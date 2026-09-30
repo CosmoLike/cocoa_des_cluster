@@ -1512,8 +1512,8 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       "nl1 <= nl2, of w_cc richness pair n"
     );
 
-  m.def("w_gammat_cluster_tomo_bins",
-      &cosmolike_interface::w_gammat_cluster_tomo_bins_cpp,
+  m.def("w_gammat_cluster_tomo",
+      &cosmolike_interface::w_gammat_cluster_tomo_cpp,
       "Compute cluster lensing gamma_t (real space) at all tomographic,"
       " richness and theta bins, before the Y transform, the selection bias"
       " and the shear calibration: array (theta, richness bin, cluster z"
@@ -1521,8 +1521,8 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::return_value_policy::move
     );
 
-  m.def("w_sigma_cluster_tomo_bins",
-      &cosmolike_interface::w_sigma_cluster_tomo_bins_cpp,
+  m.def("w_sigma_cluster_tomo",
+      &cosmolike_interface::w_sigma_cluster_tomo_cpp,
       "Compute cluster lensing (real space) as the data vector holds it at"
       " all tomographic, richness and theta bins (no mask): Sigma = Y"
       " gamma_t (gamma_t if ytransform = 0) times the selection bias and"
@@ -1531,8 +1531,8 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::return_value_policy::move
     );
 
-  m.def("w_cc_tomo_bins",
-      &cosmolike_interface::w_cc_tomo_bins_cpp,
+  m.def("w_cc_tomo",
+      &cosmolike_interface::w_cc_tomo_cpp,
       "Compute cluster clustering w_cc (real space) at all tomographic,"
       " richness and theta bins, before the selection bias: array (theta,"
       " richness bin 1, richness bin 2, cluster z bin); limber: 1 = Limber,"
@@ -1541,8 +1541,8 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::return_value_policy::move
     );
 
-  m.def("w_cg_tomo_bins",
-      &cosmolike_interface::w_cg_tomo_bins_cpp,
+  m.def("w_cg_tomo",
+      &cosmolike_interface::w_cg_tomo_cpp,
       "Compute cluster x galaxy clustering w_cg (real space) at all"
       " tomographic, richness and theta bins, before the selection bias:"
       " array (theta, richness bin, cluster z bin, lens bin); limber:"
@@ -1551,16 +1551,16 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::return_value_policy::move
     );
 
-  m.def("N_cluster_tomo_bins",
-      &cosmolike_interface::N_cluster_tomo_bins_cpp,
+  m.def("N_cluster_tomo",
+      &cosmolike_interface::N_cluster_tomo_cpp,
       "Compute the expected number of clusters (eq 16) at all richness and"
       " cluster z bins: array (richness bin, cluster z bin)",
       py::return_value_policy::move
     );
 
-  m.def("C_cs_tomo_limber_bins",
+  m.def("C_cs_tomo_limber",
       py::overload_cast<const double, const int, const int, const int>(
-        &cosmolike_interface::C_cs_tomo_limber_bins_cpp
+        &cosmolike_interface::C_cs_tomo_limber_cpp
       ),
       "Compute cluster lensing (fourier - limber) at a single richness and"
       " tomographic bin and ell value (exact quadrature, no table)",
@@ -1570,9 +1570,9 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::arg("ns").none(false).noconvert()
     );
 
-  m.def("C_cs_tomo_limber_bins",
+  m.def("C_cs_tomo_limber",
       py::overload_cast<const arma::Col<double>>(
-        &cosmolike_interface::C_cs_tomo_limber_bins_cpp
+        &cosmolike_interface::C_cs_tomo_limber_cpp
       ),
       "Compute cluster lensing (fourier - limber) at all richness and"
       " tomographic bins and many ell (vectorized): array (ell, richness"
@@ -1581,9 +1581,9 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::return_value_policy::move
     );
 
-  m.def("C_cc_tomo_limber_bins",
+  m.def("C_cc_tomo_limber",
       py::overload_cast<const double, const int, const int, const int>(
-        &cosmolike_interface::C_cc_tomo_limber_bins_cpp
+        &cosmolike_interface::C_cc_tomo_limber_cpp
       ),
       "Compute cluster clustering (fourier - limber) at a single richness"
       " pair, cluster z bin and ell value (exact quadrature, no table)",
@@ -1593,9 +1593,9 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::arg("ni").none(false).noconvert()
     );
 
-  m.def("C_cc_tomo_limber_bins",
+  m.def("C_cc_tomo_limber",
       py::overload_cast<const arma::Col<double>>(
-        &cosmolike_interface::C_cc_tomo_limber_bins_cpp
+        &cosmolike_interface::C_cc_tomo_limber_cpp
       ),
       "Compute cluster clustering (fourier - limber) at all richness pairs"
       " and cluster z bins and many ell (vectorized): array (ell, richness"
@@ -1604,9 +1604,9 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::return_value_policy::move
     );
 
-  m.def("C_cg_tomo_limber_bins",
+  m.def("C_cg_tomo_limber",
       py::overload_cast<const double, const int, const int, const int>(
-        &cosmolike_interface::C_cg_tomo_limber_bins_cpp
+        &cosmolike_interface::C_cg_tomo_limber_cpp
       ),
       "Compute cluster x galaxy clustering (fourier - limber) at a single"
       " richness and tomographic bin and ell value (exact quadrature, no"
@@ -1617,9 +1617,9 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::arg("ng").none(false).noconvert()
     );
 
-  m.def("C_cg_tomo_limber_bins",
+  m.def("C_cg_tomo_limber",
       py::overload_cast<const arma::Col<double>>(
-        &cosmolike_interface::C_cg_tomo_limber_bins_cpp
+        &cosmolike_interface::C_cg_tomo_limber_cpp
       ),
       "Compute cluster x galaxy clustering (fourier - limber) at all"
       " richness and tomographic bins and many ell (vectorized): array (ell,"

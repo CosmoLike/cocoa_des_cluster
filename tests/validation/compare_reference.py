@@ -490,7 +490,7 @@ def c_evaluate(ci, cfg, R, info, workdir, full=True):
                               for A in range(nA)] for z in zp]) * COVERH0**3
         # the interface returns (richness bin, cluster z bin); the
         # reference and the data vector hold (cluster z bin, richness bin)
-        C["N"] = np.array(ci.N_cluster_tomo_bins()).T
+        C["N"] = np.array(ci.N_cluster_tomo()).T
         C["T"] = np.array(ci.get_cluster_ytransform_matrix())
         C["B"] = np.array(ci.get_cluster_selection_factor())
     # The interface returns bin-indexed arrays, (ell or theta, bin, bin,
@@ -502,15 +502,15 @@ def c_evaluate(ci, cfg, R, info, workdir, full=True):
     nl1_cc, nl2_cc = cc_bins[:, 0], cc_bins[:, 1]
     zc_cg, zg_cg = cg_bins[:, 0], cg_bins[:, 1]
     ells = R["val_ells"]
-    Ccs = np.array(ci.C_cs_tomo_limber_bins(l=ells))             # (ell, nl, ni, ns)
-    Ccc = np.array(ci.C_cc_tomo_limber_bins(l=ells))             # (ell, nl1, nl2, ni)
-    Ccg = np.array(ci.C_cg_tomo_limber_bins(l=ells))             # (ell, nl, ni, ng)
+    Ccs = np.array(ci.C_cs_tomo_limber(l=ells))                  # (ell, nl, ni, ns)
+    Ccc = np.array(ci.C_cc_tomo_limber(l=ells))                  # (ell, nl1, nl2, ni)
+    Ccg = np.array(ci.C_cg_tomo_limber(l=ells))                  # (ell, nl, ni, ng)
     C["C_cs"] = Ccs[:, :, zc_cs, zs_cs].transpose(2, 1, 0)       # (pair, nl, ell)
     C["C_cc"] = Ccc[:, nl1_cc, nl2_cc, :].transpose(2, 1, 0)     # (ni, pair, ell)
     C["C_cg"] = Ccg[:, :, zc_cg, zg_cg].transpose(2, 1, 0)       # (pair, nl, ell)
-    gt = np.array(ci.w_gammat_cluster_tomo_bins())               # (theta, nl, ni, ns)
-    wcc = np.array(ci.w_cc_tomo_bins(limber=1))                  # (theta, nl1, nl2, ni)
-    wcg = np.array(ci.w_cg_tomo_bins(limber=1))                  # (theta, nl, ni, ng)
+    gt = np.array(ci.w_gammat_cluster_tomo())                    # (theta, nl, ni, ns)
+    wcc = np.array(ci.w_cc_tomo(limber=1))                       # (theta, nl1, nl2, ni)
+    wcg = np.array(ci.w_cg_tomo(limber=1))                       # (theta, nl, ni, ng)
     C["gt"] = gt[:, :, zc_cs, zs_cs].transpose(2, 1, 0)          # (pair, nl, theta)
     C["wcc"] = wcc[:, nl1_cc, nl2_cc, :].transpose(2, 1, 0)      # (ni, pair, theta)
     C["wcg"] = wcg[:, :, zc_cg, zg_cg].transpose(2, 1, 0)        # (pair, nl, theta)
@@ -909,7 +909,7 @@ def run_lighthouse_child(cfg, workdir, threads, out):
                     for A in range(nA)])            # (c/H0)^-3, as lighthouse
     b_c = np.array([[ci.bcl_richness(x, A) if o else 0.0 for x, o in zip(a, ok)]
                     for A in range(nA)])
-    N_c = np.array(ci.N_cluster_tomo_bins()).T     # (cluster z bin, richness bin)
+    N_c = np.array(ci.N_cluster_tomo()).T     # (cluster z bin, richness bin)
     # at the z of lighthouse's tabulated P(lambda bin|M) (mor_z)
     a_m = 1.0 / (1.0 + L["mor_z"])
     n_c_m = np.array([[ci.ncl_richness(x, A) for x in a_m] for A in range(nA)])

@@ -582,7 +582,7 @@ def N_cluster(**kwargs):
       area of the dataset.
     """
     _state(**kwargs)
-    return np.array(ci.N_cluster_tomo_bins())
+    return np.array(ci.N_cluster_tomo())
 
 
 def gamma_t_cluster(**kwargs):
@@ -602,7 +602,7 @@ def gamma_t_cluster(**kwargs):
     """
     _state(**kwargs)
     return (np.array(ci.get_binning_real_space()),
-            np.array(ci.w_gammat_cluster_tomo_bins()))
+            np.array(ci.w_gammat_cluster_tomo()))
 
 
 def sigma_cluster(**kwargs):
@@ -624,7 +624,7 @@ def sigma_cluster(**kwargs):
     """
     _state(**kwargs)
     return (np.array(ci.get_binning_real_space()),
-            np.array(ci.w_sigma_cluster_tomo_bins()))
+            np.array(ci.w_sigma_cluster_tomo()))
 
 
 def w_cc(selection_bias=False, **kwargs):
@@ -644,7 +644,7 @@ def w_cc(selection_bias=False, **kwargs):
       richness bins.
     """
     _state(**kwargs)
-    wcc = np.array(ci.w_cc_tomo_bins(
+    wcc = np.array(ci.w_cc_tomo(
         limber=int(_CONFIG["cluster_adopt_limber_cc"])))
     if selection_bias:
         # B is (cluster z bin, theta): move theta to the front and
@@ -671,7 +671,7 @@ def w_cg(selection_bias=False, **kwargs):
       lists them), the others are zero.
     """
     _state(**kwargs)
-    wcg = np.array(ci.w_cg_tomo_bins(
+    wcg = np.array(ci.w_cg_tomo(
         limber=int(_CONFIG["cluster_adopt_limber_cg"])))
     if selection_bias:
         B = np.array(ci.get_cluster_selection_factor())
@@ -693,7 +693,7 @@ def C_cs_tomo_limber(ell, **kwargs):
       4D array (n_ell, n_richness, n_cluster_z, n_source).
     """
     _state(**kwargs)
-    return np.array(ci.C_cs_tomo_limber_bins(l=_vector(ell)))
+    return np.array(ci.C_cs_tomo_limber(l=_vector(ell)))
 
 
 def C_cc_tomo_limber(ell, **kwargs):
@@ -707,7 +707,7 @@ def C_cc_tomo_limber(ell, **kwargs):
       4D array (n_ell, n_richness, n_richness, n_cluster_z).
     """
     _state(**kwargs)
-    return np.array(ci.C_cc_tomo_limber_bins(l=_vector(ell)))
+    return np.array(ci.C_cc_tomo_limber(l=_vector(ell)))
 
 
 def C_cg_tomo_limber(ell, **kwargs):
@@ -722,7 +722,7 @@ def C_cg_tomo_limber(ell, **kwargs):
       the dataset's cg_lens_bins are zero.
     """
     _state(**kwargs)
-    return np.array(ci.C_cg_tomo_limber_bins(l=_vector(ell)))
+    return np.array(ci.C_cg_tomo_limber(l=_vector(ell)))
 
 
 # ----------------------------------------------------------------------
