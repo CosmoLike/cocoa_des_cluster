@@ -7,6 +7,7 @@ from scipy.interpolate import interp1d
 import sys
 import time
 import functools
+from collections.abc import Mapping
 
 # Local
 from cobaya.likelihoods.base_classes import DataSetLikelihood
@@ -45,11 +46,68 @@ def with_omp_threads(fn):
 
 survey = "DES"
 
+# ----------------------------------------------------------------------------
+# Clusters (4x2pt + N, arXiv 2503.13631)
+# ----------------------------------------------------------------------------
+# Probe names handled by ci.init_probes_cluster: the joint vector
+# ss, gs, gg, cg, N, cc, cs (every other probe goes through ci.init_probes).
+CLUSTER_PROBES = ("4x2pt_n", "6x2pt_n", "n", "n_cc", "n_cs", "cs", "cc", "cg")
+
+# Mass-observable relation, eqs (18)-(19), in the order of cluster.mor:
+# ln lambda_0, A_lambda (slope in ln M), sigma_int, B_lambda (slope in
+# ln(1+z)). No neutral default exists: every name must be a parameter.
+CLUSTER_MOR_PARAMS = [survey+"_CL_LNLAMBDA0", survey+"_CL_A_LAMBDA",
+                      survey+"_CL_SIGMA_INT", survey+"_CL_B_LAMBDA"]
+
+# Selection bias in the order of cluster.selection. Selection model 2 (Y6,
+# eq 23): b_s1, b_s2, r_0 [comoving Mpc/h], s3 (power of (1+zbar)/1.45).
+# Selection model 1 (Y1): the same slots hold b_s0, b_s1 (mass slope),
+# b_s2 (power of (1+z)/1.45) and an unused entry. The defaults of a missing
+# name switch the selection bias off (factor 1) in either model; under Y6,
+# r_0 only divides b_s2's term, so its default is irrelevant at b_s2 = 0
+# (it must still be positive).
+CLUSTER_SELECTION_PARAMS = [survey+"_CL_BS1", survey+"_CL_BS2",
+                            survey+"_CL_R0",  survey+"_CL_BSZ"]
+CLUSTER_SELECTION_DEFAULTS = {2: [1.0, 0.0, 30.0, 0.0],  # Y6
+                              1: [1.0, 0.0, 0.0, 0.0],   # Y1
+                              0: [1.0, 0.0, 0.0, 0.0]}   # none
+
+def _ini_list(ini, key, tp):
+  """Comma- (or space-) separated dataset entry as a list of tp."""
+  return [tp(x) for x in ini.string(key).replace(",", " ").split()]
+
 class _cosmolike_prototype_base(DataSetLikelihood):
+
+  @classmethod
+  def get_modified_defaults(cls, defaults, input_options={}):
+    """Apply the yaml option `fixed_params` to the default parameters.
+
+    `params: !defaults [...]` cannot be extended in the same yaml, so a combo
+    lists the parameters it fixes under `fixed_params` (e.g. CL+GC fixes the
+    lens bins it does not use). Each entry replaces the parameter's default
+    info with the cobaya merge rule: a value drops prior, ref and proposal.
+    A user yaml can override `fixed_params` like any other option.
+    """
+    fixed = input_options.get("fixed_params", defaults.get("fixed_params"))
+    params = defaults.get("params") or {}
+    for p, info in (fixed or {}).items():
+      old = params.get(p)
+      new = {}
+      if isinstance(old, Mapping):
+        new = {k: v for k, v in old.items() if k not in ("prior", "ref", "proposal")}
+      if isinstance(info, Mapping):
+        new.update(info)
+      else:
+        new["value"] = info
+      params[p] = new
+    if params:
+      defaults["params"] = params
+    return defaults
 
   def initialize(self, probe):
     ini = IniFile(os.path.normpath(os.path.join(self.path, self.data_file)))
     self.probe = probe
+    self.has_clusters = probe.strip().lower() in CLUSTER_PROBES
     self.data_vector_file = ini.relativeFileName('data_file')
     self.cov_file = ini.relativeFileName('cov_file')
     self.mask_file = ini.relativeFileName('mask_file')
@@ -109,7 +167,12 @@ class _cosmolike_prototype_base(DataSetLikelihood):
     # ------------------------------------------------------------------------
 
     ci.initial_setup()
-    ci.init_probes(possible_probes=self.probe)
+    ci.reset_cluster() # cluster defaults + fresh cluster cache keys
+    if self.has_clusters:
+      # like.* for ss/gs/gg and cluster.probe_* for cg/N/cc/cs
+      ci.init_probes_cluster(possible_probes=self.probe)
+    else:
+      ci.init_probes(possible_probes=self.probe)
     ci.init_binning(int(self.ntheta), self.theta_min_arcmin, self.theta_max_arcmin)
 
     if self.debug:
@@ -136,6 +199,13 @@ class _cosmolike_prototype_base(DataSetLikelihood):
     # 0 = the init_IA model, 1 = halo-model IA (Fortuna et al. 2021)
     ci.init_include_halo_IA(
         include_halo_IA=int(getattr(self, "include_halo_IA", 0)))
+
+    if self.has_clusters and (self.use_emulator == 1):
+      raise LoggedError(self.log, "probe %s: clusters have no emulator path",
+                        self.probe)
+    if self.has_clusters and (self.use_baryon_pca or self.create_baryon_pca):
+      raise LoggedError(self.log, "probe %s: baryon PCAs are not supported "
+                        "with clusters", self.probe)
 
     if self.use_emulator == 1:
       ci.init_redshift_distributions_from_files(
@@ -169,7 +239,13 @@ class _cosmolike_prototype_base(DataSetLikelihood):
           source_multihisto_file=self.source_file,
           source_ntomo=int(self.source_ntomo))
       
-      ci.init_data_real(self.cov_file, self.mask_file, self.data_vector_file)
+      if self.has_clusters:
+        # cluster model, richness bins, selection kernels and pairs: they
+        # fix the block sizes of the joint vector read below
+        self.init_cluster_related(ini)
+        ci.init_data_cluster(self.cov_file, self.mask_file, self.data_vector_file)
+      else:
+        ci.init_data_real(self.cov_file, self.mask_file, self.data_vector_file)
 
       if (int(self.IA_model) == 0) and (int(self.IA_code) == 1):
    		# Fall back to C FASTPT under NLA
@@ -210,6 +286,70 @@ class _cosmolike_prototype_base(DataSetLikelihood):
       self.log.info('baryon_pca_file = %s loaded', baryon_pca_file)
     else:
       self.log.info('use_baryon_pca = False')
+
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+
+  def init_cluster_related(self, ini):
+    """Cluster part of the init chain (4x2pt + N, arXiv 2503.13631).
+
+    Dataset keys: nz_cluster_file (z column, then <phi_i|z> of each cluster
+    bin), cluster_ntomo, cluster_zbin_edges, richness_edges, survey_area_deg2,
+    cg_lens_bins (one lens bin per cluster bin, -1 = no w_cg). Runs after the
+    lens/source n(z) and init_ntomo_powerspectra, before init_data_cluster.
+    """
+    self.nz_cluster_file = ini.relativeFileName('nz_cluster_file')
+    self.cluster_ntomo = ini.int("cluster_ntomo")
+    self.cluster_zbin_edges = np.array(_ini_list(ini, "cluster_zbin_edges", float))
+    self.richness_edges = np.array(_ini_list(ini, "richness_edges", float))
+    self.survey_area_deg2 = ini.float("survey_area_deg2")
+    self.cg_lens_bins = _ini_list(ini, "cg_lens_bins", int)
+
+    if len(self.cluster_zbin_edges) != self.cluster_ntomo + 1:
+      raise LoggedError(self.log, "cluster_zbin_edges: %d edges for %d bins",
+                        len(self.cluster_zbin_edges), self.cluster_ntomo)
+    if len(self.cg_lens_bins) != self.cluster_ntomo:
+      raise LoggedError(self.log, "cg_lens_bins: %d entries for %d bins",
+                        len(self.cg_lens_bins), self.cluster_ntomo)
+    if len(self.richness_edges) < 2:
+      raise LoggedError(self.log, "richness_edges: at least two edges needed")
+
+    # survey area (deg^2) of the counts, eq (16); sigma_e is read only by
+    # the covariance code
+    ci.init_survey_parameters(surveyname=survey,
+                              area=self.survey_area_deg2,
+                              sigma_e=ini.float("sigma_e", 0.0))
+
+    self.cluster_selection_model = int(getattr(self, "cluster_selection_model", 2))
+    if self.cluster_selection_model not in CLUSTER_SELECTION_DEFAULTS:
+      raise LoggedError(self.log, "cluster_selection_model = %d not supported",
+                        self.cluster_selection_model)
+    ci.init_cluster_model(
+        mor_model=0, # lognormal, eqs (18)-(19)
+        kernel_mode=int(getattr(self, "cluster_kernel_mode", 0)),
+        selection_model=self.cluster_selection_model,
+        ytransform=int(getattr(self, "cluster_ytransform", 1)),
+        include_ia=int(getattr(self, "cluster_include_ia", 1)),
+        magnification=float(getattr(self, "cluster_magnification", -2.0)))
+
+    ci.init_cluster_adopt_limber(
+        adopt_limber_cc=int(getattr(self, "cluster_adopt_limber_cc", 1)),
+        adopt_limber_cg=int(getattr(self, "cluster_adopt_limber_cg", 1)))
+
+    ci.init_cluster_richness_bins(lambda_min=self.richness_edges[:-1].copy(),
+                                  lambda_max=self.richness_edges[1:].copy())
+
+    nz_cluster = np.loadtxt(self.nz_cluster_file)
+    if nz_cluster.ndim != 2 or nz_cluster.shape[1] != self.cluster_ntomo + 1:
+      raise LoggedError(self.log, "%s: expected %d columns (z + %d bins)",
+                        self.nz_cluster_file, self.cluster_ntomo + 1,
+                        self.cluster_ntomo)
+    ci.set_cluster_zdist(nofz=nz_cluster,
+                         zbin_min=self.cluster_zbin_edges[:-1].copy(),
+                         zbin_max=self.cluster_zbin_edges[1:].copy())
+
+    ci.init_cluster_pairs(cg_lens_bin=self.cg_lens_bins)
 
   # ------------------------------------------------------------------------
   # ------------------------------------------------------------------------
@@ -540,8 +680,27 @@ class _cosmolike_prototype_base(DataSetLikelihood):
   # ------------------------------------------------------------------------
   # ------------------------------------------------------------------------
   # ------------------------------------------------------------------------
+  @with_omp_threads
+  def set_cluster_related(self, **params):
+    """Cluster nuisance parameters: MOR (eqs 18-19) and selection bias."""
+    missing = [p for p in CLUSTER_MOR_PARAMS if p not in params]
+    if missing:
+      raise LoggedError(self.log, "missing cluster MOR parameters %s", missing)
+    ci.set_nuisance_cluster_mor(
+      MOR=[params[p] for p in CLUSTER_MOR_PARAMS]
+    )
+    defaults = CLUSTER_SELECTION_DEFAULTS[self.cluster_selection_model]
+    ci.set_nuisance_cluster_selection(
+      SEL=[params.get(p, d) for p, d in zip(CLUSTER_SELECTION_PARAMS, defaults)]
+    )
+
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
 
   def compute_logp(self, datavector):
+    if self.has_clusters:
+      return -0.5 * ci.compute_chi2_cluster(datavector)
     return -0.5 * ci.compute_chi2(datavector)
 
   # ------------------------------------------------------------------------
@@ -574,7 +733,10 @@ class _cosmolike_prototype_base(DataSetLikelihood):
         self.set_lens_related(**params)
     self.set_source_related(**params)
     
-    if self.create_baryon_pca:
+    if self.has_clusters:
+      self.set_cluster_related(**params)
+      datavector = ci.compute_data_vector_cluster_masked()
+    elif self.create_baryon_pca:
       pcs = ci.compute_baryon_pcas(scenarios=self.baryon_pca_select_sims, allsims=self.allsims)
       np.savetxt(self.filename_baryon_pca, pcs)
       datavector = ci.compute_data_vector_masked()

@@ -43,6 +43,7 @@ namespace py = pybind11;
 #include "cosmolike/cosmo2D_wrapper.hpp"
 #include "cosmolike/cosmo2D_scuts_wrapper.hpp"
 #include "cosmolike/halo_wrapper.hpp"
+#include "cosmolike/generic_interface_cluster.hpp"
 
 PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
 {
@@ -1035,6 +1036,513 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::arg("ia_halo").none(false),
       py::arg("ia_red").none(false),
       py::arg("ia_hod").none(false)
+    );
+
+  // --------------------------------------------------------------------
+  // --------------------------------------------------------------------
+  // CLUSTERS (4x2pt + N): INIT AND SET FUNCTIONS
+  // --------------------------------------------------------------------
+  // --------------------------------------------------------------------
+  // Order of the init chain (see _cosmolike_prototype_base.py):
+  //   initial_setup -> reset_cluster -> init_probes_cluster -> binning
+  //   -> accuracy -> n(z) + init_ntomo_powerspectra -> init_survey_parameters
+  //   -> init_cluster_model -> init_cluster_richness_bins
+  //   -> set_cluster_zdist -> init_cluster_pairs -> init_data_cluster
+  m.def("reset_cluster",
+      &cosmolike_interface::reset_cluster,
+      "Reset the cluster struct to its defaults (Y6 model), draw fresh cluster "
+      "cache keys and clear the cluster mask/data/covariance; call after "
+      "initial_setup"
+    );
+
+  m.def("init_probes_cluster",
+      &cosmolike_interface::init_probes_cluster,
+      "Init the probes of the joint vector by name: 4x2pt_N (gg + cg + N + "
+      "cc + cs), 6x2pt_N (all), 3x2pt, N, N_cc, N_cs, cs, cc, cg",
+      py::arg("possible_probes").none(false)
+    );
+
+  m.def("init_cluster_probes",
+      &cosmolike_interface::init_cluster_probes,
+      "Set the cluster probe flags (0/1): counts N, lensing cs, w_cc, w_cg",
+      py::arg("N").none(false).noconvert(),
+      py::arg("cs").none(false).noconvert(),
+      py::arg("cc").none(false).noconvert(),
+      py::arg("cg").none(false).noconvert()
+    );
+
+  m.def("init_cluster_model",
+      &cosmolike_interface::init_cluster_model,
+      "Cluster model choices: mor_model (0 = lognormal), kernel_mode "
+      "(0 = volume, 1 = abundance weighted), selection_model (0 = none, "
+      "1 = Y1 mass dependent, 2 = Y6 scale dependent), ytransform (0/1), "
+      "include_ia (0/1), magnification C_c (-2 in the paper, 0 = off)",
+      py::arg("mor_model").none(false).noconvert(),
+      py::arg("kernel_mode").none(false).noconvert(),
+      py::arg("selection_model").none(false).noconvert(),
+      py::arg("ytransform").none(false).noconvert(),
+      py::arg("include_ia").none(false).noconvert(),
+      py::arg("magnification").none(false)
+    );
+
+  m.def("init_cluster_adopt_limber",
+      &cosmolike_interface::init_cluster_adopt_limber,
+      "w_cc and w_cg: 1 = Limber (default), 0 = non-Limber",
+      py::arg("adopt_limber_cc").none(false).noconvert(),
+      py::arg("adopt_limber_cg").none(false).noconvert()
+    );
+
+  m.def("init_cluster_richness_bins",
+      &cosmolike_interface::init_cluster_richness_bins,
+      "Set the observed-richness bins [lambda_min, lambda_max)",
+      py::arg("lambda_min").none(false),
+      py::arg("lambda_max").none(false)
+    );
+
+  m.def("set_cluster_zdist",
+      &cosmolike_interface::set_cluster_zdist,
+      "Set the cluster selection kernels <phi_i|z> (column 0 = z, column "
+      "i+1 = bin i) and the nominal z_lambda edges of each bin",
+      py::arg("nofz").none(false),
+      py::arg("zbin_min").none(false),
+      py::arg("zbin_max").none(false)
+    );
+
+  m.def("init_cluster_pairs",
+      [](std::vector<int> cg_lens_bin) {
+        cosmolike_interface::init_cluster_pairs(
+          arma::conv_to<arma::Col<int>>::from(cg_lens_bin));
+      },
+      "Set the cluster pairs: cg_lens_bin[i] = lens bin of cluster bin i in "
+      "w_cg (-1 = none); cs = all (cluster, source) pairs; cc = auto z bins",
+      py::arg("cg_lens_bin").none(false)
+    );
+
+  m.def("set_nuisance_cluster_mor",
+      &cosmolike_interface::set_nuisance_cluster_mor,
+      "Set the mass-observable relation {ln lambda_0, A_lambda, sigma_int, "
+      "B_lambda}",
+      py::arg("MOR").none(false)
+    );
+
+  m.def("set_nuisance_cluster_selection",
+      &cosmolike_interface::set_nuisance_cluster_selection,
+      "Set the selection bias: Y6 {b_s1, b_s2, r_0 [Mpc/h], s3}; Y1 {b_s0, "
+      "b_s1, b_s2, unused}",
+      py::arg("SEL").none(false)
+    );
+
+  m.def("init_data_cluster",
+      &cosmolike_interface::init_data_cluster,
+      "Load covariance matrix, mask (vec of 0/1s) and data vector of the "
+      "joint vector ss, gs, gg, cg, N, cc, cs (cs in Y space when "
+      "ytransform = 1)",
+      py::arg("COV").none(false),
+      py::arg("MASK").none(false),
+      py::arg("DATA").none(false)
+    );
+
+  // --------------------------------------------------------------------
+  // CLUSTERS: JOINT DATA VECTOR
+  // --------------------------------------------------------------------
+  m.def("compute_data_vector_cluster_sizes",
+      []()->std::vector<int> {
+        using namespace cosmolike_interface;
+        return arma::conv_to<std::vector<int>>::from(
+          compute_data_vector_cluster_sizes());
+      },
+      "Block sizes of the joint vector (ss, gs, gg, cg, N, cc, cs)",
+      py::return_value_policy::move
+    );
+
+  m.def("compute_data_vector_cluster_starts",
+      []()->std::vector<int> {
+        using namespace cosmolike_interface;
+        return arma::conv_to<std::vector<int>>::from(
+          compute_data_vector_cluster_starts());
+      },
+      "Block starts of the joint vector (ss, gs, gg, cg, N, cc, cs)",
+      py::return_value_policy::move
+    );
+
+  m.def("compute_data_vector_cluster_masked",
+      []()->std::vector<double> {
+        using namespace cosmolike_interface;
+        return arma::conv_to<std::vector<double>>::from(
+          compute_data_vector_cluster_masked());
+      },
+      "Compute the joint theoretical data vector. Masked dimensions are "
+      "filled w/ zeros",
+      py::return_value_policy::move
+    );
+
+  m.def("compute_chi2_cluster",
+      // std::vector: accepts the list returned by
+      // compute_data_vector_cluster_masked and any numpy array (also a
+      // non-contiguous view, which carma cannot borrow)
+      [](std::vector<double> datavector) {
+        using namespace cosmolike_interface;
+        return IPCluster::get_instance().get_chi2(
+          arma::conv_to<arma::Col<double>>::from(datavector));
+      },
+      "Compute $\\chi^2$ of the joint vector given a theory data vector input",
+      py::arg("datavector").none(false),
+      py::return_value_policy::move
+    );
+
+  m.def("get_cluster_ytransform_matrix",
+      &cosmolike_interface::compute_cluster_ytransform_matrix,
+      "Park et al. 2021 matrix T (Ntheta x Ntheta) of the current theta "
+      "binning: Sigma = T gamma_t",
+      py::return_value_policy::move
+    );
+
+  m.def("get_cluster_selection_factor",
+      &cosmolike_interface::compute_cluster_selection_factor,
+      "Selection-bias factor B(theta) of eq 23, (cluster z bin, theta bin); "
+      "ones unless selection_model = 2",
+      py::return_value_policy::move
+    );
+
+  m.def("get_mask_cluster",
+      []()->std::vector<int> {
+        using namespace cosmolike_interface;
+        arma::Col<int> res = IPCluster::get_instance().get_mask();
+        return arma::conv_to<std::vector<int>>::from(res);
+      },
+      "Get the mask of the joint vector",
+      py::return_value_policy::move
+    );
+
+  m.def("get_dv_masked_cluster",
+      []()->std::vector<double> {
+        using namespace cosmolike_interface;
+        arma::Col<double> res = IPCluster::get_instance().get_dv_masked();
+        return arma::conv_to<std::vector<double>>::from(res);
+      },
+      "Get the masked data vector of the joint vector",
+      py::return_value_policy::move
+    );
+
+  m.def("get_cov_masked_cluster",
+      []()->arma::Mat<double> {
+        using namespace cosmolike_interface;
+        return IPCluster::get_instance().get_cov_masked();
+      },
+      "Get the masked covariance of the joint vector",
+      py::return_value_policy::move
+    );
+
+  m.def("get_inv_cov_masked_cluster",
+      []()->arma::Mat<double> {
+        using namespace cosmolike_interface;
+        return IPCluster::get_instance().get_inv_cov_masked();
+      },
+      "Get the inverse masked covariance of the joint vector (inverted on "
+      "the unmasked entries)",
+      py::return_value_policy::move
+    );
+
+  // --------------------------------------------------------------------
+  // CLUSTERS: THIN WRAPPERS OF THE C FUNCTIONS (TESTS)
+  // --------------------------------------------------------------------
+  // Wrappers of cosmology-dependent functions call cluster_warmup() first,
+  // so no lazily filled cluster table is ever built inside a threaded
+  // loop. Units: a scale factor, k in (c/H0)^-1, M in Msun/h.
+  m.def("cluster_warmup",
+      &cluster_warmup,
+      "Build every lazily filled cluster table, single-threaded"
+    );
+
+  m.def("amin_cluster",
+      &amin_cluster,
+      "Smallest scale factor of the support of <phi_ni|z>",
+      py::arg("ni").none(false).noconvert()
+    );
+
+  m.def("amax_cluster",
+      &amax_cluster,
+      "Largest scale factor of the support of <phi_ni|z>",
+      py::arg("ni").none(false).noconvert()
+    );
+
+  m.def("phi_cluster",
+      &phi_cluster,
+      "Selection kernel <phi_ni|z> at true redshift z",
+      py::arg("z").none(false),
+      py::arg("ni").none(false).noconvert()
+    );
+
+  m.def("zmid_cluster",
+      &zmid_cluster,
+      "Nominal midpoint of the z_lambda bin ni",
+      py::arg("ni").none(false).noconvert()
+    );
+
+  m.def("nz_cluster",
+      [](const double z, const int ni, const int nl) {
+        cluster_warmup();
+        return nz_cluster(z, ni, nl);
+      },
+      "Normalized true-redshift distribution of clusters in bin ni "
+      "(richness bin nl for the abundance-weighted kernel)",
+      py::arg("z").none(false),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("nl").none(false).noconvert()
+    );
+
+  m.def("g_cluster",
+      [](const double a, const int ni, const int nl) {
+        cluster_warmup();
+        return g_cluster(a, ni, nl);
+      },
+      "Lensing efficiency of the cluster distribution (magnification)",
+      py::arg("a").none(false),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("nl").none(false).noconvert()
+    );
+
+  m.def("W_cluster",
+      [](const double a, const int ni, const int nl) {
+        cluster_warmup();
+        return W_cluster(a, ni, nl, hoverh0(a));
+      },
+      "Cluster density kernel W_cluster = nz_cluster H/H0 at scale factor a",
+      py::arg("a").none(false),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("nl").none(false).noconvert()
+    );
+
+  m.def("W_mag_cluster",
+      [](const double a, const int ni, const int nl) {
+        cluster_warmup();
+        return W_mag_cluster(a, f_K(chi(a)), ni, nl);
+      },
+      "Cluster magnification kernel 1.5 Omega_m f_K/a g_cluster at scale "
+      "factor a (without the coefficient C_c)",
+      py::arg("a").none(false),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("nl").none(false).noconvert()
+    );
+
+  m.def("N_cs", &N_cs, "cs pair index of (cluster bin, source bin); -1 if none",
+      py::arg("ni").none(false).noconvert(),
+      py::arg("ns").none(false).noconvert()
+    );
+
+  m.def("ZC_cs", &ZC_cs, "Cluster bin of cs pair n",
+      py::arg("n").none(false).noconvert()
+    );
+
+  m.def("ZS_cs", &ZS_cs, "Source bin of cs pair n",
+      py::arg("n").none(false).noconvert()
+    );
+
+  m.def("N_cg", &N_cg, "cg pair index of (cluster bin, lens bin); -1 if none",
+      py::arg("ni").none(false).noconvert(),
+      py::arg("ng").none(false).noconvert()
+    );
+
+  m.def("ZC_cg", &ZC_cg, "Cluster bin of cg pair n",
+      py::arg("n").none(false).noconvert()
+    );
+
+  m.def("ZG_cg", &ZG_cg, "Lens bin of cg pair n",
+      py::arg("n").none(false).noconvert()
+    );
+
+  m.def("N_cc_richness", &N_cc_richness,
+      "w_cc richness-pair index of (nl1, nl2), nl1 <= nl2",
+      py::arg("nl1").none(false).noconvert(),
+      py::arg("nl2").none(false).noconvert()
+    );
+
+  m.def("NL1_cc", &NL1_cc, "First richness bin of w_cc richness pair n",
+      py::arg("n").none(false).noconvert()
+    );
+
+  m.def("NL2_cc", &NL2_cc, "Second richness bin of w_cc richness pair n",
+      py::arg("n").none(false).noconvert()
+    );
+
+  m.def("prob_richness_bin_given_m",
+      &prob_richness_bin_given_m,
+      "Probability that a halo of ln mass lnM (M in Msun/h) at redshift z "
+      "has observed richness in bin nl (closed-form erf)",
+      py::arg("lnM").none(false),
+      py::arg("z").none(false),
+      py::arg("nl").none(false).noconvert()
+    );
+
+  m.def("ncl_richness",
+      [](const double a, const int nl) {
+        cluster_warmup();
+        return ncl_richness(a, nl);
+      },
+      "Comoving number density of clusters in richness bin nl, (c/H0)^-3",
+      py::arg("a").none(false),
+      py::arg("nl").none(false).noconvert()
+    );
+
+  m.def("bcl_richness",
+      [](const double a, const int nl) {
+        cluster_warmup();
+        return bcl_richness(a, nl);
+      },
+      "Richness-weighted linear bias of richness bin nl (eq 21)",
+      py::arg("a").none(false),
+      py::arg("nl").none(false).noconvert()
+    );
+
+  m.def("pcm_1h_richness",
+      [](const double k, const double a, const int nl) {
+        cluster_warmup();
+        return pcm_1h_richness(k, a, nl);
+      },
+      "One-halo cluster-matter power spectrum of richness bin nl (eq 22); "
+      "k in (c/H0)^-1, P in (c/H0)^3",
+      py::arg("k").none(false),
+      py::arg("a").none(false),
+      py::arg("nl").none(false).noconvert()
+    );
+
+  m.def("C_cs_tomo_limber",
+      [](const double l, const int nl, const int ni, const int ns) {
+        cluster_warmup();
+        return C_cs_tomo_limber(l, nl, ni, ns);
+      },
+      "Cluster lensing Limber C_l (cached table) at one multipole",
+      py::arg("l").none(false),
+      py::arg("nl").none(false).noconvert(),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("ns").none(false).noconvert()
+    );
+
+  m.def("C_cs_tomo_limber",
+      &cosmolike_interface::C_cs_tomo_limber_cluster_cpp,
+      "Cluster lensing Limber C_l batch at many multipoles: array "
+      "(cs pair n, richness bin nl, ell)",
+      py::arg("l").none(false),
+      py::return_value_policy::move
+    );
+
+  m.def("C_cc_tomo_limber",
+      [](const double l, const int nl1, const int nl2, const int ni) {
+        cluster_warmup();
+        return C_cc_tomo_limber(l, nl1, nl2, ni);
+      },
+      "Cluster clustering Limber C_l (cached table) at one multipole",
+      py::arg("l").none(false),
+      py::arg("nl1").none(false).noconvert(),
+      py::arg("nl2").none(false).noconvert(),
+      py::arg("ni").none(false).noconvert()
+    );
+
+  m.def("C_cc_tomo_limber",
+      &cosmolike_interface::C_cc_tomo_limber_cluster_cpp,
+      "Cluster clustering Limber C_l batch at many multipoles: array "
+      "(cluster bin ni, richness pair n, ell)",
+      py::arg("l").none(false),
+      py::return_value_policy::move
+    );
+
+  m.def("C_cg_tomo_limber",
+      [](const double l, const int nl, const int ni, const int ng) {
+        cluster_warmup();
+        return C_cg_tomo_limber(l, nl, ni, ng);
+      },
+      "Cluster-galaxy Limber C_l (cached table) at one multipole",
+      py::arg("l").none(false),
+      py::arg("nl").none(false).noconvert(),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("ng").none(false).noconvert()
+    );
+
+  m.def("C_cg_tomo_limber",
+      &cosmolike_interface::C_cg_tomo_limber_cluster_cpp,
+      "Cluster-galaxy Limber C_l batch at many multipoles: array "
+      "(cg pair n, richness bin nl, ell)",
+      py::arg("l").none(false),
+      py::return_value_policy::move
+    );
+
+  m.def("w_gammat_cluster_tomo",
+      [](const int nt, const int nl, const int ni, const int ns) {
+        cluster_warmup();
+        return w_gammat_cluster_tomo(nt, nl, ni, ns);
+      },
+      "Cluster gamma_t (before Y transform and selection bias) at theta bin nt",
+      py::arg("nt").none(false).noconvert(),
+      py::arg("nl").none(false).noconvert(),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("ns").none(false).noconvert()
+    );
+
+  m.def("w_gammat_cluster_tomo",
+      &cosmolike_interface::w_gammat_cluster_tomo_cpp,
+      "Cluster gamma_t (before Y transform and selection bias) at every "
+      "theta bin: array (cs pair n, richness bin nl, theta)",
+      py::return_value_policy::move
+    );
+
+  m.def("w_cc_tomo",
+      [](const int nt, const int nl1, const int nl2, const int ni,
+         const int limber) {
+        cluster_warmup();
+        return w_cc_tomo(nt, nl1, nl2, ni, limber);
+      },
+      "Cluster-cluster w(theta) (no selection bias) at theta bin nt",
+      py::arg("nt").none(false).noconvert(),
+      py::arg("nl1").none(false).noconvert(),
+      py::arg("nl2").none(false).noconvert(),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("limber").none(false).noconvert()
+    );
+
+  m.def("w_cc_tomo",
+      &cosmolike_interface::w_cc_tomo_cpp,
+      "Cluster-cluster w(theta) (no selection bias) at every theta bin: "
+      "array (cluster bin ni, richness pair n, theta)",
+      py::arg("limber").none(false).noconvert(),
+      py::return_value_policy::move
+    );
+
+  m.def("w_cg_tomo",
+      [](const int nt, const int nl, const int ni, const int ng,
+         const int limber) {
+        cluster_warmup();
+        return w_cg_tomo(nt, nl, ni, ng, limber);
+      },
+      "Cluster-galaxy w(theta) (no selection bias) at theta bin nt",
+      py::arg("nt").none(false).noconvert(),
+      py::arg("nl").none(false).noconvert(),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("ng").none(false).noconvert(),
+      py::arg("limber").none(false).noconvert()
+    );
+
+  m.def("w_cg_tomo",
+      &cosmolike_interface::w_cg_tomo_cpp,
+      "Cluster-galaxy w(theta) (no selection bias) at every theta bin: "
+      "array (cg pair n, richness bin nl, theta)",
+      py::arg("limber").none(false).noconvert(),
+      py::return_value_policy::move
+    );
+
+  m.def("N_cluster_tomo",
+      [](const int nl, const int ni) {
+        cluster_warmup();
+        return N_cluster_tomo(nl, ni);
+      },
+      "Expected number of clusters in richness bin nl and z bin ni (eq 16)",
+      py::arg("nl").none(false).noconvert(),
+      py::arg("ni").none(false).noconvert()
+    );
+
+  m.def("N_cluster_tomo",
+      &cosmolike_interface::N_cluster_tomo_cpp,
+      "Expected number of clusters: array (cluster z bin, richness bin)",
+      py::return_value_policy::move
     );
 
   // --------------------------------------------------------------------
