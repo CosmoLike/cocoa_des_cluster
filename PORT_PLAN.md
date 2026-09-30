@@ -153,3 +153,44 @@ cg [(zc,zg) pair][lambda][theta].
 - C (running): Python reference + Gaussian covariance
 - lighthouse reference outputs (running)
 - Fable: code/physics review after Phase 1b, and at M0/M1.
+
+## 7. Status (2026-09-30)
+
+Done (cosmolike_core bugfix, des_cluster bugfix):
+- Port: 5be792a contract; efdfc62 redshift_spline_cluster + radial
+  weights; 2527d65 halo_cluster; 5032c08 cosmo2D_cluster; 34a5a26
+  generic_interface_cluster; e79de2d counts fix; ea9a625 grouped node
+  legs; 8c71ddd Tinker alpha switch (default fixed 0.368, what DES ran).
+- Core bug found by the validation, fixed: 84c54c9 (g_tomo / g2_tomo /
+  g_lens / C_ss ranges started at the UNSHIFTED n(z) top and dropped the
+  mass a positive photo-z shift moves above it; bitwise when no shift is
+  positive; delta chi2 at dz_s = +0.03: roman_fourier 13.8, roman_real
+  0.85, desy1xplanck 0.054, des_y3 0.026, lsst_y1 0.010).
+- Growth factor on the dense z grid (historical normalization kept):
+  des_cluster 31bdff8 / bb2e1c4 and the six other projects (one commit
+  each, 2026-09-30); frozen references not refrozen.
+- M0: tests/validation/compare_reference.py - every cluster quantity
+  matches the independent Python reference to <= 2e-5 (cluster lensing
+  1e-3 in the n(z) tail of the lowest source bins behind the highest
+  cluster bin; chi2 cs 3.4e-5 cut / 2.0e-4 uncut); bitwise deterministic
+  (OMP 1 vs 8). Lighthouse: counts 2.4%, b_A 0.8% (its 1e-2 CQUAD).
+- M1: scripts/make_synthetic_data.py + tests/reference/
+  ref_covariance_full.py (joint Gaussian covariance, 2812 entries);
+  chi2 ~ 1e-25 at the fiducial for both combos.
+
+Open:
+- Regenerate the synthetic data with the final code (gammat covariance
+  block under review: sigma/|signal| looked ~15x too small).
+- Knob sweep (tests/validation/knob_sweep.py): fastest settings with
+  delta chi2 < 0.2; timing 4 vs 8 threads on a quiet machine;
+  optimization pass (volume-kernel sharing of W_c / W_mag,c, P1h build
+  gated on cluster lensing - in progress).
+- Rebuild the six other projects against 84c54c9 and run their suites;
+  refreeze after attributing the pre-existing drift (lsst_y1 +0.034).
+- HOD NaN (include_HOD_GX = 1) in des_y3 Y3 and desy1xplanck MagLim:
+  suspect halo.c's HOD a-range (3311-3312) bounded by the unstretched
+  lens range; fix on the zmax_lens_photoz model.
+- Phase 4 physics: FKEM non-Limber w_cc, TATT in cluster lensing, a
+  cb-neutrino option (Fable P1.2: counts 2-4% at the fiducial, >10% at
+  the top of the Omega_nu h^2 prior), Y1 switches end to end, the
+  parameter-recovery MCMC.
