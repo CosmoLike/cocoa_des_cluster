@@ -88,7 +88,7 @@ class _cosmolike_prototype_base(DataSetLikelihood):
     # The low block multiplies its node count (endpoint=False, spacing
     # 3/n); the high block multiplies its INTERVAL count
     # (endpoint=True: 35 nodes = 34 intervals -> 34*m + 1 nodes).
-    # zmax of the hybrid emulator is 50 (why 50? Only relevant if CMB lensing included)
+    # zmax of the hybrid emulator is 50
     m = int(min(2**np.ceil(np.log2(max(1.0, self.accuracyboost))), 16))
     self.z_interp_2D = np.concatenate((np.linspace(0,3.0,105*m,endpoint=False), 
                                        np.linspace(3.0,49.99,34*m + 1)),axis=0)
@@ -137,24 +137,6 @@ class _cosmolike_prototype_base(DataSetLikelihood):
     ci.init_include_halo_IA(
         include_halo_IA=int(getattr(self, "include_halo_IA", 0)))
 
-    # Init CMB cross spectra ---------------------------------------------------   
-    ci.init_cmb_cross_correlation(
-        lmin = ini.int("lmin_kx"),
-        lmax = ini.int("lmax_kx"), 
-        fwhm = ini.float("fwhm_kx"), 
-        healpixwin_filename = ini.relativeFileName('healpix_win_func_kx_file')
-      )
-    # CMB auto spectra ---------------------------------------------------------   
-    nbins = ini.int("nbp_kk")
-    nvar = ini.float("hartlap_nvar_kk")
-    ci.init_cmb_auto_bandpower(
-        nbins  = nbins,
-        lmin = ini.int("lminbp_kk"),
-        lmax = ini.int("lmaxbp_kk"),
-        binning_matrix = ini.relativeFileName('binmat_kk_file'),
-        theory_offset = ini.relativeFileName('offset_kk_file'),
-        alpha = (nvar - nbins - 2.0)/(nvar - 1.0))
-
     if self.use_emulator == 1:
       ci.init_redshift_distributions_from_files(
           lens_multihisto_file=self.lens_file,
@@ -196,7 +178,7 @@ class _cosmolike_prototype_base(DataSetLikelihood):
                 ia_redshift_evolution = int(self.IA_redshift_evolution),
                 ia_code = int(self.IA_code))
 
-      if self.probe not in ("xi", "3x2pt_ss_sk_sk", "2x2pt_ss_sk"):
+      if self.probe != "xi":
         # (b1, b2, bs2, b3, bmag). 0 = one amplitude per bin
         ci.init_bias(bias_model=self.bias_model)
 

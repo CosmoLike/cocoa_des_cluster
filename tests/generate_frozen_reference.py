@@ -9,19 +9,21 @@ they become the new references the tests compare against.
 What one run produces, all under tests/ (see cocoa_test_utils for how
 the tests consume each piece):
 
-  - frozen/data/: a copy of the CURRENT ../data folder.
+  - frozen/data/: a copy of the CURRENT ../data folder, plus the
+    synthetic NLA data vector and its dataset descriptor
+    (cocoa_test_utils.SYNTHETIC_VECTORS).
   - frozen/EXAMPLE_EVALUATE{1,2}.yaml: snapshots of the current
     examples, kept for humans to diff (the tests never load them).
-  - frozen/frozen_config_example{1,2}.py: for each example, the model
-    is built from the CURRENT example yaml, cobaya resolves it against
-    the CURRENT likelihood defaults, and the complete resolved
-    configuration is written back out as a yaml string, together with
-    the exact evaluation point. Writing out every resolved option and
-    parameter is what makes the tests independent of later edits to
-    the live files.
-  - frozen/reference_chi2.json: the four reference chi2 values
-    (example1/2, each with NLA and TATT), computed FROM the frozen
-    modules just written, exactly the way the tests will compute them.
+  - frozen/frozen_config_<example>.py: for each configuration of
+    cocoa_test_utils.EXAMPLES, the model is built from the CURRENT
+    example yaml, cobaya resolves it against the CURRENT likelihood
+    defaults, and the complete resolved configuration is written back
+    out as a yaml string, together with the exact evaluation point.
+    Writing out every resolved option and parameter is what makes the
+    tests independent of later edits to the live files.
+  - frozen/reference_chi2.json: one NLA reference chi2 per
+    configuration, computed FROM the frozen modules just written,
+    exactly the way the tests will compute them.
   - manifest_sha256.json: the SHA-256 pin of every frozen file.
 
 Usage (from the Cocoa/ folder, cocoa environment active,
@@ -90,7 +92,7 @@ def freeze_example(example, stamp):
     module no longer depends on any live default.
 
     Arguments:
-      example = "example1" or "example2" (a key of u.EXAMPLES).
+      example = a key of u.EXAMPLES.
       stamp   = the UTC time string written into the module header.
 
     Returns:
@@ -116,7 +118,7 @@ def freeze_example(example, stamp):
     live["debug"] = 30
     live["timing"] = False
     # the 2x2pt configuration reuses example2's yaml with the
-    # likelihood renamed (combo_6x2pt -> combo_2x2pt: same options,
+    # likelihood renamed (combo_3x2pt -> combo_2x2pt: same options,
     # same data, different probe selection inside cosmolike)
     # .get falls back to its second argument when the key is
     # absent, so most entries rename nothing
@@ -183,18 +185,17 @@ def freeze_example(example, stamp):
 
 
 def generate_datavector(dataset_name):
-    """Write one generated data vector and its dataset descriptor.
+    """Write one synthetic NLA data vector and its dataset descriptor.
 
-    u.SYNTHETIC_VECTORS names the source example and the IA model:
-    the NLA vector puts the fiducial point at the chi2 minimum for
-    the NLA tests (the shipped data_file is real data), the TATT
-    vector does the same for the TATT tests. The vector is evaluated
-    with datavector printing enabled against the ORIGINAL frozen
-    dataset (the descriptor written here does not exist yet; the
-    printed theory vector does not depend on which data vector it is
-    compared against). Runs inside a --vector-one worker subprocess:
-    it builds a model, and two different-dimension builds in one
-    process abort (see cocoa_test_utils).
+    The shipped data_file is real data, far from the fiducial's chi2
+    minimum; the synthetic vector puts the fiducial point AT the
+    minimum (see cocoa_test_utils.NLA_DATASET). The vector is
+    evaluated with datavector printing enabled against the ORIGINAL
+    frozen dataset (the descriptor written here does not exist yet;
+    the printed theory vector does not depend on which data vector it
+    is compared against). Runs inside a --vector-one worker
+    subprocess: it builds a model, and two different-dimension builds
+    in one process abort (see cocoa_testing).
 
     Arguments:
       dataset_name = a key of u.SYNTHETIC_VECTORS, which is also the
@@ -211,31 +212,27 @@ def generate_datavector(dataset_name):
     """
     from cobaya.yaml import yaml_load
 
-    # the table's value is an (example, TATT?) pair; the assignment
-    # unpacks it into the two names
-    example, use_tatt = u.SYNTHETIC_VECTORS[dataset_name]
+    example = u.SYNTHETIC_VECTORS[dataset_name]
     cfg = u.EXAMPLES[example]
     # the original dataset name comes from the frozen configuration
-    # itself (load_frozen_info would already point at the TATT dataset)
+    # itself (load_frozen_info already points data_file at the
+    # synthetic descriptor, which does not exist yet)
     frozen_info = yaml_load(u._frozen_module(example).yaml_string)
     original_dataset = frozen_info["likelihood"][cfg["likelihood"]]["data_file"]
 
     # str.replace swaps the extension, pairing the vector's file
     # name with the descriptor's
     vector_name = dataset_name.replace(".dataset", ".modelvector")
-    info = u.load_frozen_info(example, tatt=use_tatt)
+    info = u.load_frozen_info(example, tatt=False)
     likelihood_block = info["likelihood"][cfg["likelihood"]]
     likelihood_block["data_file"] = original_dataset
     likelihood_block["print_datavector"] = True
     likelihood_block["print_datavector_file"] = (
         FROZEN_DATA_RELPATH + "/" + vector_name)
 
-    # ternary: "TATT" when use_tatt is True, "NLA" otherwise
-    ia_label = "TATT" if use_tatt else "NLA"
-    print(f"generating {vector_name} ({example}, {ia_label} point) ...",
-          flush=True)
+    print(f"generating {vector_name} ({example}, NLA point) ...", flush=True)
     model = u.make_model(info)
-    point = u.build_point(model, example, tatt=use_tatt)
+    point = u.build_point(model, example, tatt=False)
     u.evaluate_chi2(model, point)
 
     # sanity: the generated vector must have the same length as the
@@ -264,10 +261,10 @@ def generate_datavector(dataset_name):
         original_lines = sum(1 for _ in f)
     if generated_lines != original_lines:
         raise RuntimeError(
-            f"TATT data vector has {generated_lines} lines; the "
+            f"generated data vector has {generated_lines} lines; the "
             f"original {original_vector} has {original_lines}")
 
-    # the TATT dataset descriptor: the original with only the
+    # the synthetic dataset descriptor: the original with only the
     # data_file line replaced
     replaced = 0
     out_lines = []
@@ -292,146 +289,27 @@ def generate_datavector(dataset_name):
           f"descriptor: {dataset_name}", flush=True)
 
 
-def generate_baryon_datavector(label):
-    """Write one feedback method's frozen data vector and descriptor.
-
-    The vector is the example1 theory prediction WITH the bfmt theory
-    block computing this method's suppression, at the frozen fiducial
-    point plus the method's cosmology override
-    (u.BARYON_POINT_OVERRIDES, e.g. BACCOemu's omegab shift into its
-    training box). The DRIFT tests of test_baryons.py evaluate
-    against this vector: at freeze time the chi2 is zero by
-    construction, so any later chi2 above the tolerance means
-    cosmolike or the theory block changed its prediction. (The
-    ACCURACY checks of test_accuracy_baryons.py do not use these
-    files: they regenerate their vector on the fly per run.) Runs
-    inside a --baryon-one worker subprocess for the same isolation
-    reasons as the other steps.
-
-    Arguments:
-      label = a u.BARYON_METHODS label.
-
-    Returns:
-      nothing; frozen/data/ gains the .modelvector and .dataset files.
-
-    Raises:
-      RuntimeError when the generated vector's length differs from
-      the original data vector, or when the dataset descriptor does
-      not contain exactly one data_file line.
-    """
-    from cobaya.yaml import yaml_load
-
-    example = "example1"
-    cfg = u.EXAMPLES[example]
-    frozen_info = yaml_load(u._frozen_module(example).yaml_string)
-    original_dataset = frozen_info["likelihood"][cfg["likelihood"]]["data_file"]
-
-    dataset_name = u._baryon_dataset(label)
-    vector_name = dataset_name.replace(".dataset", ".modelvector")
-    info = u.load_frozen_info(example, tatt=False, baryon=label)
-    likelihood_block = info["likelihood"][cfg["likelihood"]]
-    likelihood_block["data_file"] = original_dataset
-    likelihood_block["print_datavector"] = True
-    likelihood_block["print_datavector_file"] = (
-        FROZEN_DATA_RELPATH + "/" + vector_name)
-
-    print(f"generating {vector_name} ({label}) ...", flush=True)
-    model = u.make_model(info)
-    point = dict(u.build_point(model, example, tatt=False))
-    point.update(u.BARYON_POINT_OVERRIDES.get(label, {}))
-    u.evaluate_chi2(model, point)
-
-    data_dir = os.path.join(u.FROZEN_DIR, "data")
-    with open(os.path.join(data_dir, vector_name)) as f:
-        generated_lines = sum(1 for _ in f)
-    descriptor_path = os.path.join(data_dir, original_dataset)
-    with open(descriptor_path) as f:
-        descriptor = f.read()
-    original_vector = None
-    for line in descriptor.splitlines():
-        if line.strip().startswith("data_file"):
-            original_vector = line.split("=", 1)[1].strip()
-    with open(os.path.join(data_dir, original_vector)) as f:
-        original_lines = sum(1 for _ in f)
-    if generated_lines != original_lines:
-        raise RuntimeError(
-            f"baryon data vector has {generated_lines} lines; the "
-            f"original {original_vector} has {original_lines}")
-
-    replaced = 0
-    out_lines = []
-    for line in descriptor.splitlines(keepends=True):
-        if line.strip().startswith("data_file"):
-            out_lines.append(f"data_file = {vector_name}\n")
-            replaced += 1
-        else:
-            out_lines.append(line)
-    if replaced != 1:
-        raise RuntimeError(
-            f"{original_dataset}: expected exactly one data_file "
-            f"line, found {replaced}")
-    with open(os.path.join(data_dir, dataset_name), "w") as f:
-        f.write("".join(out_lines))
-    print(f"baryon data vector: {vector_name} ({generated_lines} "
-          f"lines); descriptor: {dataset_name}", flush=True)
-
-
-# The --mask reruns of the comparison sweeps read one frozen TATT
-# dataset descriptor per scale-cut mask: identical to the base TATT
-# descriptor except for its mask_file line (the entries of
-# cocoa_test_utils.FASTPT_MASK_DATASETS). variant -> (base, mask).
-TATT_MASK_VARIANTS = {
-    "tatt_des_cluster_ones.dataset": ("tatt_des_cluster.dataset", "ones.mask"),
-}
-
-def generate_tatt_mask_datasets():
-    """Write the per-mask TATT dataset descriptors.
-
-    Each variant is the base TATT descriptor with only its mask_file
-    line retyped: the comparison sweeps read them through the --mask
-    option to evaluate the same generated vector under another
-    scale-cut mask. Pure text, no model evaluations, so the variants
-    regenerate in the --overwrite run and in the incremental
-    --tatt-masks mode alike.
-
-    Returns:
-      nothing; frozen/data/ gains one descriptor per variant.
-
-    Raises:
-      RuntimeError when a base descriptor does not contain exactly
-      one mask_file line.
-    """
-    data_dir = os.path.join(u.FROZEN_DIR, "data")
-    for variant, (base, mask) in TATT_MASK_VARIANTS.items():
-        with open(os.path.join(data_dir, base)) as f:
-            descriptor = f.read()
-        replaced = 0
-        out_lines = []
-        # keepends=True keeps the newline on every line, so joining
-        # the pieces rebuilds the file byte for byte and only the
-        # retyped line differs
-        for line in descriptor.splitlines(keepends=True):
-            if line.strip().startswith("mask_file"):
-                out_lines.append(f"mask_file = {mask}\n")
-                replaced += 1
-            else:
-                out_lines.append(line)
-        if replaced != 1:
-            raise RuntimeError(
-                f"{base}: expected exactly one mask_file line, "
-                f"found {replaced}")
-        with open(os.path.join(data_dir, variant), "w") as f:
-            f.write("".join(out_lines))
-        print(f"TATT mask variant: {variant} (mask_file = {mask})",
-              flush=True)
-
-
 def main():
-    # worker modes first: --freeze-one X and --tatt-one D each run a
-    # single model-building step and exit. The parent below spawns one
-    # subprocess per step: a process that initializes configurations
-    # with different data-set dimensions aborts inside cosmolike (see
-    # cocoa_test_utils), and one architecture serves every project.
+    """Rebuild tests/frozen/ and the manifest from the current project.
+
+    Worker modes come first: --freeze-one X and --vector-one D each
+    run a single model-building step and exit. The parent spawns one
+    subprocess per step: a process that initializes configurations
+    with different data-set dimensions aborts inside cosmolike (see
+    cocoa_testing), and one architecture serves every project.
+
+    The parent's steps, in order: refuse without --overwrite; delete
+    and recreate frozen/; copy the data and the example snapshots;
+    write the expanded frozen-configuration modules; generate the
+    synthetic data vector; evaluate the reference chi2 values from
+    those modules (the same code path the tests use); write the
+    reference file; hash everything into the manifest. The manifest
+    comes last so it covers every file the earlier steps produced.
+
+    Returns:
+      0 on success, 1 when --overwrite was not given (the usage text
+      and the refusal reason are printed).
+    """
     # `in` scans the argument list for the flag; .index returns the
     # position of its first occurrence, so [index + 1] is the value
     # that follows the flag
@@ -441,72 +319,11 @@ def main():
         stamp = sys.argv[sys.argv.index("--stamp") + 1]
         freeze_example(example, stamp)
         return 0
-    if "--baryon-one" in sys.argv:
-        u.require_cocoa_environment()
-        label = sys.argv[sys.argv.index("--baryon-one") + 1]
-        generate_baryon_datavector(label)
-        return
     if "--vector-one" in sys.argv:
         u.require_cocoa_environment()
         dataset_name = sys.argv[sys.argv.index("--vector-one") + 1]
         generate_datavector(dataset_name)
         return 0
-    """Rebuild tests/frozen/ and the manifest from the current project.
-
-    The steps, in order: refuse without --overwrite; delete and
-    recreate frozen/; copy the data and the example snapshots; write
-    the two expanded frozen-configuration modules; evaluate the four
-    reference chi2 values from those modules (the same code path the
-    tests use); write the reference file; hash everything into the
-    manifest. The manifest comes last so it covers every file the
-    earlier steps produced.
-
-    Returns:
-      0 on success, 1 when --overwrite was not given (the usage text
-      and the refusal reason are printed).
-    """
-    # the same argument-list scan as the worker flags above
-    if "--tatt-masks" in sys.argv:
-        # incremental: rewrite the per-mask TATT descriptors of the
-        # --mask comparison sweeps in an existing frozen state and
-        # re-pin the manifest; pure text, no model evaluations
-        u.require_cocoa_environment()
-        generate_tatt_mask_datasets()
-        manifest = {
-            "_comment": "SHA-256 of every file under tests/frozen/; "
-                        "verified by every test before evaluating "
-                        "anything.",
-            "files": u.compute_manifest(),
-        }
-        with open(u.MANIFEST_FILE, "w") as f:
-            json.dump(manifest, f, indent=2, sort_keys=True)
-            f.write("\n")
-        print(f"manifest: {len(manifest['files'])} files pinned")
-        return
-    if "--baryons" in sys.argv:
-        # incremental: add the per-method frozen baryon vectors of the
-        # DRIFT tests to an existing frozen state and re-pin the
-        # manifest; nothing else changes
-        import subprocess
-
-        u.require_cocoa_environment()
-        self_path = os.path.abspath(__file__)
-        for label, _, _ in u.BARYON_METHODS:
-            completed = subprocess.run(
-                [sys.executable, self_path, "--baryon-one", label])
-            if completed.returncode != 0:
-                raise RuntimeError(f"baryon worker for {label!r} failed")
-        manifest = {
-            "_comment": "SHA-256 of every file under tests/frozen/; "
-                        "verified by every test before evaluating "
-                        "anything.",
-            "files": u.compute_manifest(),
-        }
-        with open(u.MANIFEST_FILE, "w") as f:
-            json.dump(manifest, f, indent=2, sort_keys=True)
-            f.write("\n")
-        print(f"manifest: {len(manifest['files'])} files pinned")
-        return
     if "--overwrite" not in sys.argv:
         print(__doc__)
         print("Refusing to run without --overwrite (this redefines the "
@@ -531,7 +348,7 @@ def main():
         shutil.copy2(os.path.join(PROJECT_DIR, cfg["provenance"]),
                      os.path.join(u.FROZEN_DIR, cfg["provenance"]))
 
-    # one worker subprocess per model-building step (see main's note)
+    # one worker subprocess per model-building step (see the docstring)
     import subprocess
     # __file__ is this script's own path: each worker re-runs this
     # very file with a mode flag
@@ -545,35 +362,31 @@ def main():
              "--stamp", stamp])
         if completed.returncode != 0:
             raise RuntimeError(f"freeze worker for {example} failed")
-    # the generated data vectors must exist before the reference loop
-    # below: every reference evaluates against them
+    # the generated data vector must exist before the reference loop
+    # below: every reference evaluates against it
     for dataset_name in u.SYNTHETIC_VECTORS:
         completed = subprocess.run(
             [sys.executable, self_path, "--vector-one", dataset_name])
         if completed.returncode != 0:
             raise RuntimeError(f"vector worker for {dataset_name} failed")
 
-    generate_tatt_mask_datasets()
-
     reference = {
         "_meta": {
             "generated_utc": stamp,
             "omp_num_threads": os.environ["OMP_NUM_THREADS"],
-            "chi2_tolerance": u.CHI2_TOLERANCE,
         }
     }
     for example in u.EXAMPLES:
-        for tatt in (False, True):
-            # the ternary inside the f-string picks the key suffix:
-            # "tatt" when tatt is True, "nla" otherwise
-            key = f"{example}_{'tatt' if tatt else 'nla'}"
-            t0 = time.time()
-            chi2 = u.single_model_chi2(example, tatt)
-            # :.6f = fixed six decimals; :.1f = one decimal for the
-            # elapsed seconds
-            print(f"{key}: chi2 = {chi2:.6f}  ({time.time() - t0:.1f}s)",
-                  flush=True)
-            reference[key] = chi2
+        # the "_nla" suffix names the IA model the reference was
+        # evaluated with, the key test_accuracy.py reads
+        key = f"{example}_nla"
+        t0 = time.time()
+        chi2 = u.single_model_chi2(example, False)
+        # :.6f = fixed six decimals; :.1f = one decimal for the
+        # elapsed seconds
+        print(f"{key}: chi2 = {chi2:.6f}  ({time.time() - t0:.1f}s)",
+              flush=True)
+        reference[key] = chi2
 
     with open(u.REFERENCE_FILE, "w") as f:
         # json.dump writes the table as JSON text into the open

@@ -46,7 +46,7 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
 {
-  m.doc() = "CosmoLike Interface for DESY3 x Planck 6x2pt Module";
+  m.doc() = "CosmoLike Interface for the DES cluster (4x2pt + N) Module";
 
   // --------------------------------------------------------------------
   // INIT FUNCTIONS
@@ -184,30 +184,10 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::arg("is_linear").none(false)
     );
 
-  m.def("init_cmb_cross_correlation",
-      &cosmolike_interface::init_cmb_cross_correlation,
-      "Init scale cuts (fourier) and experiment binning for the CMB cross correlation",
-      py::arg("lmin").none(false).noconvert(),
-      py::arg("lmax").none(false).noconvert(),
-      py::arg("fwhm").none(false),
-      py::arg("healpixwin_filename").none(false)
-    );
-
-  m.def("init_cmb_auto_bandpower",
-      &cosmolike_interface::init_cmb_auto_bandpower,
-      "Init scale cuts (fourier & bandpower) and cov correctionfor the CMB kk",
-      py::arg("nbins").none(false).noconvert(),
-      py::arg("lmin").none(false).noconvert(),
-      py::arg("lmax").none(false).noconvert(),
-      py::arg("binning_matrix").none(false),
-      py::arg("theory_offset").none(false),
-      py::arg("alpha").none(false)
-    );
-
   m.def("init_data_real",
       [](std::string cov, std::string mask, std::string data) {
         using namespace cosmolike_interface;
-        init_data_Mx2pt_N<0,6>(cov, mask, data, {0, 1, 2, 3, 4, 5});
+        init_data_Mx2pt_N<0,3>(cov, mask, data, {0, 1, 2});
       },
       "Load covariance matrix, mask (vec of 0/1s) and data vector",
       py::arg("COV").none(false),
@@ -474,10 +454,10 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
         using namespace cosmolike_interface;
         arma::Col<double> res;
         if (force_exclude_pm == 1) {
-          res = compute_add_calib_and_set_mask_Mx2pt_N<0,6,0>(dv,{0, 1, 2, 3, 4, 5});
+          res = compute_add_calib_and_set_mask_Mx2pt_N<0,3,0>(dv,{0, 1, 2});
         } 
         else {
-          res = compute_add_calib_and_set_mask_Mx2pt_N<0,6,1>(dv,{0, 1, 2, 3, 4, 5});
+          res = compute_add_calib_and_set_mask_Mx2pt_N<0,3,1>(dv,{0, 1, 2});
         }
         return arma::conv_to<std::vector<double>>::from(res);
       },
@@ -496,10 +476,10 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
         using stlvec = std::vector<double>;
         arma::Col<double> res;
         if (force_exclude_pm == 1) {
-          res = compute_add_calib_and_set_mask_Mx2pt_N<0,6,0>(dv,{0,1,2,3,4,5});
+          res = compute_add_calib_and_set_mask_Mx2pt_N<0,3,0>(dv,{0,1,2});
         } 
         else {
-          res = compute_add_calib_and_set_mask_Mx2pt_N<0,6,1>(dv,{0,1,2,3,4,5});
+          res = compute_add_calib_and_set_mask_Mx2pt_N<0,3,1>(dv,{0,1,2});
         }
         return arma::conv_to<stlvec>::from(compute_add_baryons_pcs(Q,res));
       },
@@ -515,7 +495,7 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
         using namespace cosmolike_interface;
         using namespace arma;
         using stlvec = std::vector<int>;
-        return conv_to<stlvec>::from(compute_data_vector_Mx2pt_N_sizes<0,6>());
+        return conv_to<stlvec>::from(compute_data_vector_Mx2pt_N_sizes<0,3>());
       },
       "Returns the data vector sizes of each 2pt correlation function",
       py::return_value_policy::move
@@ -528,7 +508,7 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       []()->std::vector<double> {
         using namespace cosmolike_interface;
         using stlvec = std::vector<double>;
-        return arma::conv_to<stlvec>::from(compute_Mx2pt_N_masked<0,6>({0,1,2,3,4,5}));
+        return arma::conv_to<stlvec>::from(compute_Mx2pt_N_masked<0,3>({0,1,2}));
       },
       "Compute theoretical data vector. Masked dimensions are filled w/ zeros",
       py::return_value_policy::move
@@ -538,7 +518,7 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       [](std::vector<double> Q)->std::vector<double> {
         using namespace cosmolike_interface;
         using stlvec = std::vector<double>;
-        arma::Col<double> res = compute_Mx2pt_N_masked<0,6>({0,1,2,3,4,5});
+        arma::Col<double> res = compute_Mx2pt_N_masked<0,3>({0,1,2});
         return arma::conv_to<stlvec>::from(compute_add_baryons_pcs(Q,res));
       },
       "Compute theoretical data vector, including contributions from baryonic"
@@ -560,7 +540,7 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       [](std::string scenarios, std::string allsims) {
         using namespace cosmolike_interface;
         BaryonScenario::get_instance().set_scenarios(allsims, scenarios);
-        return compute_baryon_pcas_Mx2pt_N<0,6>({0,1,2,3,4,5});
+        return compute_baryon_pcas_Mx2pt_N<0,3>({0,1,2});
       },
       "Compute baryonic principal components given a list of scenarios" 
       "that contaminate the matter power spectrum",
@@ -604,13 +584,6 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
   m.def("w_gg_tomo",
       &cosmolike_interface::w_gg_tomo_cpp,
       "Compute galaxy-galaxy clustering (real space) data vector at all"
-      " tomographic and theta bins",
-      py::return_value_policy::move
-    );
-
-  m.def("w_ks_tomo",
-      &cosmolike_interface::w_ks_tomo_cpp,
-      "Compute CMB lensing-shear (real space) data vector at all"
       " tomographic and theta bins",
       py::return_value_policy::move
     );
@@ -667,24 +640,6 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::overload_cast<arma::Col<double>>(&cosmolike_interface::C_gg_tomo_cpp),
       "Compute position-position (fourier - non-limber/limber) data vector"
       " at all tomographic bins and many ell (vectorized)",
-      py::arg("l").none(false),
-      py::return_value_policy::move
-    );
-
-  m.def("C_ks_tomo_limber",
-      py::overload_cast<const double, const int>(
-        &cosmolike_interface::C_ks_tomo_limber_cpp),
-      "Compute CMB lensing-shear (fourier - limber) data vector at a single"
-      " tomographic bin and ell value",
-      py::arg("l").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert()
-    );
-
-  m.def("C_ks_tomo_limber",
-      py::overload_cast<arma::Col<double>>(
-        &cosmolike_interface::C_ks_tomo_limber_cpp),
-      "Compute CMB lensing-shear (fourier - limber) data vector at all"
-      " tomographic bins and many ell (vectorized)",
       py::arg("l").none(false),
       py::return_value_policy::move
     );
@@ -772,86 +727,6 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
         &cosmolike_interface::RF_xi_tomo_limber_cpp
       ),
       "Compute int from -infty to k of |dlnxi_dlnk| (fourier - limber)",
-      py::arg("k").none(false),
-      py::return_value_policy::move
-    );
-
-  m.def("dlnC_ks_dlnk_tomo_limber",
-      py::overload_cast<const double, const double, const int>(
-        &cosmolike_interface::dlnC_ks_dlnk_tomo_limber_cpp
-      ),
-      "Compute dlnC_ks_dlnk (fourier - limber) derivative of the data vector",
-      py::arg("k").none(false).noconvert(),
-      py::arg("l").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert(),
-      py::return_value_policy::move
-    );
-
-  m.def("dlnC_ks_dlnk_tomo_limber",
-      py::overload_cast<const arma::Col<double>, const arma::Col<double>>(
-        &cosmolike_interface::dlnC_ks_dlnk_tomo_limber_cpp
-      ),
-      "Compute dlnC_ks_dlnk (fourier - limber) derivative of the data vector",
-      py::arg("k").none(false),
-      py::arg("l").none(false),
-      py::return_value_policy::move
-    );
-
-  m.def("rf_C_ks_tomo_limber",
-      py::overload_cast<const double, const double, const int>(
-        &cosmolike_interface::RF_C_ks_tomo_limber_cpp
-      ),
-      "Compute int from -infty to k of |dlnC_ks_dlnk| (fourier - limber)",
-      py::arg("k").none(false).noconvert(),
-      py::arg("l").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert(),
-      py::return_value_policy::move
-    );
-
-  m.def("rf_C_ks_tomo_limber",
-      py::overload_cast<const arma::Col<double>, const arma::Col<double>>(
-        &cosmolike_interface::RF_C_ks_tomo_limber_cpp
-      ),
-      "Compute int from -infty to k of |dlnC_ks_dlnk| (fourier - limber)",
-      py::arg("k").none(false),
-      py::arg("l").none(false),
-      py::return_value_policy::move
-    );
-
-  m.def("dlnw_ks_dlnk_tomo",
-      py::overload_cast<const double>(
-        &cosmolike_interface::dlnw_ks_dlnk_tomo_cpp
-      ),
-      "Compute dlnw_ks_dlnk (real - limber) derivative of the data vector",
-      py::arg("k").none(false),
-      py::return_value_policy::move
-    );
-
-  m.def("dlnw_ks_dlnk_tomo",
-      py::overload_cast<const arma::Col<double>>(
-        &cosmolike_interface::dlnw_ks_dlnk_tomo_cpp
-      ),
-      "Compute dlnw_ks_dlnk (real - limber) derivative of the data vector",
-      py::arg("k").none(false),
-      py::return_value_policy::move
-    );
-
-  m.def("rf_w_ks_tomo",
-      py::overload_cast<const double, const int, const int>(
-        &cosmolike_interface::RF_w_ks_tomo_cpp
-      ),
-      "Compute int from -infty to k of |dlnw_ks_dlnk| (fourier - limber)",
-      py::arg("k").none(false),
-      py::arg("nt").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert(),
-      py::return_value_policy::move
-    );
-
-  m.def("rf_w_ks_tomo",
-      py::overload_cast<const arma::Col<double>>(
-        &cosmolike_interface::RF_w_ks_tomo_cpp
-      ),
-      "Compute int from -infty to k of |dlnw_ks_dlnk| (fourier - limber)",
       py::arg("k").none(false),
       py::return_value_policy::move
     );

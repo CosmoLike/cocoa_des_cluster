@@ -1,0 +1,23 @@
+{
+  "_comment": "SHA-256 of every file under tests/frozen/; verified by every test before evaluating anything.",
+  "files": {
+    "frozen/EXAMPLE_EVALUATE1.yaml": "8b4764b6a282e8145481cd3f67214092f22887dd27f1d6e4f726a850d8670c65",
+    "frozen/EXAMPLE_EVALUATE2.yaml": "44f5e2c62105586af455cae8f90e5e0e317f6b86a0f1b016ddbba57ccb5b9d00",
+    "frozen/data/3x2pt_baseline.mask": "a50d8afdc25810391cb737990683bf933c7391650720e195af17b68039a3806d",
+    "frozen/data/README.md": "db41446e453ff3f1684d73fb4ffd5aee1583aacf298c7b273b4e0c66ff92bbf4",
+    "frozen/data/baryons_logPkR.h5": "1ab5cc0604925089787dd775740b368db2a83a0d10c88af54f3b3f4bfa33570d",
+    "frozen/data/des_y3_cov_unblinded_final.txt": "0ae78cd8b95cf0055525bc19475a1d328eb850572d1c43e721a7cf41aa0830c0",
+    "frozen/data/des_y3_lens.nz": "51fb8b61a44abd20dcb5e82842f9b707a1744228b3ed8f9cc6ae587359fbe6d0",
+    "frozen/data/des_y3_real.dataset": "35c9dbe28ffecad7a88ca3996fb09239a152361122a35048be250b79cdbfed02",
+    "frozen/data/des_y3_source.nz": "289771a3766fbe46d6d2a61436a31e0aef6693e4c9c0e92b4e3cc72d607d9477",
+    "frozen/data/des_y3_unblinded_final.txt": "17bdf9c97ad2c207049eb21d3c41a8a18aab9417b1d80dc3bd937f18e1892486",
+    "frozen/data/ones.mask": "28c3165bc1c94f4264818a3b02832fb7ec3f74ca4d029105e13912a433d05386",
+    "frozen/data/pca.txt": "c4112d76ff0c258e20a2c9201b469be6a87199671536e46ce6cced967f3f5e59",
+    "frozen/data/synthetic_des_cluster.dataset": "9ec53b696315994880f91adbac86c4cbba655fb362453460424c58aed7e47951",
+    "frozen/data/synthetic_des_cluster.modelvector": "169b5cc970338dbde46859a70677c0f3ba4a245a46886275b27482591044be15",
+    "frozen/frozen_config_example1.py": "b7d12f2d979abed6a525ce91c58b5715df758383ccd2426f6679d04c111cc2cc",
+    "frozen/frozen_config_example2.py": "6c2e589519fbaad42c6cce9ce140283ec31a59476b834810dd6b5308bf9cdfd4",
+    "frozen/frozen_config_example2_2x2pt.py": "200115820ac24885da615576af9f192686745cfa9a07df309390a8b1258712f9",
+    "frozen/reference_chi2.json": "262e50be1962d4e70f2f6b1d85f4601adc1969b1590213785b5717aab9ddf547"
+  }
+}
