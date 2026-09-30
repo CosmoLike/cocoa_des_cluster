@@ -4,7 +4,7 @@ The two evaluate examples (EXAMPLE_EVALUATE1.yaml = 4x2pt + N,
 EXAMPLE_EVALUATE2.yaml = 6x2pt + N) are the hand-written source of truth:
 their likelihood blocks, their nuisance-parameter note and their fiducial
 point. This script derives every other example from them, so the
-fourteen files cannot drift apart:
+sixteen files cannot drift apart:
 
   EXAMPLE_MCMC{1,2}.yaml                 Metropolis-Hastings, CAMB
   EXAMPLE_EMUL2_EVALUATE{1,2}.yaml       evaluate, emulated Boltzmann inputs
