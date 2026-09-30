@@ -2,29 +2,51 @@ timing: True
 debug: False
 stop_at_error: True
 
+# CL+3x2pt (6x2pt + N) of arXiv 2503.13631 on the synthetic DES Y6-like data:
+# the CL+GC blocks (cluster counts N, cluster lensing Sigma = Y gamma_t,
+# cluster clustering w_cc, cluster x galaxy w_cg) plus the galaxy 3x2pt
+# (cosmic shear, galaxy-galaxy lensing, galaxy clustering; MagLim bins 1-6).
+# The data vector is the model at the point of the evaluate block below
+# (scripts/make_synthetic_data.py, Table I of the paper), so chi2 ~ 0 there.
 likelihood:
-  #des_cluster.combo_2x2pt:
-  des_cluster.combo_3x2pt:
+  des_cluster.combo_6x2pt_N:
     path: ./external_modules/data/des_cluster
-    data_file: des_y3_real.dataset
+    data_file: des_cluster_y6_6x2ptN.dataset
     print_datavector: False
-    print_datavector_file: "./projects/des_cluster/chains/theory.modelvector"
+    print_datavector_file: "./projects/des_cluster/chains/theory_6x2pt_N.modelvector"
     # WARNING: keep accuracyboost <= 3 (above it the integration tables of the
     # donor project desy1xplanck broke down; not re-measured here).
     accuracyboost: 1.0
-    integration_accuracy: 0
+    # integer 0, 1 or 2; 1 for the Y6 inputs (the MagLim lens n(z) tails reach
+    # z = 2.99: delta chi2 vs high accuracy 1.65 at 0, 0.048 at 1)
+    integration_accuracy: 1
     lmax: 75000 # lmax computed for real space correlation function
-    kmax_boltzmann: 7.5
+    kmax_boltzmann: 10.0
     # 1 EE2, 2 Halofit
     non_linear_emul: 2
-    IA_model: 0 # NLA (0) or TATT (1)
+    IA_model: 0 # NLA (0); the cluster lensing code has no TATT
     IA_code: 0  # CFASTPT (0) or FASTPT (1) (only works if not NLA)
     IA_redshift_evolution: 3
     debug: false
-    use_baryon_pca: false
-    create_baryon_pca: false
-    baryon_pca_select_sims: "antilles-2-99/antilles-101-378/antilles-380-400"
-    filename_baryon_pca: "./projects/des_cluster/chains/pca.txt"
+    # radial kernel of clusters in the 2pt functions: 0 = volume only (what
+    # DES ran), 1 = abundance weighted
+    cluster_kernel_mode: 0
+    # selection bias: 0 = none, 1 = Y1 (mass dependent), 2 = Y6 (scale
+    # dependent, on the data vector; eq 23)
+    cluster_selection_model: 2
+    # cluster lensing: 1 = Sigma = Y gamma_t (eq 15), 0 = gamma_t (the data
+    # and covariance files must be in the same space)
+    cluster_ytransform: 1
+    # 1 = intrinsic alignment of the sources in the 2-halo cluster-lensing term
+    cluster_include_ia: 1
+    # cluster magnification coefficient C_c (eq 28: -2); 0 switches it off
+    cluster_magnification: -2.0
+    # Tinker 2010 amplitude: 0 = 0.368 at every z (what DES ran), 1 = alpha(z)
+    cluster_hmf_alpha_mode: 0
+    # w_cc and w_cg: 1 = Limber at every multipole, 0 = non-Limber
+    cluster_adopt_limber_cc: 1
+    cluster_adopt_limber_cg: 1
+
 params:
   As_1e9:
     prior:
@@ -45,8 +67,8 @@ params:
     ref:
       dist: norm
       loc: 0.96605
-      scale: 0.015
-    proposal: 0.015
+      scale: 0.01
+    proposal: 0.01
     latex: n_\mathrm{s}
   H0:
     prior:
@@ -65,8 +87,8 @@ params:
     ref:
       dist: norm
       loc: 0.0495
-      scale: 0.005
-    proposal: 0.005
+      scale: 0.004
+    proposal: 0.004
     latex: \Omega_\mathrm{b}
     drop: true
   omegam:
@@ -92,7 +114,7 @@ params:
     latex: w_{0,\mathrm{DE}}
   w0pwa:
     prior:
-      min: -5 
+      min: -5
       max: -0.01
     ref:
       dist: norm
@@ -121,7 +143,7 @@ params:
   # ---------------------------------------------------------------------------------------
   # WARNING: DO NOT REMOVE omegabh2/omegach2/omegamh2/wa/As/ FROM DERIVED PARAMETERS
   # SEE: github.com/CosmoLike/cocoa#warning-warning-warning-weak-lensing-yaml-files-in-cobaya-
-  # --------------------------------------------------------------------------------------- 
+  # ---------------------------------------------------------------------------------------
   As:
     value: 'lambda As_1e9: 1e-9 * As_1e9'
     latex: A_\mathrm{s}
@@ -160,37 +182,14 @@ params:
     latex: \Omega_\mathrm{\\nu} h^2
   omegan:
     derived: 'lambda omegan2, H0: omegan2/((H0/100)**2)'
-    latex: \Omega_\mathrm{\\nu}
+    latex: \Omega_\mathrm{\nu}
   # ----------------------------------------------------------------------------
-  # DES-Y3 nuisance parameters begins
+  # The nuisance parameters (sources, MagLim lenses, clusters) and their
+  # priors come from the likelihood defaults: likelihood/params_source_y6.yaml,
+  # params_lens_maglim.yaml and params_cluster.yaml. CL+3x2pt samples the
+  # bias and photo-z shift of all six lens bins.
   # ----------------------------------------------------------------------------
-  # baryon effects: the first two PCs
-  # Q1 informative: [0, 7]
-  # Q1 wide: [-6, 20]
-  # Q2: [-4, 4] 
-  DES_BARYON_Q1:
-    prior:
-      min: 0.0
-      max: 7.0
-    ref:
-      dist: norm
-      loc: 2.0
-      scale: 0.5
-    proposal: 0.5
-    latex: Q_\mathrm{DES}^1
-  DES_BARYON_Q2:
-    prior:
-      min: -4.0
-      max: 4.0
-    ref:
-      dist: norm
-      loc: 2.0
-      scale: 0.5
-    proposal: 0.5
-    latex: Q_\mathrm{DES}^2
-  # ----------------------------------------------------------------------------
-  # DES-Y3 nuisance parameters ends
-  # ----------------------------------------------------------------------------
+
 theory:
   camb:
     path: ./external_modules/code/CAMB
@@ -206,50 +205,60 @@ theory:
       accurate_massive_neutrino_transfers: false
       k_per_logint: 12
       kmax: 10
+
 sampler:
   evaluate:
     N: 1
     override:
-      As_1e9: 2.1
-      ns: 0.96605
-      H0: 67.32
-      omegab: 0.04
+      # Table I of arXiv 2503.13631 (the point of the synthetic data vector)
+      As_1e9: 2.19
+      ns: 0.96859
+      H0: 69.0
+      omegab: 0.048
       omegam: 0.3
-      mnu: 0.06
+      # Omega_nu h^2 = 0.00083: mnu = 0.00083 x 94.0708/(3.046/3)^0.75 eV
+      mnu: 0.07719273818983689
       w0pwa: -1.0
       w: -1.0
-      DES_DZ_S1: 0.0
-      DES_DZ_S2: 0.0
-      DES_DZ_S3: 0.0
-      DES_DZ_S4: 0.0
-      DES_M1: -0.0063
-      DES_M2: -0.0198
-      DES_M3: -0.0241
-      DES_M4: -0.0369
-      DES_DZ_L1: 0.006
-      DES_DZ_L2: 0.001
-      DES_DZ_L3: 0.004
+      # sources: photo-z shift, shear calibration
+      DES_DZ_S1: 0.034
+      DES_DZ_S2: 0.028
+      DES_DZ_S3: 0.011
+      DES_DZ_S4: -0.010
+      DES_M1: 0.0
+      DES_M2: 0.0
+      DES_M3: 0.0
+      DES_M4: 0.0
+      # NLA: amplitude a1, redshift power eta1
+      DES_A1_1: 0.0
+      DES_A1_2: 0.0
+      # MagLim lenses: photo-z shift, linear bias
+      DES_DZ_L1: 0.005
+      DES_DZ_L2: 0.003
+      DES_DZ_L3: 0.001
       DES_DZ_L4: -0.002
-      DES_DZ_L5: -0.007
-      DES_B1_1: 1.7
-      DES_B1_2: 1.7
-      DES_B1_3: 1.7
-      DES_B1_4: 2.0
-      DES_B1_5: 2.0
-      DES_DZ2_L5: 1.23
+      DES_DZ_L5: 0.001
+      DES_DZ_L6: 0.008
+      DES_B1_1: 1.42
+      DES_B1_2: 1.66
+      DES_B1_3: 1.70
+      DES_B1_4: 1.62
+      DES_B1_5: 1.78
+      DES_B1_6: 1.75
+      # point mass of gamma_t (eq 14), in units of 1e13 Msun/h
       DES_PM1: 0.0
       DES_PM2: 0.0
       DES_PM3: 0.0
       DES_PM4: 0.0
       DES_PM5: 0.0
-      DES_BARYON_Q1: 0.0
-      DES_BARYON_Q2: 0.0
-      # TATT PARAMETERS
-      DES_A1_1: -0.7
-      DES_A1_2: -1.7
-      DES_A2_1: 0.0
-      DES_BTA_1: 0.0
-      #DES_A2_1: 0.6
-      #DES_BTA_1: 1.01257
-      DES_A2_2: -1.51541
+      DES_PM6: 0.0
+      # clusters: mass-observable relation (eqs 18-19)
+      DES_CL_LNLAMBDA0: 4.26
+      DES_CL_A_LAMBDA: 0.943
+      DES_CL_SIGMA_INT: 0.15
+      DES_CL_B_LAMBDA: 0.207
+      # clusters: selection bias (eq 23)
+      DES_CL_BS1: 1.1
+      DES_CL_BS2: 0.2
+      DES_CL_R0: 30.0
 output: ./projects/des_cluster/chains/EXAMPLE_EVALUATE2
