@@ -598,7 +598,7 @@ MagLim lenses (`params_lens_maglim.yaml`):
 | `DES_DZ2_L1` ... `DES_DZ2_L6` | photo-z stretch of each lens bin | 1 | fixed |
 | `DES_B2_1` ... `DES_B2_6` | nonlinear galaxy bias (the model is linear bias) | 0 | fixed |
 
-4x2pt + N uses lens bins 1-3 only, so `combo_4x2pt_N.yaml` fixes the bias and the photo-z shift of lens bins 4-6 at their fiducial values (its `fixed_params` block). 6x2pt + N samples all six bins. The clusters have no photo-z nuisance parameter: their redshift selection enters through the fixed kernels $\langle\phi_i|z\rangle$ of `data/des_y6_cluster.nz`.
+4x2pt + N uses lens bins 1-3 only and has no galaxy-galaxy lensing block, so `combo_4x2pt_N.yaml` fixes the bias and the photo-z shift of lens bins 4-6 at their fiducial values and the six point masses at zero (its `fixed_params` block): these parameters enter only blocks that the 4x2pt + N mask removes. 6x2pt + N samples the bias and the photo-z shift of all six bins and the six point masses. The clusters have no photo-z nuisance parameter: their redshift selection enters through the fixed kernels $\langle\phi_i|z\rangle$ of `data/des_y6_cluster.nz`.
 
 The fiducial cosmology of the synthetic data is `As_1e9` = 2.19, `ns` = 0.96859, `H0` = 69, `omegab` = 0.048, `omegam` = 0.3, $\Omega_\nu h^2 = 0.00083$ (`mnu` = 0.077 eV), and $w = -1$.
 
@@ -734,7 +734,6 @@ The port is complete for the model described above: the two likelihoods run, the
 - **Emulated Boltzmann inputs.** The emulators of the EMUL2 examples are fixed at a neutrino mass of 0.06 eV. At equal neutrino mass they differ from CAMB by $\Delta\chi^2 = 1.6$ on 6x2pt + N (the cluster counts differ by 1.5% in the median).
 - **The Y1 switches are not validated end to end.** The options that reproduce the DES Y1 choices (`cluster_selection_model: 1`, `cluster_ytransform: 0`, and the magnification and intrinsic-alignment switches) exist, but only the defaults have been validated.
 - **No parameter-recovery chain yet.** An MCMC that recovers the input parameters from the synthetic data is still open, as is an independent review of the model against the paper.
-- **Point-mass parameters in 4x2pt + N.** `combo_4x2pt_N` samples `DES_PM1` ... `DES_PM6` although it has no galaxy-galaxy lensing block, so these six parameters only follow their priors.
 - **Thread scaling.** Going from 4 to 8 threads gains only a factor of 1.4 on 6x2pt + N; the cause has not been measured. Two optimizations of the cluster tables are left (the one-halo table, and the $w_{cc}$ and $w_{cg}$ spectra tables).
 - **Angular binning in the compiled interface.** cosmolike caches the bin-averaged Legendre kernels by the number of angular bins and the table key, not by the angular range, so a call to `init_binning` with a new range and the same number of bins returns the values of the old range. The notebook wrappers avoid this by drawing a new table key on every call.
 - **No response functions for the cluster blocks.** The data-vector plotting functions of `cosmolike_notebook_utils` have a cluster version (`plot_datavectors_cluster.py`); the response helpers (`plot_response.py`) do not.

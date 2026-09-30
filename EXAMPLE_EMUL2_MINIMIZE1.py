@@ -212,7 +212,8 @@ params:
   # The nuisance parameters (sources, MagLim lenses, clusters) and their
   # priors come from the likelihood defaults: likelihood/params_source_y6.yaml,
   # params_lens_maglim.yaml and params_cluster.yaml. CL+GC fixes the bias and
-  # photo-z shift of lens bins 4-6 (fixed_params of combo_4x2pt_N.yaml).
+  # photo-z shift of lens bins 4-6, and the point masses of galaxy-galaxy
+  # lensing, which it does not contain (fixed_params of combo_4x2pt_N.yaml).
   # ----------------------------------------------------------------------------
 
 theory:

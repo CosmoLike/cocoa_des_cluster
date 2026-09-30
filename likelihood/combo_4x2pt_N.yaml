@@ -86,6 +86,9 @@ print_datavector_file: "./projects/des_cluster/chains/theory_4x2pt_N.modelvector
 # params_lens_maglim.yaml fiducials. Each entry replaces the parameter's
 # default (a value drops prior, ref and proposal, the cobaya merge rule);
 # see _cosmolike_prototype_base.get_modified_defaults.
+# The point masses act on galaxy-galaxy lensing gamma_t only (eq 14). CL+GC
+# has no gamma_t block (its mask removes `gs`), so its data vector does not
+# move with them: they are fixed at zero, not sampled.
 fixed_params:
   DES_B1_4:
     value: 1.62
@@ -99,5 +102,17 @@ fixed_params:
     value: 0.001
   DES_DZ_L6:
     value: 0.008
+  DES_PM1:
+    value: 0.0
+  DES_PM2:
+    value: 0.0
+  DES_PM3:
+    value: 0.0
+  DES_PM4:
+    value: 0.0
+  DES_PM5:
+    value: 0.0
+  DES_PM6:
+    value: 0.0
 
 params: !defaults [params_source_y6, params_lens_maglim, params_cluster]

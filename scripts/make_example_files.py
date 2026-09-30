@@ -119,6 +119,13 @@ def lens(n):
   nb = 3 if n == 1 else 6
   return ["DES_DZ_L%d" % i for i in range(1, nb + 1)] + ["DES_B1_%d" % i for i in range(1, nb + 1)]
 
+def point_mass(n):
+  """The point masses of gamma_t that combination n samples: all six for
+  6x2pt + N (n = 2), none for 4x2pt + N (n = 1), which has no gamma_t block
+  and fixes them in combo_4x2pt_N.yaml. The MCMC blocking may only name
+  sampled parameters."""
+  return PM if n == 2 else []
+
 def fix_param(params, name, value, latex):
   """replace the block of a top-level parameter by a fixed value"""
   pat = re.compile(r"(?m)^  %s:\n(?:    .*\n)+" % re.escape(name))
@@ -155,7 +162,7 @@ def mcmc_sampler(n, emul):
           "    # calibration only rescales blocks\n")
   blocking = (note + "    blocking:\n"
               "      - [%d,\n          [\n%s\n          ]\n        ]\n" % (speeds[0], wrap(cosmo)) +
-              "      - [%d,\n          [\n%s\n          ]\n        ]\n" % (speeds[1], wrap(SRC + lens(n) + PM + CL)) +
+              "      - [%d,\n          [\n%s\n          ]\n        ]\n" % (speeds[1], wrap(SRC + lens(n) + point_mass(n) + CL)) +
               "      - [%d,\n          [\n%s\n          ]\n        ]\n" % (speeds[2], wrap(SHEARCAL)))
   return s[:a] + blocking + s[b:]
 

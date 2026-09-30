@@ -5,9 +5,11 @@
  # 1.05] (n(z): data/des_y6_maglim.nz). Priors and fiducials: Table I of
  # arXiv 2503.13631 (synthetic Y6-like analysis). Parameter layout restored
  # from projects/desy1xplanck/likelihood/params_lens_maglim.yaml.
- # CL+GC (4x2pt + N) uses lens bins 1-3 only (w_gg and w_cg): Table I varies
- # b1 and Delta z of bins 4-6 only in CL+3x2pt, so a CL+GC combo should fix
- # DES_B1_4..6 and DES_DZ_L4..6 (they are unconstrained there).
+ # CL+GC (4x2pt + N) uses lens bins 1-3 only (w_gg and w_cg) and has no
+ # gamma_t: Table I varies b1 and Delta z of bins 4-6 only in CL+3x2pt, and
+ # the point masses act on gamma_t only. combo_4x2pt_N.yaml therefore fixes
+ # DES_B1_4..6, DES_DZ_L4..6 and DES_PM1..6 (its fixed_params block): they
+ # enter only blocks that the CL+GC mask removes.
  # ------------------------------------------------------------------------
  # Lensing photo-z shifts (Table I: Gaussian, means from Cardinal)
   DES_DZ_L1:
