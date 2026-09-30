@@ -333,6 +333,11 @@ class _cosmolike_prototype_base(DataSetLikelihood):
         include_ia=int(getattr(self, "cluster_include_ia", 1)),
         magnification=float(getattr(self, "cluster_magnification", -2.0)))
 
+    # amplitude of the Tinker 2010 cluster mass function: 0 = 0.368 at every
+    # z (DES), 1 = alpha(z) from int b f dnu = 1 (halo.c)
+    ci.init_cluster_hmf_alpha_mode(
+        hmf_alpha_mode=int(getattr(self, "cluster_hmf_alpha_mode", 0)))
+
     ci.init_cluster_adopt_limber(
         adopt_limber_cc=int(getattr(self, "cluster_adopt_limber_cc", 1)),
         adopt_limber_cg=int(getattr(self, "cluster_adopt_limber_cg", 1)))

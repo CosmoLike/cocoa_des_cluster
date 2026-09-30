@@ -21,12 +21,21 @@ Conventions mirrored from halo.c (checked by reading the source):
     Tinker et al. 2010 (1001.3162) multiplicity at Delta = 200m, Eqs. 8-12,
     Table 4: beta = 0.589 aa^-0.2, gamma = 0.864 aa^0.01,
     phi = -0.729 aa^0.08, eta = -0.243 aa^-0.27, aa = max(a, 0.25).
-  * NORMALIZATION (halo.c `tinker_alpha`): alpha is NOT the fixed Table-4
-    value 0.368 used by lighthouse; it is re-derived at every aa from the
-    peak-background consistency relation (1001.3162 Eq. 7)
-        int_0^inf b(nu) f(nu; aa) dnu = 1,
-    with b the Tinker bias below and the shape evaluated at the same aa.
-    (alpha = 0.3684 at z = 0, falling with z; 0.2520 for z >= 3.)
+  * AMPLITUDE alpha (the C switch cluster.hmf_alpha_mode, HaloModel's
+    `hmf_alpha_mode`):
+      0 = HMF_ALPHA_FIXED (default): alpha = 0.368, the Table-4 value at
+          Delta = 200m, at every z: the convention of the DES cluster
+          analyses (lighthouse halo.c f_tinker) and of the C cluster code
+          by default (halo_cluster.c, private copy of halo.c's shape);
+      1 = HMF_ALPHA_NORMALIZED: halo.c's own fnu (`tinker_alpha`), alpha
+          re-derived at every aa from the peak-background consistency
+          relation (1001.3162 Eq. 7)
+              int_0^inf b(nu) f(nu; aa) dnu = 1,
+          with b the Tinker bias below and the shape at the same aa
+          (alpha = 0.3684 at z = 0, falling with z: alpha/0.368 = 0.967,
+          0.951, 0.936, 0.923, 0.909 at z = 0.2 .. 0.6; 0.2520 for z >= 3).
+    The shape is the same in both modes, so n_A and the counts scale with
+    alpha while b_A and P^1h_A (ratios over the mass function) do not.
   * Bias: Tinker 2010 Eq. 6 with y = log10(200); A = 1 + 0.24 y exp(-(4/y)^4),
     a = 0.44 y - 0.88, B = 0.183, b = 1.5, C = 0.019 + 0.107 y +
     0.19 exp(-(4/y)^4), c = 2.4, delta_c = 1.686. No z dependence.
@@ -52,6 +61,10 @@ from ref_cosmology import RHO_CRIT
 
 DELTA_C = 1.686
 DELTA_HALO = 200.0
+# amplitude modes of the Tinker f(nu) (module docstring; structs_cluster.h)
+HMF_ALPHA_FIXED = 0
+HMF_ALPHA_NORMALIZED = 1
+TINKER_ALPHA_FIXED = 0.368          # 1001.3162 Table 4, Delta = 200m
 _Y = np.log10(DELTA_HALO)
 _EXPY = np.exp(-(4.0 / _Y) ** 4)
 TINKER_BIAS = dict(A=1.0 + 0.24 * _Y * _EXPY, a=0.44 * _Y - 0.88, B=0.183, b=1.5,
@@ -116,10 +129,22 @@ def tinker_alpha(aa):
     return _TINKER_ALPHA(aa)
 
 
-def tinker_f(nu, z):
-    """Tinker f(nu) at redshift z (aa = max(1/(1+z), 0.25)), halo.c normalization."""
+def tinker_amplitude(aa, alpha_mode=HMF_ALPHA_FIXED):
+    """alpha of Tinker Eq. 8 at aa (already floored at 0.25): 0.368
+    (HMF_ALPHA_FIXED) or halo.c's alpha(aa) (HMF_ALPHA_NORMALIZED)."""
+    aa = np.asarray(aa, dtype=float)
+    if alpha_mode == HMF_ALPHA_FIXED:
+        return np.full_like(aa, TINKER_ALPHA_FIXED)
+    if alpha_mode == HMF_ALPHA_NORMALIZED:
+        return tinker_alpha(aa)
+    raise ValueError(f"hmf_alpha_mode = {alpha_mode} not supported")
+
+
+def tinker_f(nu, z, alpha_mode=HMF_ALPHA_FIXED):
+    """Tinker f(nu) at redshift z (aa = max(1/(1+z), 0.25)); amplitude per
+    alpha_mode (module docstring)."""
     aa = np.maximum(1.0 / (1.0 + np.asarray(z, dtype=float)), 0.25)
-    return tinker_alpha(aa) * tinker_f_shape(nu, aa)
+    return tinker_amplitude(aa, alpha_mode) * tinker_f_shape(nu, aa)
 
 
 def tophat_W_and_dW(x):
@@ -173,11 +198,16 @@ class HaloModel:
     """Tinker HMF + bias, Bhattacharya c(M), NFW u(k|M) in halo.c conventions.
 
     hmf_matter: "tot" (halo.c, default) or "cb" (lighthouse / Y1 PRL).
+    hmf_alpha_mode: HMF_ALPHA_FIXED (0.368, DES / lighthouse / the C cluster
+    code's default) or HMF_ALPHA_NORMALIZED (halo.c's alpha(z), Eq. 7).
     """
 
-    def __init__(self, cosmo, hmf_matter="tot"):
+    def __init__(self, cosmo, hmf_matter="tot", hmf_alpha_mode=HMF_ALPHA_FIXED):
+        if hmf_alpha_mode not in (HMF_ALPHA_FIXED, HMF_ALPHA_NORMALIZED):
+            raise ValueError(f"hmf_alpha_mode = {hmf_alpha_mode} not supported")
         self.cosmo = cosmo
         self.hmf_matter = hmf_matter
+        self.hmf_alpha_mode = hmf_alpha_mode
         self.rho_m = RHO_CRIT * cosmo.Omega_m                  # NFW, 1-halo (always total)
         if hmf_matter == "tot":
             self.rho_hmf = self.rho_m
@@ -198,7 +228,7 @@ class HaloModel:
         if nu is None:
             nu = self.nu(lnM, z)
         dlnnu = -0.5 * self.sig.dlns2(lnM)
-        return (self.rho_hmf / np.exp(lnM)) * nu * tinker_f(nu, z) * dlnnu
+        return (self.rho_hmf / np.exp(lnM)) * nu * tinker_f(nu, z, self.hmf_alpha_mode) * dlnnu
 
     def bias(self, lnM, z, nu=None):
         if nu is None:

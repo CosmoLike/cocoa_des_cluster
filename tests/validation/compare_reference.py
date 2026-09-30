@@ -7,8 +7,8 @@ Run from Cocoa/ in the cocoa environment (start_cocoa.sh sourced):
 
     python projects/des_cluster/tests/validation/compare_reference.py \
         [--cache-dir DIR] [--recompute-reference] [--threads 4] \
-        [--skip-production] [--skip-diagnostics] [--skip-determinism] \
-        [--skip-lighthouse] [--json OUT.json]
+        [--hmf-alpha-mode {0,1}] [--skip-production] [--skip-diagnostics] \
+        [--skip-determinism] [--skip-lighthouse] [--json OUT.json]
 
 What it does
 ------------
@@ -21,7 +21,10 @@ What it does
        (photoz = "table"; every table node a quadrature break),
      - lens/source n(z) = the project files of the dataset,
      - LMAX = the lmax of likelihood/combo_4x2pt_N.yaml,
-     - binning, richness and z edges, area, cg lens bins = the dataset.
+     - binning, richness and z edges, area, cg lens bins = the dataset,
+     - Tinker amplitude mode (hmf_alpha_mode) = cluster_hmf_alpha_mode of
+       the yaml (0 = alpha 0.368, DES; 1 = halo.c's alpha(z)), or the
+       --hmf-alpha-mode override; the C side gets the same mode.
    It exports every quantity compared below, its Gaussian covariance
    (N, Sigma = T gamma_t, w_cc, w_cg) and the cosmology tables in the
    interface units of the likelihood (log10 k in h/Mpc, ln P in
@@ -64,9 +67,10 @@ What it does
 5. LIGHTHOUSE (fresh subprocess): the C code fed lighthouse's own
    background, growth and linear P(k) (EH98 + sigma_8, mnu = 0) with a
    TOP-HAT kernel table: n_A(z), b_A(z) and the counts against
-   tests/lighthouse_reference (exact-P values; the Tinker alpha of
-   halo.c, re-derived from the peak-background relation, is applied to
-   the lighthouse densities, which use the fixed alpha = 0.368).
+   tests/lighthouse_reference (exact-P values). Lighthouse uses the fixed
+   Tinker alpha = 0.368, as the C code's default mode 0 does, so those
+   rows compare the raw numbers; in mode 1 (halo.c's alpha(z)) extra rows
+   rescale the lighthouse densities by alpha(z)/0.368 first.
 
 Targets: tables 1e-4 (max |diff|/max|signal| per row), delta^T C^-1 delta
 < 0.01 per block (whole-code budget 0.2).
@@ -128,7 +132,9 @@ def load_yaml(path):
         return yaml.load(f, Loader=Loader)
 
 
-def load_config():
+def load_config(hmf_alpha_mode=None):
+    """The dataset and the likelihood keys; hmf_alpha_mode (0/1) overrides
+    the yaml's cluster_hmf_alpha_mode on both sides."""
     from getdist import IniFile
     y = load_yaml(YAML)
     ini = IniFile(DATASET)
@@ -155,8 +161,10 @@ def load_config():
             "adopt_limber_gg", "include_HOD_GX", "include_halo_IA", "lmax", "IA_redshift_evolution",
             "IA_model", "IA_code", "bias_model", "cluster_kernel_mode", "cluster_selection_model",
             "cluster_ytransform", "cluster_include_ia", "cluster_magnification",
-            "cluster_adopt_limber_cc", "cluster_adopt_limber_cg")
+            "cluster_adopt_limber_cc", "cluster_adopt_limber_cg", "cluster_hmf_alpha_mode")
     lik = {k: y[k] for k in keys}
+    if hmf_alpha_mode is not None:
+        lik["cluster_hmf_alpha_mode"] = int(hmf_alpha_mode)
     return dict(dataset=ds, likelihood=lik)
 
 
@@ -177,7 +185,8 @@ def reference_settings(cfg, variant="matched"):
         ntheta=ds["n_theta"], tmin_arcmin=ds["theta_min_arcmin"],
         tmax_arcmin=ds["theta_max_arcmin"], lens_bins=ds["cg_lens_bins"],
         kernel_mode=int(lk["cluster_kernel_mode"]), C_c=float(lk["cluster_magnification"]),
-        hmf_matter="tot", pk_nl_z_order=(3 if variant == "production" else 1))
+        hmf_matter="tot", hmf_alpha_mode=int(lk["cluster_hmf_alpha_mode"]),
+        pk_nl_z_order=(3 if variant == "production" else 1))
     if variant in ("diagnostic", "nuisance"):
         s["source_g_zmax"] = source_file_zmax(ds["nz_source_file"])
     return s
@@ -386,6 +395,7 @@ def init_c(cfg, workdir, threads, nz_cluster_file=None):
                           ytransform=int(lk["cluster_ytransform"]),
                           include_ia=int(lk["cluster_include_ia"]),
                           magnification=float(lk["cluster_magnification"]))
+    ci.init_cluster_hmf_alpha_mode(hmf_alpha_mode=int(lk["cluster_hmf_alpha_mode"]))
     ci.init_cluster_adopt_limber(adopt_limber_cc=int(lk["cluster_adopt_limber_cc"]),
                                  adopt_limber_cg=int(lk["cluster_adopt_limber_cg"]))
     edges = np.array(ds["richness_edges"])
@@ -792,13 +802,20 @@ def emit_dv(cfg, R, workdir, threads, out):
     np.savez(out, dv0=dv0, dv1=dv1, dv2=dv2)
 
 
+def mode_args(args):
+    """The --hmf-alpha-mode override, passed on to the child processes."""
+    if args.hmf_alpha_mode is None:
+        return []
+    return ["--hmf-alpha-mode", str(args.hmf_alpha_mode)]
+
+
 def run_determinism(args):
     outs = {}
     for n in (1, 8):
         f = os.path.join(args.cache_dir, f"dv_omp{n}.npz")
         env = dict(os.environ, OMP_NUM_THREADS=str(n))
         cmd = [sys.executable, os.path.abspath(__file__), "--cache-dir", args.cache_dir,
-               "--emit-dv", f, "--threads", str(n)]
+               "--emit-dv", f, "--threads", str(n)] + mode_args(args)
         t0 = time.time()
         subprocess.run(cmd, env=env, check=True, stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL)
@@ -868,8 +885,9 @@ def lighthouse_inputs(cfg, workdir):
 
 
 def run_lighthouse_child(cfg, workdir, threads, out):
-    from ref_halo import tinker_alpha
+    from ref_halo import tinker_amplitude, TINKER_ALPHA_FIXED
     from scipy.interpolate import CubicSpline
+    mode = int(cfg["likelihood"]["cluster_hmf_alpha_mode"])
     R, th, L, conf = lighthouse_inputs(cfg, workdir)
     P = dict(lnlambda0=conf["MOR"][0], A=conf["MOR"][1], sigma_int=conf["MOR"][2],
              B=conf["MOR"][3], sel_s0=1.0, sel_s1=0.0, sel_s2=30.0, sel_s3=0.0,
@@ -892,10 +910,12 @@ def run_lighthouse_child(cfg, workdir, threads, out):
     a_m = 1.0 / (1.0 + L["mor_z"])
     n_c_m = np.array([[ci.ncl_richness(x, A) for x in a_m] for A in range(nA)])
     b_c_m = np.array([[ci.bcl_richness(x, A) for x in a_m] for A in range(nA)])
-    alpha_m = tinker_alpha(np.maximum(a_m, 0.25))
-    # lighthouse densities with halo.c's alpha(z) instead of 0.368
-    alpha = tinker_alpha(np.maximum(a, 0.25))
-    nL = L["n_A_exact"] * (alpha / 0.368)[None, :]
+    # alpha of the C side (0.368 in mode 0, halo.c's alpha(z) in mode 1)
+    # over lighthouse's fixed 0.368: the rescaling that puts lighthouse's
+    # densities on the C side's amplitude (1 in mode 0)
+    alpha_m = tinker_amplitude(np.maximum(a_m, 0.25), mode) / TINKER_ALPHA_FIXED
+    alpha = tinker_amplitude(np.maximum(a, 0.25), mode) / TINKER_ALPHA_FIXED
+    nL = L["n_A_exact"] * alpha[None, :]
     # counts from the exact-P lighthouse densities: Omega_s int dz chi^2/E n_A
     # (top hat in true z; the grid nodes fall on the bin edges)
     zb = conf["cluster_zbins"]
@@ -912,14 +932,14 @@ def run_lighthouse_child(cfg, workdir, threads, out):
             N_L_exact_alpha[i, A] = Omega_s * np.trapz(chiL[s] ** 2 / E[s] * nL[A, s], zz[s])
     np.savez(out, z=zz, ok=ok, n_c=n_c, b_c=b_c, N_c=N_c, n_L_alpha=nL, n_L=L["n_A_exact"],
              n_L_tab=L["n_A_tab"], b_L=L["b_A_exact"], b_L_tab=L["b_A_tab"], N_L=L["N_counts"],
-             N_L_exact=N_L_exact, N_L_exact_alpha=N_L_exact_alpha, alpha=alpha,
-             n_c_m=n_c_m, b_c_m=b_c_m, alpha_m=alpha_m)
+             N_L_exact=N_L_exact, N_L_exact_alpha=N_L_exact_alpha, alpha_ratio=alpha,
+             n_c_m=n_c_m, b_c_m=b_c_m, alpha_ratio_m=alpha_m, hmf_alpha_mode=mode)
 
 
 def run_lighthouse(args):
     f = os.path.join(args.cache_dir, "lighthouse_c.npz")
     cmd = [sys.executable, os.path.abspath(__file__), "--cache-dir", args.cache_dir,
-           "--lighthouse-child", f, "--threads", str(args.threads)]
+           "--lighthouse-child", f, "--threads", str(args.threads)] + mode_args(args)
     t0 = time.time()
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                    env=dict(os.environ, OMP_NUM_THREADS=str(args.threads)))
@@ -934,13 +954,20 @@ def run_lighthouse(args):
         i = np.unravel_index(np.argmax(rel), rel.shape)
         rows.append((name, float(rel.max()), tuple(int(x) for x in i)))
 
-    row("n_A(z): C / (LH exact-P x alpha_halo.c/0.368)", d["n_c"][:, inner], d["n_L_alpha"][:, inner])
-    row("n_A(z): C / LH exact-P (LH alpha = 0.368)", d["n_c"][:, inner], d["n_L"][:, inner])
+    mode = int(d["hmf_alpha_mode"])
+    # raw: lighthouse as it is (alpha = 0.368); the like-with-like rows of
+    # mode 0. Mode 1 adds the rows with lighthouse rescaled to alpha(z).
+    row("n_A(z): C / LH exact-P (raw)", d["n_c"][:, inner], d["n_L"][:, inner])
+    if mode == 1:
+        row("n_A(z): C / (LH exact-P x alpha(z)/0.368)", d["n_c"][:, inner],
+            d["n_L_alpha"][:, inner])
     row("b_A(z): C / LH exact-P", d["b_c"][:, inner], d["b_L"][:, inner])
     row("b_A(z): C / LH P-table (LH model)", d["b_c"][:, inner], d["b_L_tab"][:, inner])
-    row("N: C / LH counts (P table, alpha 0.368)", d["N_c"], d["N_L"])
-    row("N: C / Omega int dV n_A^LH-exact", d["N_c"], d["N_L_exact"])
-    row("N: C / Omega int dV n_A^LH-exact x alpha", d["N_c"], d["N_L_exact_alpha"])
+    row("N: C / LH counts (P table; raw)", d["N_c"], d["N_L"])
+    row("N: C / Omega int dV n_A^LH-exact (raw)", d["N_c"], d["N_L_exact"])
+    if mode == 1:
+        row("N: C / Omega int dV n_A^LH-exact x alpha(z)/0.368", d["N_c"],
+            d["N_L_exact_alpha"])
     # n_A, b_A re-integrated from lighthouse's OWN tabulated ingredients
     # (dn/dM on 79 lg M nodes, exact P(lambda bin|M), B1) on a dense lg M
     # grid: separates lighthouse's CQUAD 1e-2 mass integrals from the model
@@ -959,10 +986,11 @@ def run_lighthouse(args):
                                                          1e-300)))(x))
             nb[A, im] = np.trapz(f, x) * np.log(10.0)
             bb[A, im] = np.trapz(f * np.exp(lnb), x) * np.log(10.0) / nb[A, im]
-    row("n_A(0.3/0.475/0.6): C / LH ingredients x alpha", d["n_c_m"],
-        nb * (d["alpha_m"] / 0.368)[None, :])
+    row("n_A(0.3/0.475/0.6): C / LH ingredients" + (" x alpha(z)/0.368" if mode == 1 else ""),
+        d["n_c_m"], nb * d["alpha_ratio_m"][None, :])
     row("b_A(0.3/0.475/0.6): C / LH ingredients", d["b_c_m"], bb)
-    print("\nLighthouse cross-check (top-hat kernel, lighthouse EH98 + sigma_8 cosmology, mnu = 0)")
+    print("\nLighthouse cross-check (top-hat kernel, lighthouse EH98 + sigma_8 cosmology, mnu = 0; "
+          f"C hmf_alpha_mode = {mode})")
     for name, v, i in rows:
         print(f"  {name:50s} max |ratio - 1| = {v:.2e} at {i}")
     return {name: v for name, v, i in rows}
@@ -975,6 +1003,9 @@ def main(argv=None):
         "DES_CLUSTER_VALIDATION_CACHE", os.path.join(tempfile.gettempdir(), "des_cluster_validation")))
     ap.add_argument("--recompute-reference", action="store_true")
     ap.add_argument("--threads", type=int, default=int(os.environ.get("OMP_NUM_THREADS", 4)))
+    ap.add_argument("--hmf-alpha-mode", type=int, default=None, choices=(0, 1),
+                    help="Tinker amplitude on both sides (default: the yaml's "
+                         "cluster_hmf_alpha_mode): 0 = 0.368 (DES), 1 = halo.c's alpha(z)")
     ap.add_argument("--skip-production", action="store_true")
     ap.add_argument("--skip-diagnostics", action="store_true")
     ap.add_argument("--skip-determinism", action="store_true")
@@ -984,7 +1015,7 @@ def main(argv=None):
     ap.add_argument("--lighthouse-child", default=None, help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
     os.makedirs(args.cache_dir, exist_ok=True)
-    cfg = load_config()
+    cfg = load_config(args.hmf_alpha_mode)
     workdir = os.path.join(args.cache_dir, "work_" + str(os.getpid()))
 
     try:
@@ -1004,11 +1035,14 @@ def run_validation(args, cfg, R, path, workdir):
     """Steps 2-5 of the module docstring; prints the tables."""
     from reference_cluster import FIDUCIAL
     print(f"[validation] reference (matched) {path}")
+    print(f"[validation] Tinker amplitude: hmf_alpha_mode = "
+          f"{int(cfg['likelihood']['cluster_hmf_alpha_mode'])} on both sides "
+          f"(0 = alpha 0.368, 1 = halo.c's alpha(z))")
     print(f"[validation] CAMB: mnu = {float(R['cin_mnu']):.5f} eV (3 degenerate), Omega_nu h^2 = "
           f"{float(R['cin_omnuh2']):.5f}; Omega_m = {float(R['cin_omegam'])} (total), "
           f"Omega_b = {float(R['cin_omegab'])}, H0 = {float(R['cin_H0'])}; the C side gets "
           f"these tables and Omega_m, Omega_b, H0")
-    out = {}
+    out = dict(hmf_alpha_mode=int(cfg["likelihood"]["cluster_hmf_alpha_mode"]))
     t0 = time.time()
     ci, info = init_c(cfg, workdir, args.threads)
     set_nuisance_c(ci, cfg, dict(FIDUCIAL))

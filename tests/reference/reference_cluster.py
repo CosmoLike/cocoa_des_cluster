@@ -5,8 +5,8 @@ the cluster code into cosmolike_core (des_cluster project).
 
 Modules (same folder):
   ref_cosmology  CAMB background, growth, P_lin/P_NL; n(z) files
-  ref_halo       Tinker 2010 f(nu) (halo.c normalization) and b(nu),
-                 sigma(M), Bhattacharya c(M), NFW u(k|M)
+  ref_halo       Tinker 2010 f(nu) (alpha = 0.368, or halo.c's alpha(z))
+                 and b(nu), sigma(M), Bhattacharya c(M), NFW u(k|M)
   ref_cluster    MOR, P(lambda bin|M,z), n_A, b_A, P^1h_A, <phi_i|z>,
                  counts, radial kernels, cluster lensing efficiency
   ref_limber     Limber C_l: cs (2h + 1h + mag + NLA), cc, cg (+ gg, gs, ss)
@@ -30,7 +30,8 @@ Usage (python):
 CLI:
 
     python reference_cluster.py --out ref_fiducial.npz [--kernel-mode 1]
-        [--hmf-matter cb] [--cov] [--nonlimber-check] [--set key=value ...]
+        [--hmf-matter cb] [--hmf-alpha-mode 1] [--cov] [--nonlimber-check]
+        [--set key=value ...]
 
 Data-vector layout (ref.data_vector(), lighthouse inner ordering):
   N  [zc][lambda]
@@ -93,6 +94,8 @@ DEFAULT_SETTINGS = dict(
     mass_panel_width=0.25, mass_order=8,
     kernel_mode=0,               # 0 volume-only (default), 1 abundance-weighted
     hmf_matter="tot",            # "tot" (halo.c) or "cb" (lighthouse / Y1 PRL)
+    hmf_alpha_mode=0,            # Tinker alpha: 0 = 0.368 at every z (DES / lighthouse;
+                                 # cluster.hmf_alpha_mode default), 1 = halo.c's alpha(z)
     ntheta=20, tmin_arcmin=2.5, tmax_arcmin=250.0, lmax=75000,
     l_exact=30, n_per_decade=60,
     z_panel=0.01, z_panel_far=0.02, z_order=8,
@@ -139,7 +142,8 @@ class ClusterReference:
         if s["photoz"] == "table":
             tab = np.loadtxt(s["phi_table_file"])
             phi_table = (tab[:, 0], tab[:, 1:])
-        self.halo = HaloModel(self.cosmo, hmf_matter=s["hmf_matter"])
+        self.halo = HaloModel(self.cosmo, hmf_matter=s["hmf_matter"],
+                              hmf_alpha_mode=int(s["hmf_alpha_mode"]))
         self.cluster = ClusterModel(
             self.cosmo, self.halo, {k: p[k] for k in MOR_KEYS},
             lambda_edges=s["lambda_edges"], zc_edges=s["zc_edges"],
@@ -373,6 +377,8 @@ def main(argv=None):
     ap.add_argument("--out", default="reference_cluster_fiducial.npz")
     ap.add_argument("--kernel-mode", type=int, default=0, choices=(0, 1))
     ap.add_argument("--hmf-matter", default="tot", choices=("tot", "cb"))
+    ap.add_argument("--hmf-alpha-mode", type=int, default=0, choices=(0, 1),
+                    help="Tinker alpha: 0 = 0.368 (DES), 1 = halo.c's alpha(z)")
     ap.add_argument("--cov", action="store_true", help="also compute the Gaussian covariance")
     ap.add_argument("--nonlimber-check", action="store_true")
     ap.add_argument("--set", nargs="*", help="parameter or setting overrides key=value")
@@ -383,7 +389,8 @@ def main(argv=None):
     unknown = set(over) - set(params) - set(settings)
     if unknown:
         raise SystemExit(f"unknown keys: {sorted(unknown)}")
-    settings.update(kernel_mode=a.kernel_mode, hmf_matter=a.hmf_matter)
+    settings.update(kernel_mode=a.kernel_mode, hmf_matter=a.hmf_matter,
+                    hmf_alpha_mode=a.hmf_alpha_mode)
     t0 = time.time()
     ref = ClusterReference(params, settings, verbose=True)
     res = ref.results(with_cov=a.cov, with_nonlimber=a.nonlimber_check)

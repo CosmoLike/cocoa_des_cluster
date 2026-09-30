@@ -57,6 +57,10 @@ cluster_ytransform: 1
 cluster_include_ia: 1
 # cluster magnification coefficient C_c (eq 28: -2); 0 switches it off
 cluster_magnification: -2.0
+# amplitude alpha of the Tinker 2010 cluster mass function (same shape):
+#   0 = 0.368 at every z (arXiv 1001.3162 Table 4; what DES ran)
+#   1 = alpha(z) from int b f dnu = 1 (halo.c; 3-9% fewer clusters at z = 0.2-0.6)
+cluster_hmf_alpha_mode: 0
 # w_cc and w_cg: 1 = Limber at every multipole, 0 = non-Limber
 cluster_adopt_limber_cc: 1
 cluster_adopt_limber_cg: 1

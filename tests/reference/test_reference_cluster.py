@@ -22,7 +22,8 @@ sys.path.insert(0, HERE)
 
 from reference_cluster import ClusterReference, FIDUCIAL           # noqa: E402
 from ref_halo import (tinker_alpha, tinker_alpha_exact, tinker_bias,  # noqa: E402
-                      tinker_f_shape)
+                      tinker_f_shape, HMF_ALPHA_FIXED, HMF_ALPHA_NORMALIZED,
+                      TINKER_ALPHA_FIXED)
 from ref_projection import (legendre_table, projection_kernels,   # noqa: E402
                             theta_edges, y_transform_matrices, selection_factor,
                             cl_on_integers)
@@ -45,6 +46,7 @@ def scaled_diff(a, b, axis=-1):
 # halo model conventions
 # ----------------------------------------------------------------------
 def test_tinker_alpha_normalization():
+    # the HMF_ALPHA_NORMALIZED amplitude (halo.c's fnu):
     # halo.c header: alpha = 0.3684 at z = 0, 0.2520 for z >= 3
     assert abs(tinker_alpha(1.0) - 0.3684) < 1e-4
     assert abs(tinker_alpha(0.25) - 0.2520) < 1e-4
@@ -58,6 +60,30 @@ def test_tinker_alpha_normalization():
     aa = np.linspace(0.26, 0.99, 7) + 0.003
     exact = np.array([tinker_alpha_exact(a) for a in aa])
     assert np.max(np.abs(tinker_alpha(aa) / exact - 1)) < 1e-9
+
+
+def test_hmf_alpha_modes(ref):
+    # default = HMF_ALPHA_FIXED (alpha = 0.368 at every z, DES / lighthouse)
+    assert ref.settings["hmf_alpha_mode"] == HMF_ALPHA_FIXED
+    assert ref.halo.hmf_alpha_mode == HMF_ALPHA_FIXED
+    # the two modes share the shape: dn/dlnM(mode 1)/dn/dlnM(mode 0) =
+    # alpha(aa)/0.368 at every mass, with aa = max(a, 0.25)
+    lnM = np.log(np.array([1e12, 1e13, 1e14, 1e15, 5e15]))[:, None]
+    z = np.array([0.0, 0.2, 0.45, 0.65, 3.5])[None, :]
+    dn0 = ref.halo.dndlnM(lnM, z)
+    ref.halo.hmf_alpha_mode = HMF_ALPHA_NORMALIZED
+    try:
+        dn1 = ref.halo.dndlnM(lnM, z)
+    finally:
+        ref.halo.hmf_alpha_mode = HMF_ALPHA_FIXED
+    aa = np.maximum(1.0 / (1.0 + z), 0.25)
+    expect = np.broadcast_to(tinker_alpha(aa) / TINKER_ALPHA_FIXED, dn0.shape)
+    assert np.max(np.abs(dn1 / dn0 / expect - 1)) < 1e-13
+    # the ratios quoted in structs_cluster.h (and the fall with z)
+    zq = np.array([0.2, 0.3, 0.4, 0.5, 0.6])
+    ratio = tinker_alpha(1.0 / (1.0 + zq)) / TINKER_ALPHA_FIXED
+    assert np.max(np.abs(ratio - np.array([0.967, 0.951, 0.936, 0.923, 0.909]))) < 5e-4
+    print("\n  alpha(z)/0.368 at z = 0.2 .. 0.6:", np.array2string(ratio, precision=4))
 
 
 def test_sigma2_table_and_slope(ref):

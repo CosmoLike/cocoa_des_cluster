@@ -1058,7 +1058,8 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
   // Order of the init chain (see _cosmolike_prototype_base.py):
   //   initial_setup -> reset_cluster -> init_probes_cluster -> binning
   //   -> accuracy -> n(z) + init_ntomo_powerspectra -> init_survey_parameters
-  //   -> init_cluster_model -> init_cluster_richness_bins
+  //   -> init_cluster_model -> init_cluster_hmf_alpha_mode
+  //   -> init_cluster_adopt_limber -> init_cluster_richness_bins
   //   -> set_cluster_zdist -> init_cluster_pairs -> init_data_cluster
   m.def("reset_cluster",
       &cosmolike_interface::reset_cluster,
@@ -1095,6 +1096,15 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::arg("ytransform").none(false).noconvert(),
       py::arg("include_ia").none(false).noconvert(),
       py::arg("magnification").none(false)
+    );
+
+  m.def("init_cluster_hmf_alpha_mode",
+      &cosmolike_interface::init_cluster_hmf_alpha_mode,
+      "Amplitude alpha of the Tinker 2010 cluster mass function: 0 = fixed "
+      "0.368 at every z (1001.3162 Table 4; the DES convention, default), "
+      "1 = alpha(z) from int b f dnu = 1 (halo.c's fnu; 3-9% lower counts "
+      "at z = 0.2-0.6)",
+      py::arg("hmf_alpha_mode").none(false).noconvert()
     );
 
   m.def("init_cluster_adopt_limber",
