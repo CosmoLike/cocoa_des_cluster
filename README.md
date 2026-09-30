@@ -97,7 +97,7 @@ From `Cocoa/Readme` instructions:
 >
 >     [... NotebookApp] or http://127.0.0.1:8888/?token=XXX
 >
-> The project des_cluster contains a jupyter notebook example located at `projects/des_cluster` (see [The notebook and the notebook wrappers](#des_cluster_notebook)).
+> The project des_cluster contains two jupyter notebook examples located at `projects/des_cluster` (see [The notebooks and the notebook wrappers](#des_cluster_notebook)).
 
 To run the example
 
@@ -170,7 +170,9 @@ The outputs are written to `projects/des_cluster/chains/`.
 # Table of contents <a name="table_of_contents"></a>
 
 1. [Running Hybrid Cosmolike-ML emulators](#des_cluster_examples_emul2)
-2. [The notebook and the notebook wrappers](#des_cluster_notebook)
+2. [The notebooks and the notebook wrappers](#des_cluster_notebook)
+    1. [The plotting functions](#des_cluster_plots)
+    2. [The notebook wrappers](#des_cluster_wrappers)
 3. [Likelihood options and nuisance parameters](#des_cluster_likelihood)
     1. [Cluster options](#des_cluster_options)
     2. [Nuisance parameters](#des_cluster_params)
@@ -464,17 +466,36 @@ to new models, extended ranges, or higher precision.
 Similarly, we use networks to generalize the *syren-Halofit* LCDM nonlinear
 boost fit (Eq. 11 of [arXiv:2402.17492](https://arxiv.org/abs/2402.17492)).
 
-# The notebook and the notebook wrappers <a name="des_cluster_notebook"></a>
+# The notebooks and the notebook wrappers <a name="des_cluster_notebook"></a>
 
-The notebook `EXAMPLE_EVALUATE1.ipynb` computes the cluster observables at the fiducial point with the options of `EXAMPLE_EVALUATE1.yaml` (4x2pt + N) and compares them with the synthetic data where the scale cuts keep them. It covers, in this order: the cluster counts per richness and redshift bin; the halo-model ingredients (the probability of a richness bin given the halo mass, the number density and the bias of each richness bin, the redshift selection kernels, the one-halo cluster-matter power spectrum); cluster lensing, both as $\gamma_t$ and as the $\Sigma = Y\gamma_t$ statistic of the data vector; $w_{cc}$; $w_{cg}$; the Limber spectra $C_\ell^{cs}$, $C_\ell^{cc}$, and $C_\ell^{cg}$; the response of the counts and of $\gamma_t$ to the mass-observable relation; and the $\chi^2$ against the synthetic data vector. To run 6x2pt + N instead, set `CLprobe = "6x2pt_N"` and `data_file = "des_cluster_y6_6x2ptN.dataset"` in the notebook.
+The notebook `EXAMPLE_EVALUATE1.ipynb` computes the cluster observables at the fiducial point with the options of `EXAMPLE_EVALUATE1.yaml` (4x2pt + N) and compares them with the synthetic data where the scale cuts keep them. It covers, in this order: the cluster counts per richness and redshift bin; the halo-model ingredients (the probability of a richness bin given the halo mass, the number density and the bias of each richness bin, the redshift selection kernels, the one-halo cluster-matter power spectrum); cluster lensing, both as $\gamma_t$ and as the $\Sigma = Y\gamma_t$ statistic of the data vector; $w_{cc}$; $w_{cg}$; the Limber spectra $C_\ell^{cs}$, $C_\ell^{cc}$, and $C_\ell^{cg}$; the response of the counts and of $\gamma_t$ to the mass-observable relation; and the $\chi^2$ against the synthetic data vector.
+
+The notebook `EXAMPLE_EVALUATE2.ipynb` runs 6x2pt + N with the options of `EXAMPLE_EVALUATE2.yaml`, in the form of parameter sweeps. It computes a reference model at the fiducial point, then varies one parameter at a time (five values each) and shows every block as a ratio to the reference, with the curves colored by the parameter value. The sweeps cover $\Omega_m$ and $A_s$; two parameters of the mass-observable relation ($\ln\lambda_0$ and $\sigma_{\rm int}$); two parameters of the selection bias ($b_{s2}$ and $r_0$); the number of angular bins; and the accuracy setting of cosmolike. The $\Omega_m$ sweep also shows the 3x2pt blocks ($\xi_\pm$, galaxy-galaxy lensing, and $w(\theta)$). The notebook ends with the $\chi^2$ against the synthetic data vector.
 
 > [!NOTE]
-> The notebook loads its support functions from two places. The functions shared by
-> all projects (the CAMB run packaged for cosmolike) come from
+> The notebooks load their support functions from two places. The functions shared by
+> all projects (the CAMB run packaged for cosmolike, the plotting functions) come from
 > `Cocoa/external_modules/code/cosmolike_core/cosmolike_notebook_utils/`. The
 > functions specific to this project (fiducial values, the compiled-interface calls,
 > the cluster observables) come from
 > `interface/cosmolike_des_cluster_notebook_wrappers.py`.
+
+## The plotting functions <a name="des_cluster_plots"></a>
+
+Every data-vector figure of the two notebooks comes from a plotting function. The cluster blocks use `plot_datavectors_cluster.py` of `cosmolike_notebook_utils`, the cluster version of the functions the other projects use for the galaxy blocks. The module is imported on its own:
+
+    from cosmolike_notebook_utils import plot_datavectors_cluster as pdc
+
+| function | panels | curves inside a panel |
+|---|---|---|
+| `plot_N_cluster` | one per cluster z bin; the x axis is the richness | one staircase per model |
+| `plot_gammat_cluster_tomo`, `plot_sigma_cluster_tomo`, `plot_C_cs_tomo_limber` | one per (cluster z bin, source bin) pair: columns are cluster z bins, rows are source bins | the richness bins |
+| `plot_wcc_tomo`, `plot_C_cc_tomo_limber` | one per cluster z bin | the richness pairs (by default the auto pairs) |
+| `plot_wcg_tomo`, `plot_C_cg_tomo_limber` | one per (cluster z bin, lens bin) pair of the dataset | the richness bins |
+
+The functions follow the conventions of the galaxy functions. They take a list of models; `param` and `colorbarlabel` color the list by a parameter value; a reference (the `*_ref` argument) turns every panel into the fractional difference to it; `rescale = 1` joins the panels on one y axis, with one power of ten per panel; and `show = None` returns the figure. The cluster blocks have one more index than the galaxy blocks, the richness bin. The richness bins are curves inside each panel: the color follows the model and the line style follows the richness bin. The argument `richness` (`pairs` for $w_{cc}$) selects the bins to draw, counted from 0. The argument `data` overlays the data vector with its errors and leaves out the points the scale cuts remove. The 3x2pt blocks use the galaxy functions `cnu.plot_xi`, `cnu.plot_gammat_tomo_limber`, and `cnu.plot_wtheta_tomo`. The docstrings of the module document every argument.
+
+## The notebook wrappers <a name="des_cluster_wrappers"></a>
 
 The wrappers module drives the compiled interface through the same steps as the likelihoods: it runs CAMB once, pushes the power spectra, growth, and distances into the interface, sets the nuisance parameters, and reads off an observable. Its usage is
 
@@ -496,12 +517,14 @@ The wrappers module drives the compiled interface through the same steps as the 
 | `w_cc(selection_bias)` | `(theta, wcc)`: array ($\theta$, richness bin 1, richness bin 2, cluster z bin) |
 | `w_cg(selection_bias)` | `(theta, wcg)`: array ($\theta$, richness bin, cluster z bin, lens bin) |
 | `C_cs_tomo_limber(ell)`, `C_cc_tomo_limber(ell)`, `C_cg_tomo_limber(ell)` | the Limber spectra at the multipoles `ell`, with the layouts above and $\ell$ on the first axis |
+| `xi()`, `gamma_t()`, `w_theta()` | the 3x2pt blocks in real space: `(theta, xi_plus, xi_minus)`, `(theta, gammat)`, and `(theta, wtheta)`, in the array layouts of the galaxy plotting functions |
 | `prob_richness_bin_given_m(M, z)` | probability of each richness bin given the halo mass (M200m, in $M_\odot/h$) and the redshift |
 | `ncl_richness(z)`, `bcl_richness(z)` | comoving number density, in $(h/{\rm Mpc})^3$, and richness-weighted linear bias of each richness bin |
 | `pcm_1h_richness(k, z)` | one-halo cluster-matter power spectrum of each richness bin, in $({\rm Mpc}/h)^3$, with `k` in $h/{\rm Mpc}$ |
 | `phi_cluster(z)` | the selection kernels $\langle\phi_i\vert z\rangle$ of the cluster redshift bins |
 | `nz_cluster(z)`, `W_cluster(z)` | the normalized true-redshift distribution and the radial kernels of the cluster bins |
 | `get_datavector()`, `get_chi2()` | the masked joint theory vector and its $\chi^2$ against the loaded data |
+| `cluster_blocks(vector)`, `data_cluster_blocks()` | the cluster blocks (counts, cluster lensing, $w_{cc}$, $w_{cg}$) of a joint vector, or of the data and their errors, as arrays in the layouts above. Entries that the mask removes or that the data vector does not hold are NaN |
 
 Every wrapper that computes a model takes the cosmology (`omegam`, `omegab`, `H0`, `ns`, `As_1e9`, `w`, `w0pwa`, `mnu`), the accuracy settings, and the nuisance vectors (`M`, `A1`, `B1`, `MOR`, `SEL`, ...) as keyword arguments, and falls back to the project fiducial point, which the module holds as plain constants. For example, `nw.N_cluster(MOR=[4.3, 0.943, 0.15, 0.207])` changes the mass-observable relation for one call. Each wrapper sets the complete state of the interface on every call, so no call depends on which wrapper ran before it; the module keeps the last CAMB run, so repeated calls at one cosmology cost one CAMB run. The docstrings of the module document every argument and array layout.
 
@@ -570,7 +593,7 @@ MagLim lenses (`params_lens_maglim.yaml`):
 |---|---|---|---|
 | `DES_DZ_L1` ... `DES_DZ_L6` | photo-z shift of each lens bin | 0.005, 0.003, 0.001, -0.002, 0.001, 0.008 | Gaussian, width 0.007, 0.011, 0.006, 0.006, 0.01, 0.01 |
 | `DES_B1_1` ... `DES_B1_6` | linear galaxy bias of each lens bin | 1.42, 1.66, 1.70, 1.62, 1.78, 1.75 | flat [0.8, 3] |
-| `DES_PM1` ... `DES_PM6` | point mass of galaxy-galaxy lensing, in units of $10^{13}\,M_\odot/h$ | 0 | Gaussian, width 25 |
+| `DES_PM1` ... `DES_PM6` | point mass of galaxy-galaxy lensing, in units of $10^{13}\,M_\odot/h$ | 0 | flat [-100, 100] |
 | `DES_BMAG_1` ... `DES_BMAG_6` | magnification coefficient of each lens bin | -1.57, -1.70, -0.25, 1.50, 2.22, 2.80 | fixed |
 | `DES_DZ2_L1` ... `DES_DZ2_L6` | photo-z stretch of each lens bin | 1 | fixed |
 | `DES_B2_1` ... `DES_B2_6` | nonlinear galaxy bias (the model is linear bias) | 0 | fixed |
@@ -598,7 +621,7 @@ The files of `data/` that the cluster likelihoods read:
 | `des_y6_cluster.nz` | the selection kernels $\langle\phi_i\vert z\rangle$ of the three cluster redshift bins: the probability that a cluster at true redshift z lands in each $z_\lambda$ bin. It is a probability, not a normalized distribution, and it is sampled at z (no half-cell offset) |
 | `y3_redmapper_counts.txt` | the DES Y3 redMaPPer counts per redshift and richness bin, from the public Y3 catalog. The model does not read it: `make_synthetic_data.py` compares the model counts with it, and `make_cluster_mask.py` reads it for an optional cut on $w_{cc}$ that is off by default |
 
-The remaining files (`des_y3_real.dataset`, `des_y3_unblinded_final.txt`, `des_y3_cov_unblinded_final.txt`, `des_y3_lens.nz`, `des_y3_source.nz`, `3x2pt_baseline.mask`, `ones.mask`, `pca.txt`, `baryons_logPkR.h5`) are a copy of the DES Y3 3x2pt data set of the project des_y3. The galaxy-only likelihoods of this project (`cosmic_shear`, `combo_3x2pt`, `combo_2x2pt`) still point at it; the cluster likelihoods and the unit tests do not use it. `data/README.md` describes only these files.
+The remaining files (`des_y3_real.dataset`, `des_y3_unblinded_final.txt`, `des_y3_cov_unblinded_final.txt`, `des_y3_lens.nz`, `des_y3_source.nz`, `3x2pt_baseline.mask`, `ones.mask`, `pca.txt`, `baryons_logPkR.h5`) are a copy of the DES Y3 3x2pt data set of the project des_y3. The galaxy-only likelihoods of this project (`cosmic_shear`, `combo_3x2pt`, `combo_2x2pt`) still point at it; the cluster likelihoods and the unit tests do not use it.
 
 The scale cuts are defined at the mean redshift of each bin, at the fiducial cosmology: a point survives when its angle exceeds $R/\chi(\bar z)$, with $R = 2\,{\rm Mpc}/h$ for cluster lensing, $8\,{\rm Mpc}/h$ for $w_{cg}$ and $w_{gg}$, $16\,{\rm Mpc}/h$ for $w_{cc}$, and $6\,{\rm Mpc}/h$ for galaxy-galaxy lensing; cosmic shear uses a table of minimum angles per source pair. In cluster lensing, a (cluster bin, source bin) pair is masked entirely when the cluster bin's upper edge lies above the mean redshift of the source bin.
 
@@ -704,7 +727,7 @@ On the same machine, CAMB takes 0.63 s at 8 threads and 1.2 s at 4 threads, 6 to
 
 The port is complete for the model described above: the two likelihoods run, the compiled code is validated against an independent Python reference, and the unit tests cover both combinations. [PORT_PLAN.md](PORT_PLAN.md) (section 7) holds the detailed status. The items below are open.
 
-- **The data are synthetic.** The data vector is a noiseless model at the fiducial point, and the covariance is analytic Gaussian: it has no block between the counts and the two-point functions, no super-sample covariance, and no trispectrum term.
+- **The data are synthetic.** The data vector is a noiseless model at the fiducial point, and the covariance is analytic Gaussian: it has no block between the counts and the two-point functions, no super-sample covariance, and no trispectrum term. The terms beyond Gaussian and the block between the counts and the two-point functions are deferred to the planned port of CosmoCov to Cocoa.
 - **$w_{cc}$ and $w_{cg}$ are Limber only.** The original CosmoLike code computes both without the Limber approximation. At the largest angular bin (225 arcmin), for the first cluster redshift bin and the lowest richness bin, the Limber result differs from the non-Limber one by about -13% for $w_{cc}$ and -16% for $w_{cg}$ ([tests/lighthouse_reference/README.md](tests/lighthouse_reference/README.md)). The keys `cluster_adopt_limber_cc` and `cluster_adopt_limber_cg` exist, but 1 is the only implemented value. Non-Limber $w_{cc}$ and $w_{cg}$ are the first physics item of the backlog.
 - **Cluster lensing has NLA intrinsic alignment only.** There is no TATT in the cluster lensing code, and the examples run NLA in every block.
 - **Neutrinos in the halo mass function.** The mass function uses the code's default treatment of massive neutrinos; an option based on the cold dark matter plus baryon spectrum does not exist yet. [PORT_PLAN.md](PORT_PLAN.md) estimates the effect on the counts at 2-4% at the fiducial point and above 10% at the top of the prior on $\Omega_\nu h^2$.
@@ -714,5 +737,5 @@ The port is complete for the model described above: the two likelihoods run, the
 - **Point-mass parameters in 4x2pt + N.** `combo_4x2pt_N` samples `DES_PM1` ... `DES_PM6` although it has no galaxy-galaxy lensing block, so these six parameters only follow their priors.
 - **Thread scaling.** Going from 4 to 8 threads gains only a factor of 1.4 on 6x2pt + N; the cause has not been measured. Two optimizations of the cluster tables are left (the one-halo table, and the $w_{cc}$ and $w_{cg}$ spectra tables).
 - **Angular binning in the compiled interface.** cosmolike caches the bin-averaged Legendre kernels by the number of angular bins and the table key, not by the angular range, so a call to `init_binning` with a new range and the same number of bins returns the values of the old range. The notebook wrappers avoid this by drawing a new table key on every call.
-- **One notebook.** The data-vector plotting and response helpers of `cosmolike_notebook_utils` have no cluster version yet.
+- **No response functions for the cluster blocks.** The data-vector plotting functions of `cosmolike_notebook_utils` have a cluster version (`plot_datavectors_cluster.py`); the response helpers (`plot_response.py`) do not.
 - **No tagged release.** Cocoa pins this project to the branch `main`.
