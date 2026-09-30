@@ -1,0 +1,27 @@
+# DES Y6-like CL+GC / CL+3x2pt synthetic data set (arXiv 2503.13631).
+# data_file, cov_file, mask_file: placeholders for the synthetic-data step.
+# The scale-cut masks already exist (scripts/make_cluster_mask.py):
+#   des_cluster_y6_4x2ptN.mask (CL+GC), des_cluster_y6_6x2ptN.mask (CL+3x2pt);
+#   des_cluster_y6_4x2ptN.dataset / des_cluster_y6_6x2ptN.dataset point at them.
+# n(z): Z_LOW z column (photoz_zmid_convention = 0); the cluster table
+# des_y6_cluster.nz holds <phi_i|z> sampled at z (no half-cell offset).
+# survey_area_deg2: 4143 = Y3 cluster footprint (arXiv 2503.13632); the local
+# lighthouse Y6 configuration (dataY6.yaml) uses 4125.3.
+data_file = des_cluster_y6.datavector
+cov_file = des_cluster_y6.cov
+mask_file = des_cluster_y6.mask
+nz_lens_file = des_y6_maglim.nz
+nz_source_file = des_y6_source.nz
+lens_ntomo = 6
+source_ntomo = 4
+n_theta = 20
+theta_min_arcmin = 2.5
+theta_max_arcmin = 250.0
+nz_cluster_file = des_y6_cluster.nz
+cluster_ntomo = 3
+cluster_zbin_edges = 0.2,0.4,0.55,0.65
+richness_edges = 20,30,45,60,500
+survey_area_deg2 = 4143
+cg_lens_bins = 0,1,2
+baryon_pca_file = pca.txt
+all_sims_hdf5_file = baryons_logPkR.h5

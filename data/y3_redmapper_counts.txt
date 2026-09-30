@@ -1,0 +1,19 @@
+# DES Y3 redMaPPer cluster counts per (z_lambda bin, richness bin)
+# catalog: y3_redmapper_v6.4.22+2_release.h5 (DES Y3 public release, y3kp_clusters), cosmology sample index/redmapper/lgt20/select
+# read from: /private/tmp/claude-501/-Users-vivianmiranda-data-COCOA-september2026-test/7acf7473-0c5c-4d2b-bbeb-402e158a395f/scratchpad/y3_redmapper_cluster_columns.npz
+# sample of arXiv 2503.13632: z_lambda counts 5632 / 6308 / 4551 (total 16491)
+# bins half open: z_lo <= z_lambda < z_hi, lambda_lo <= lambda_chisq < lambda_hi
+# n_cA = N / Omega_s with area 4143.0 deg^2 = 1.262030 sr (Y3 cluster footprint; the local Y6 lighthouse config uses 4125.3 deg^2)
+# columns: z_lo z_hi lambda_lo lambda_hi N n_cA[1/sr] n_cA[1/arcmin^2]
+0.200 0.400 20 30 3282 2.600572e+03 2.200499e-04
+0.200 0.400 30 45 1535 1.216294e+03 1.029179e-04
+0.200 0.400 45 60 477 3.779625e+02 3.198166e-05
+0.200 0.400 60 500 338 2.678225e+02 2.266205e-05
+0.400 0.550 20 30 3896 3.087090e+03 2.612170e-04
+0.400 0.550 30 45 1652 1.309002e+03 1.107625e-04
+0.400 0.550 45 60 468 3.708311e+02 3.137823e-05
+0.400 0.550 60 500 292 2.313733e+02 1.957787e-05
+0.550 0.650 20 30 2894 2.293131e+03 1.940355e-04
+0.550 0.650 30 45 1154 9.143998e+02 7.737281e-05
+0.550 0.650 45 60 322 2.551445e+02 2.158929e-05
+0.550 0.650 60 500 181 1.434197e+02 1.213560e-05

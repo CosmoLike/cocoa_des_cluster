@@ -1,0 +1,288 @@
+ # ------------------------------------------------------------------------
+ # ------------------------------------------------------------------------
+ # ------------------------------------------------------------------------
+ # DES Y6-like MagLim lens sample, 6 bins [0.2, 0.4, 0.55, 0.70, 0.85, 0.95,
+ # 1.05] (n(z): data/des_y6_maglim.nz). Priors and fiducials: Table I of
+ # arXiv 2503.13631 (synthetic Y6-like analysis). Parameter layout restored
+ # from projects/desy1xplanck/likelihood/params_lens_maglim.yaml.
+ # CL+GC (4x2pt + N) uses lens bins 1-3 only (w_gg and w_cg): Table I varies
+ # b1 and Delta z of bins 4-6 only in CL+3x2pt, so a CL+GC combo should fix
+ # DES_B1_4..6 and DES_DZ_L4..6 (they are unconstrained there).
+ # ------------------------------------------------------------------------
+ # Lensing photo-z shifts (Table I: Gaussian, means from Cardinal)
+  DES_DZ_L1:
+    prior:
+      dist: norm
+      loc: 0.005
+      scale: 0.007
+    ref:
+      dist: norm
+      loc: 0.005
+      scale: 0.007
+    proposal: 0.0035
+    latex: \Delta z_\mathrm{l,DES}^1
+  DES_DZ_L2:
+    prior:
+      dist: norm
+      loc: 0.003
+      scale: 0.011
+    ref:
+      dist: norm
+      loc: 0.003
+      scale: 0.011
+    proposal: 0.0055
+    latex: \Delta z_\mathrm{l,DES}^2
+  DES_DZ_L3:
+    prior:
+      dist: norm
+      loc: 0.001
+      scale: 0.006
+    ref:
+      dist: norm
+      loc: 0.001
+      scale: 0.006
+    proposal: 0.003
+    latex: \Delta z_\mathrm{l,DES}^3
+  DES_DZ_L4:
+    prior:
+      dist: norm
+      loc: -0.002
+      scale: 0.006
+    ref:
+      dist: norm
+      loc: -0.002
+      scale: 0.006
+    proposal: 0.003
+    latex: \Delta z_\mathrm{l,DES}^4
+  DES_DZ_L5:
+    prior:
+      dist: norm
+      loc: 0.001
+      scale: 0.01
+    ref:
+      dist: norm
+      loc: 0.001
+      scale: 0.01
+    proposal: 0.005
+    latex: \Delta z_\mathrm{l,DES}^5
+  DES_DZ_L6:
+    prior:
+      dist: norm
+      loc: 0.008
+      scale: 0.01
+    ref:
+      dist: norm
+      loc: 0.008
+      scale: 0.01
+    proposal: 0.005
+    latex: \Delta z_\mathrm{l,DES}^6
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # Linear galaxy bias (Table I: flat [0.8, 3], ref centered on the fiducial)
+  DES_B1_1:
+    prior:
+      min: 0.8
+      max: 3
+    ref:
+      dist: norm
+      loc: 1.42
+      scale: 0.05
+    proposal: 0.05
+    latex: b_\mathrm{1-DES}^1
+  DES_B1_2:
+    prior:
+      min: 0.8
+      max: 3
+    ref:
+      dist: norm
+      loc: 1.66
+      scale: 0.05
+    proposal: 0.05
+    latex: b_\mathrm{1-DES}^2
+  DES_B1_3:
+    prior:
+      min: 0.8
+      max: 3
+    ref:
+      dist: norm
+      loc: 1.70
+      scale: 0.05
+    proposal: 0.05
+    latex: b_\mathrm{1-DES}^3
+  DES_B1_4:
+    prior:
+      min: 0.8
+      max: 3
+    ref:
+      dist: norm
+      loc: 1.62
+      scale: 0.05
+    proposal: 0.05
+    latex: b_\mathrm{1-DES}^4
+  DES_B1_5:
+    prior:
+      min: 0.8
+      max: 3
+    ref:
+      dist: norm
+      loc: 1.78
+      scale: 0.05
+    proposal: 0.05
+    latex: b_\mathrm{1-DES}^5
+  DES_B1_6:
+    prior:
+      min: 0.8
+      max: 3
+    ref:
+      dist: norm
+      loc: 1.75
+      scale: 0.05
+    proposal: 0.05
+    latex: b_\mathrm{1-DES}^6
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # Linear bias model: b2 fixed to zero
+  DES_B2_1:
+    value: 0.0
+    latex: b_\mathrm{2-DES}^1
+  DES_B2_2:
+    value: 0.0
+    latex: b_\mathrm{2-DES}^2
+  DES_B2_3:
+    value: 0.0
+    latex: b_\mathrm{2-DES}^3
+  DES_B2_4:
+    value: 0.0
+    latex: b_\mathrm{2-DES}^4
+  DES_B2_5:
+    value: 0.0
+    latex: b_\mathrm{2-DES}^5
+  DES_B2_6:
+    value: 0.0
+    latex: b_\mathrm{2-DES}^6
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # Magnification (Table I, fixed). The core adds b_mag x kappa_lens to the
+  # lens overdensity (W_mag * ell_prefactor * gbmag, cosmo2D.c, with W_mag
+  # the convergence kernel of the lens n(z), radial_weights.c), i.e.
+  # delta_obs = b1 delta + b_mag kappa. Eq (9) of 2503.13631 writes
+  # delta_mu = C_l kappa with C_l = 5 dln n/dm + dln n/dln r - 2 (eq 27), so
+  # DES_BMAG = C_l with no transform (lighthouse b_mag_fiducial and the
+  # desy1xplanck Y3 MagLim values follow the same identity).
+  DES_BMAG_1:
+    value: -1.57
+    latex: b_\mathrm{BMAG-DES}^1
+  DES_BMAG_2:
+    value: -1.70
+    latex: b_\mathrm{BMAG-DES}^2
+  DES_BMAG_3:
+    value: -0.25
+    latex: b_\mathrm{BMAG-DES}^3
+  DES_BMAG_4:
+    value: 1.50
+    latex: b_\mathrm{BMAG-DES}^4
+  DES_BMAG_5:
+    value: 2.22
+    latex: b_\mathrm{BMAG-DES}^5
+  DES_BMAG_6:
+    value: 2.80
+    latex: b_\mathrm{BMAG-DES}^6
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # Lens photo-z stretch (eq 30). Table I lists no stretch parameter for the
+  # Y6-like analysis: fixed to 1 (the likelihood's default for a missing
+  # DES_DZ2_L is 0, which is not "no stretch", so keep these entries).
+  DES_DZ2_L1:
+    value: 1.0
+    latex: \sigma z_\mathrm{l,DES}^1
+  DES_DZ2_L2:
+    value: 1.0
+    latex: \sigma z_\mathrm{l,DES}^2
+  DES_DZ2_L3:
+    value: 1.0
+    latex: \sigma z_\mathrm{l,DES}^3
+  DES_DZ2_L4:
+    value: 1.0
+    latex: \sigma z_\mathrm{l,DES}^4
+  DES_DZ2_L5:
+    value: 1.0
+    latex: \sigma z_\mathrm{l,DES}^5
+  DES_DZ2_L6:
+    value: 1.0
+    latex: \sigma z_\mathrm{l,DES}^6
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # Point mass of gamma_t (eq 14; CL+3x2pt only), as in desy1xplanck.
+  # Units: 1e13 Msun/h (PointMass::get_pm). Table I samples B^i flat
+  # [-1, 1] in units of 1e15 Msun/h, i.e. flat [-100, 100] here.
+  DES_PM1:
+    prior:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    ref:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    proposal: 5
+    latex: PM_\mathrm{DES}^1
+  DES_PM2:
+    prior:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    ref:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    proposal: 5
+    latex: PM_\mathrm{DES}^2
+  DES_PM3:
+    prior:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    ref:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    proposal: 5
+    latex: PM_\mathrm{DES}^3
+  DES_PM4:
+    prior:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    ref:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    proposal: 5
+    latex: PM_\mathrm{DES}^4
+  DES_PM5:
+    prior:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    ref:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    proposal: 5
+    latex: PM_\mathrm{DES}^5
+  DES_PM6:
+    prior:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    ref:
+      dist: norm
+      loc: 0.0
+      scale: 25
+    proposal: 5
+    latex: PM_\mathrm{DES}^6

@@ -1,0 +1,92 @@
+ # ------------------------------------------------------------------------
+ # ------------------------------------------------------------------------
+ # ------------------------------------------------------------------------
+ # DES redMaPPer cluster nuisance parameters, Table I of arXiv 2503.13631
+ # (synthetic Y6-like analysis; all flat priors).
+ # Mass-observable relation, eqs (18)-(19):
+ #   <ln lambda|M,z> = ln lambda_0 + A ln(M/M_piv) + B ln((1+z)/1.45),
+ #   sigma^2_ln lambda = sigma_int^2 + (e^<ln lambda> - 1)/e^(2 <ln lambda>),
+ #   M_piv = 5e14 Msun/h (lighthouse; not stated in the paper), M200m.
+ # Selection bias, eq (23), on the data vector:
+ #   Sigma, w_cg x [b_s1 + b_s2 exp(-theta chi(zbar)/r_0)], w_cc x [...]^2,
+ #   chi and r_0 in comoving Mpc/h. DES_CL_BSZ is the power of
+ #   (1+zbar)/1.45 multiplying the whole factor (lighthouse selection[3];
+ #   cf. the b_z test of arXiv 2503.13632 eq 1); 0 = the paper's model.
+ # ------------------------------------------------------------------------
+  DES_CL_LNLAMBDA0:
+    prior:
+      min: 2.0
+      max: 5.0
+    ref:
+      dist: norm
+      loc: 4.26
+      scale: 0.05
+    proposal: 0.05
+    latex: \ln\lambda_{0}
+  DES_CL_A_LAMBDA:
+    prior:
+      min: 0.1
+      max: 1.5
+    ref:
+      dist: norm
+      loc: 0.943
+      scale: 0.03
+    proposal: 0.03
+    latex: A_{\ln\lambda}
+  DES_CL_SIGMA_INT:
+    prior:
+      min: 0.1
+      max: 1.0
+    ref:
+      dist: norm
+      loc: 0.15
+      scale: 0.02
+    proposal: 0.02
+    latex: \sigma_{\mathrm{int}}
+  DES_CL_B_LAMBDA:
+    prior:
+      min: -5.0
+      max: 5.0
+    ref:
+      dist: norm
+      loc: 0.207
+      scale: 0.1
+    proposal: 0.1
+    latex: B_{\ln\lambda}
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # Selection bias
+  DES_CL_BS1:
+    prior:
+      min: 1.0
+      max: 2.0
+    ref:
+      dist: norm
+      loc: 1.1
+      scale: 0.02
+    proposal: 0.02
+    latex: b_{\mathrm{s}1}
+  DES_CL_BS2:
+    prior:
+      min: -1.0
+      max: 1.0
+    ref:
+      dist: norm
+      loc: 0.2
+      scale: 0.05
+    proposal: 0.05
+    latex: b_{\mathrm{s}2}
+  DES_CL_R0:
+    prior:
+      min: 10.0
+      max: 60.0
+    ref:
+      dist: norm
+      loc: 30.0
+      scale: 3.0
+    proposal: 3.0
+    latex: r_{0}\,[h^{-1}\mathrm{Mpc}]
+  DES_CL_BSZ:
+    value: 0.0
+    latex: b_{\mathrm{s}z}

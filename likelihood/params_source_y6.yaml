@@ -1,0 +1,208 @@
+ # ------------------------------------------------------------------------
+ # ------------------------------------------------------------------------
+ # ------------------------------------------------------------------------
+ # DES Y6-like source sample, 4 bins (n(z): data/des_y6_source.nz). Photo-z
+ # shifts (eq 29) and shear calibration: Table I of arXiv 2503.13631 (means
+ # of the Delta z priors from Cardinal). The 3x2pt placeholder keeps using
+ # params_source.yaml (DES Y3 Metacal values).
+ # ------------------------------------------------------------------------
+ # WL photo-z errors
+  DES_DZ_S1:
+    prior:
+      dist: norm
+      loc: 0.034
+      scale: 0.018
+    ref:
+      dist: norm
+      loc: 0.034
+      scale: 0.018
+    proposal: 0.009
+    latex: \Delta z_\mathrm{s,DES}^1
+  DES_DZ_S2:
+    prior:
+      dist: norm
+      loc: 0.028
+      scale: 0.013
+    ref:
+      dist: norm
+      loc: 0.028
+      scale: 0.013
+    proposal: 0.0065
+    latex: \Delta z_\mathrm{s,DES}^2
+  DES_DZ_S3:
+    prior:
+      dist: norm
+      loc: 0.011
+      scale: 0.006
+    ref:
+      dist: norm
+      loc: 0.011
+      scale: 0.006
+    proposal: 0.003
+    latex: \Delta z_\mathrm{s,DES}^3
+  DES_DZ_S4:
+    prior:
+      dist: norm
+      loc: -0.01
+      scale: 0.013
+    ref:
+      dist: norm
+      loc: -0.01
+      scale: 0.013
+    proposal: 0.0065
+    latex: \Delta z_\mathrm{s,DES}^4
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # Intrinsic alignment: kept as in params_source.yaml for now (the cluster
+  # baseline runs NLA: IA_model 0, IA_redshift_evolution 3). With these
+  # names DES_A1_1 = amplitude a1, DES_A1_2 = redshift power eta1,
+  # DES_A2_1 = a2, DES_A2_2 = eta2, DES_BTA_1 = b_TA (IA.c nuisance.ia).
+  # Table I of 2503.13631 (TATT, eqs 24-26, z0 = Y1 mean source z):
+  #   a1   flat [-5, 5], fiducial 0       (CL+GC and CL+3x2pt)
+  #   eta1 Gauss(0, 3),  fiducial 0       (CL+GC and CL+3x2pt)
+  #   a2   flat [-5, 5], fiducial -1.36   (CL+3x2pt only; A2 = 0 in
+  #                                        cluster lensing)
+  #   eta2 Gauss(0, 3),  fiducial 0       (CL+3x2pt only)
+  #   b_TA fixed to 1
+  DES_A1_1:
+    prior:
+      min: -5
+      max:  5
+    ref:
+      dist: norm
+      loc: 0.7
+      scale: 0.5
+    proposal: 0.75
+    latex: A_\mathrm{1-IA,DES}^1
+  DES_A1_2:
+    prior:
+      min: -5
+      max:  5
+    ref:
+      dist: norm
+      loc: -1.7
+      scale: 0.5
+    proposal: 0.75
+    latex: A_\mathrm{1-IA,DES}^2
+  DES_A1_3:
+    value: 0
+    latex: A_\mathrm{1-IA,DES}^3        
+  DES_A1_4:
+    value: 0
+    latex: A_\mathrm{1-IA,DES}^4  
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  DES_A2_1:
+    prior:
+      min: -5.0
+      max: 5.0
+    ref:
+      dist: norm
+      loc: -1.36
+      scale: 0.2
+    proposal: 0.2
+    latex: A_\mathrm{2-IA,DES}^1
+  DES_A2_2:
+    prior:
+      min: -5.0
+      max: 5.0
+    ref:
+      dist: norm
+      loc: -2.5
+      scale: 0.2
+    proposal: 0.2
+    latex: A_\mathrm{2-IA,DES}^2
+  DES_A2_3:
+    value: 0.0
+    latex: A_\mathrm{2-IA,DES}^3
+  DES_A2_4:
+    value: 0.0
+    latex: A_\mathrm{2-IA,DES}^4
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  DES_BTA_1:
+    prior:
+      min: 0.0
+      max: 2.0
+    ref:
+      dist: norm
+      loc: 1.0
+      scale: 0.1
+    proposal: 0.1
+    latex: A_\mathrm{BTA-IA,DES}^1
+  DES_BTA_2:
+    value: 0
+    latex: A_\mathrm{BTA-IA,DES}^2
+  DES_BTA_3:
+    value: 0
+    latex: A_\mathrm{BTA-IA,DES}^3        
+  DES_BTA_4:
+    value: 0
+    latex: A_\mathrm{BTA-IA,DES}^4
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # Shear calibration parameters (Table I: Gaussian, zero mean)
+  DES_M1:
+    prior:
+      dist: norm
+      loc: 0.0
+      scale: 0.008
+    ref:
+      dist: norm
+      loc: 0.0
+      scale: 0.008
+    proposal: 0.004
+    latex: m_\mathrm{DES}^1
+  DES_M2:
+    prior:
+      dist: norm
+      loc: 0.0
+      scale: 0.013
+    ref:
+      dist: norm
+      loc: 0.0
+      scale: 0.013
+    proposal: 0.0065
+    latex: m_\mathrm{DES}^2
+  DES_M3:
+    prior:
+      dist: norm
+      loc: 0.0
+      scale: 0.009
+    ref:
+      dist: norm
+      loc: 0.0
+      scale: 0.009
+    proposal: 0.0045
+    latex: m_\mathrm{DES}^3
+  DES_M4:
+    prior:
+      dist: norm
+      loc: 0.0
+      scale: 0.012
+    ref:
+      dist: norm
+      loc: 0.0
+      scale: 0.012
+    proposal: 0.006
+    latex: m_\mathrm{DES}^4
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # Baryonic effects PCs amplitudes
+  DES_BARYON_Q1:
+    value: 0.0
+    latex: Q_\mathrm{DES}^1
+  DES_BARYON_Q2:
+    value: 0.0
+    latex: Q_\mathrm{DES}^2
+  DES_BARYON_Q3:
+    value: 0.0
+    latex: Q_\mathrm{DES}^3
+  DES_BARYON_Q4:
+    value: 0.0
+    latex: Q_\mathrm{DES}^4
