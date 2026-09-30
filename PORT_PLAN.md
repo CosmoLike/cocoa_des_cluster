@@ -207,8 +207,13 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
   in-process (coarse G) every halo probe is bitwise its frozen value on
   the current core, so the whole move is the dense growth grid (as that
   commit's message records; halo integrals amplify the G error), and the
-  HOD a-grid fix and the tiling are bitwise there. The halo_reference
-  refreeze waits for Vivian's review of the growth deltas (handoff).
+  HOD a-grid fix and the tiling are bitwise there. roman_real slow tier
+  (COCOA_HALO_SLOW=1: test_halo, halo/HOD cache consistency, test_hod_cell,
+  halo IA accuracy/race): 55 passed, 8 failed, all TestFrozenReferences
+  (the three above plus p_mm, p_my, p_yy, p_gm, p_gg); with the old G
+  every frozen halo probe is within 1.4e-14 of its value (rtol 1e-12).
+  The halo_reference refreeze waits for Vivian's review of the growth
+  deltas (handoff).
 - Optimization (d92b90d): a sampled profile (macOS `sample`, 6x2pt + N)
   put the cluster Legendre sums at 20% of the cosmolike thread time;
   4 rows x 4 theta register tiles, bitwise identical to the reference
