@@ -58,7 +58,6 @@ import sys
 
 import numpy as np
 from getdist import IniFile
-from scipy.interpolate import CubicSpline
 
 # the shared notebook utilities live in cosmolike_core; the compiled
 # interface is on the path already (each project's interface/
@@ -401,7 +400,7 @@ def _camb_cosmology(**kwargs):
       kwargs = the arguments of cnu.get_camb_cosmology.
 
     Returns:
-      its tuple (log10k_2D, z_2D, lnPL, lnPNL, G, z_1D, chi).
+      its tuple (log10k_2D, z_2D, lnPL, lnPNL, G, z_G, z_1D, chi).
     """
     key = tuple(sorted(kwargs.items()))
     if _CAMB_CACHE["key"] != key:
@@ -431,9 +430,8 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
     likelihood sends it (z_G of ci.set_cosmology): cosmolike reads G
     linearly in z, and the cluster abundance amplifies a growth error
     5-15x, so the coarse grid of the power spectra is not enough.
-    cnu.get_camb_cosmology returns G on that coarse grid (the z nodes
-    CAMB itself computes), so it is resampled here with a cubic
-    spline; the normalization (G = 1 at the last coarse node) is kept.
+    cnu.get_camb_cosmology returns G on that dense grid, with its z
+    nodes (z_growth).
 
     Arguments:
       omegam ... non_linear_emul = the cosmology and accuracy
@@ -452,7 +450,7 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
       nothing; the interface state is the result.
     """
     (log10k_interp_2D, z_interp_2D, lnPL, lnPNL,
-     G_growth, z_interp_1D, chi) = _camb_cosmology(
+     G_growth, z_growth, z_interp_1D, chi) = _camb_cosmology(
         omegam=omegam, omegab=omegab, H0=H0, ns=ns, As_1e9=As_1e9,
         w=w, w0pwa=w0pwa, mnu=mnu, AccuracyBoost=AccuracyBoost,
         kmax=kmax, k_per_logint=k_per_logint,
@@ -487,9 +485,6 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
     ci.init_binning(int(binning[0]), binning[1], binning[2])
     ci.init_bias(bias_model=_CONFIG["bias_model"])
 
-    # G on the dense 1D z grid (clipped to the range of the 2D tables)
-    z_growth = z_interp_1D[z_interp_1D <= z_interp_2D[-1]]
-    G_dense = CubicSpline(z_interp_2D, G_growth)(z_growth)
     ci.set_cosmology(omegam=omegam,
                      omegab=omegab,
                      H0=H0,
@@ -497,7 +492,7 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
                      z_2D=z_interp_2D,
                      lnP_linear=lnPL,
                      lnP_nonlinear=lnPNL,
-                     G=G_dense,
+                     G=G_growth,
                      z_G=z_growth,
                      z_1D=z_interp_1D,
                      chi=chi)
