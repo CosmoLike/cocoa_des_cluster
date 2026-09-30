@@ -70,16 +70,17 @@ def setup():
     return dict(ds=ds, settings=settings, ref=ref, M=M, cN=cN, info=info)
 
 
-def make_fc(setup, mode="signal", selection="ref"):
+def make_fc(setup, mode="signal", selection="ref", noise="exact", spectra=None):
     ref, s = setup["ref"], setup["settings"]
     B = ref.selection() if isinstance(selection, str) else selection
     return FullGaussianCovariance(
-        ref.spectra(), ref.counts(), ref.cluster.Omega_s, ref.edges, ref.T, s["lmax"],
+        ref.spectra() if spectra is None else spectra, ref.counts(), ref.cluster.Omega_s,
+        ref.edges, ref.T, s["lmax"],
         selection=B, shear_m=ref.params["shear_m"],
         n_lens_arcmin2=ref.settings["n_lens_arcmin2"],
         n_src_arcmin2=ref.settings["n_src_arcmin2"], sigma_e=ref.settings["sigma_e"],
         cg_lens_bins=setup["ds"]["cg_lens_bins"], selection_mode=mode,
-        counts_cov=setup["cN"])
+        counts_cov=setup["cN"], noise=noise)
 
 
 @pytest.fixture(scope="module")
@@ -266,8 +267,10 @@ def test_counts_block_and_zero_cross(cov_signal, setup):
 # ----------------------------------------------------------------------
 # reduction to ref_covariance.py on the cluster blocks
 # ----------------------------------------------------------------------
-def test_reduction_to_ref_covariance(setup, cov_none):
-    fc, cov = cov_none
+def test_reduction_to_ref_covariance(setup):
+    """noise = "lsum" (the LMAX-truncated noise sum of ref_covariance.py)."""
+    fc = make_fc(setup, "none", noise="lsum")
+    cov = fc.full(setup["M"])
     ref, s = setup["ref"], setup["settings"]
     lay = fc.layout
     cg = setup["ds"]["cg_lens_bins"]
@@ -303,8 +306,10 @@ def test_reduction_to_ref_covariance(setup, cov_none):
 # brute-force elements
 # ----------------------------------------------------------------------
 def test_bruteforce_xi_xi(setup, cov_signal):
-    """xi+(s1 s1) x xi+(s1 s1) and xi+ x xi-: E-mode [2 (S + N)^2] +/- B-mode
-    [2 N^2], summed over every integer l."""
+    """xi+(s1 s1) x xi+(s1 s1) and xi+ x xi-: E-mode 2 (S + N)^2 +/- B-mode
+    2 N^2. The pieces with signal are summed over every integer l < LMAX;
+    the noise x noise piece (2 N^2 E + 2 N^2 B for ++, 0 for +-) is the
+    all-l value, delta_ij/(8 pi^2 Delta x_i f_sky)."""
     fc, cov = cov_signal
     ref, lay = setup["ref"], fc.layout
     sp, lmax = ref.spectra(), setup["settings"]["lmax"]
@@ -314,19 +319,23 @@ def test_bruteforce_xi_xi(setup, cov_signal):
     S = sp["C_ss"][j, j]
     op = obs_index(lay, "ss", ("xip", j, j))
     om = obs_index(lay, "ss", ("xim", j, j))
+    xe = np.cos(ref.edges)
+    for ti, tj in ((3, 11), (3, 3)):
+        for o2, K2, sgn in ((op, K["xip"], 1.0), (om, K["xim"], -1.0)):
+            nodes = 2.0 * S**2 + 4.0 * S * N
+            direct = spline_sum(sp["ells"], nodes, K["xip"][ti], K2[tj], lmax) / fc.fsky
+            if ti == tj and sgn > 0:
+                direct += 4.0 * N**2 / (8 * np.pi**2 * (xe[ti] - xe[ti + 1])) / fc.fsky
+            el = cov[lay["index"][op][ti], lay["index"][o2][tj]]
+            rel = abs(el / direct - 1.0)
+            print(f"\nxi+ x {'xi+' if sgn > 0 else 'xi-'} (s{j}s{j}, bins {ti},{tj}): "
+                  f"assembled {el:.10e}, direct {direct:.10e}, rel {rel:.1e}")
+            assert rel < TOL_BRUTE
     ti, tj = 3, 11
-    for o2, K2, sgn in ((op, K["xip"], 1.0), (om, K["xim"], -1.0)):
-        nodes = 2.0 * (S + N) ** 2 + sgn * 2.0 * N**2
-        direct = spline_sum(sp["ells"], nodes, K["xip"][ti], K2[tj], lmax) / fc.fsky
-        el = cov[lay["index"][op][ti], lay["index"][o2][tj]]
-        rel = abs(el / direct - 1.0)
-        print(f"\nxi+ x {'xi+' if sgn > 0 else 'xi-'} (s{j}s{j}, bins {ti},{tj}): "
-              f"assembled {el:.10e}, direct {direct:.10e}, rel {rel:.1e}")
-        assert rel < TOL_BRUTE
     # interpolating the spectrum instead of the product: an accuracy statement
     l = np.arange(1, lmax, dtype=float)
     Sl = CubicSpline(np.log(sp["ells"]), S)(np.log(l))
-    alt = np.sum(K["xip"][ti, 1:] * K["xip"][tj, 1:] * (2 * (Sl + N) ** 2 + 2 * N**2)
+    alt = np.sum(K["xip"][ti, 1:] * K["xip"][tj, 1:] * (2 * Sl**2 + 4 * Sl * N)
                  / (2 * l + 1)) / fc.fsky
     el = cov[lay["index"][op][ti], lay["index"][op][tj]]
     print(f"spline of C_l instead of the product: rel {abs(el / alt - 1):.1e}")
@@ -359,7 +368,8 @@ def test_bruteforce_gs_cs(setup, cov_signal):
 
 
 def test_bruteforce_cc_selection(setup, cov_signal):
-    """w_cc(i, A, A) auto: 2 (B_i(t) B_i(t') C + N)^2 per l (signal mode)."""
+    """w_cc(i, A, A) auto: 2 (B_i(t) B_i(t') C + N)^2 per l (signal mode);
+    the 2 N^2 piece is the all-l value (zero off the diagonal)."""
     fc, cov = cov_signal
     ref, lay = setup["ref"], fc.layout
     sp, lmax = ref.spectra(), setup["settings"]["lmax"]
@@ -367,18 +377,68 @@ def test_bruteforce_cc_selection(setup, cov_signal):
     i, A = 2, 3
     S = sp["C_cc"][i, A, i, A]
     N = fc.Omega_s / fc.N[i, A]
-    ti, tj = 12, 15
-    bi, bj = fc.B[i, ti], fc.B[i, tj]
-    direct = (2 * bi**2 * bj**2 * spline_sum(sp["ells"], S**2, K["w"][ti], K["w"][tj], lmax)
-              + 4 * bi * bj * N * spline_sum(sp["ells"], S, K["w"][ti], K["w"][tj], lmax)
-              + 2 * N**2 * spline_sum(sp["ells"], np.ones_like(S), K["w"][ti], K["w"][tj], lmax)
-              ) / fc.fsky
+    xe = np.cos(ref.edges)
     o = obs_index(lay, "cc", (i, A, A))
-    el = cov[lay["index"][o][ti], lay["index"][o][tj]]
-    rel = abs(el / direct - 1.0)
-    print(f"\ncc auto element with selection: assembled {el:.10e}, direct {direct:.10e}, "
-          f"rel {rel:.1e}")
-    assert rel < TOL_BRUTE
+    for ti, tj in ((12, 15), (12, 12)):
+        bi, bj = fc.B[i, ti], fc.B[i, tj]
+        direct = (2 * bi**2 * bj**2 * spline_sum(sp["ells"], S**2, K["w"][ti], K["w"][tj], lmax)
+                  + 4 * bi * bj * N * spline_sum(sp["ells"], S, K["w"][ti], K["w"][tj], lmax)
+                  ) / fc.fsky
+        if ti == tj:
+            direct += 2 * N**2 / (8 * np.pi**2 * (xe[ti] - xe[ti + 1])) / fc.fsky
+        el = cov[lay["index"][o][ti], lay["index"][o][tj]]
+        rel = abs(el / direct - 1.0)
+        print(f"\ncc auto element with selection (bins {ti},{tj}): assembled {el:.10e}, "
+              f"direct {direct:.10e}, rel {rel:.1e}")
+        assert rel < TOL_BRUTE
+
+
+def test_pure_noise_is_pair_count_variance(setup):
+    """With every spectrum set to zero the covariance is noise x noise
+    alone and must equal the real-space pair-count variances:
+      xi+/- auto (s_j s_j): 2 sigma_e^4 / (n_j^2 Omega pi Dx), cross: half;
+      gamma_t (g_k s_j): sigma_e^2/(n_k n_j Omega 2 pi Dx);
+      w auto: 1/(n^2 Omega pi Dx);  w_cg: 1/(n_c n_g Omega 2 pi Dx);
+      Sigma: T diag(sigma_e^2/(n_c n_s Omega 2 pi Dx)) T^T,
+    Dx = cos(theta_lo) - cos(theta_hi); diagonal in theta except through T."""
+    ref = setup["ref"]
+    zero = {k: (np.zeros_like(v) if k.startswith("C_") else v) for k, v in ref.spectra().items()}
+    fc = make_fc(setup, "signal", spectra=zero)
+    c2 = fc.twopoint(setup["M"]).reshape(len(fc.layout["obs"]), fc.nt,
+                                         len(fc.layout["obs"]), fc.nt)
+    xe = np.cos(ref.edges)
+    Dx = xe[:-1] - xe[1:]
+    Om = fc.Omega_s
+    se2 = fc.sigma_e**2
+    Nc = fc.N / Om
+    worst = 0.0
+    for o, (block, legs, kind, lab) in enumerate(fc.layout["obs"]):
+        if block == "ss":
+            _, i, j = lab
+            v = se2**2 / (fc.n_src[i] * fc.n_src[j] * Om * np.pi * Dx) * (2 if i == j else 1)
+        elif block == "gs":
+            k, j = lab
+            v = se2 / (fc.n_lens[k] * fc.n_src[j] * Om * 2 * np.pi * Dx)
+        elif block == "gg":
+            (k,) = lab
+            v = 1 / (fc.n_lens[k] ** 2 * Om * np.pi * Dx)
+        elif block == "cg":
+            i, g, A = lab
+            v = 1 / (Nc[i, A] * fc.n_lens[g] * Om * 2 * np.pi * Dx)
+        elif block == "cc":
+            i, A, B = lab
+            v = 1 / (Nc[i, A] * Nc[i, B] * Om * (np.pi if A == B else 2 * np.pi) * Dx)
+        else:
+            i, j, A = lab
+            v0 = se2 / (Nc[i, A] * fc.n_src[j] * Om * 2 * np.pi * Dx)
+            expect = ref.T @ np.diag(v0) @ ref.T.T
+            got = c2[o, :, o, :]
+            worst = max(worst, np.max(np.abs(got - expect)) / np.max(np.abs(expect)))
+            continue
+        got = c2[o, :, o, :]
+        worst = max(worst, np.max(np.abs(got - np.diag(v))) / np.max(v))
+    print(f"\npure noise vs pair-count variances: max |dC|/max C = {worst:.2e}")
+    assert worst < 1e-12
 
 
 # ----------------------------------------------------------------------

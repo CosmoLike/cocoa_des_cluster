@@ -178,7 +178,7 @@ def reference_settings(ds, lik):
         ntheta=ds["n_theta"], tmin_arcmin=ds["theta_min_arcmin"],
         tmax_arcmin=ds["theta_max_arcmin"], lens_bins=list(range(ds["lens_ntomo"])),
         kernel_mode=int(lik["cluster_kernel_mode"]), C_c=float(lik["cluster_magnification"]),
-        hmf_matter="tot")
+        hmf_matter="tot", hmf_alpha_mode=int(lik["cluster_hmf_alpha_mode"]))
 
 
 # ============================================================================

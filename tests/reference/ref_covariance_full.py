@@ -28,7 +28,11 @@ A, B, C, D in {cluster c_iA, lens g_k, source shear s_j}:
   Cov(O_i, O'_j) = sum_{l=1}^{LMAX-1} K_i(l) K'_j(l) [..]_l / ((2l+1) f_sky),
   with [..] interpolated in ln l between the spectra nodes by the cubic
   spline the signal uses (band_matrices: exact band weights, no binning),
-  exactly as ref_covariance.py does for its cluster-only blocks.
+  exactly as ref_covariance.py does for its cluster-only blocks. The pure
+  noise x noise piece (flat in l) is summed to l = infinity instead
+  (noise = "exact", default): delta_ij [..]/(8 pi^2 Delta x_i f_sky), the
+  real-space pair-count variance (FullGaussianCovariance._noise_exact);
+  noise = "lsum" keeps the LMAX-truncated sum of ref_covariance.py.
 
   Shear: xi+ = sum G+ (C^EE + C^BB), xi- = sum G- (C^EE - C^BB), and the
   B modes carry shape noise only, so every xi x xi pair also gets
@@ -78,6 +82,7 @@ from ref_projection import legendre_table, projection_kernels
 BLOCKS = ("ss", "gs", "gg", "cg", "N", "cc", "cs")
 KINDS = ("xip", "xim", "gt", "w")
 SELECTION_MODES = ("signal", "jacobian", "none")
+NOISE_MODES = ("exact", "lsum")
 
 
 # ----------------------------------------------------------------------
@@ -245,9 +250,11 @@ class FullGaussianCovariance:
                  n_lens_arcmin2=(0.1380, 0.1016, 0.1071, 0.1381, 0.1054, 0.1045),
                  n_src_arcmin2=(2.1402, 2.14455, 2.1518, 2.11845),
                  sigma_e=0.384666 / np.sqrt(2.0), cg_lens_bins=(0, 1, 2),
-                 selection_mode="signal", counts_cov=None):
+                 selection_mode="signal", counts_cov=None, noise="exact"):
         if selection_mode not in SELECTION_MODES:
             raise ValueError(f"selection_mode {selection_mode!r} not in {SELECTION_MODES}")
+        if noise not in NOISE_MODES:
+            raise ValueError(f"noise {noise!r} not in {NOISE_MODES}")
         self.sp = spectra
         self.N = np.asarray(counts, dtype=float)
         self.nzc, self.nA = self.N.shape
@@ -269,6 +276,7 @@ class FullGaussianCovariance:
         self.sigma_e = float(sigma_e)
         self.cg_lens_bins = list(cg_lens_bins)
         self.selection_mode = selection_mode
+        self.noise = noise
         self.counts_cov = (np.diag(self.N.ravel()) if counts_cov is None
                            else np.asarray(counts_cov, dtype=float))
         self.layout = joint_layout(self.nzc, self.nA, self.ns, self.nl, self.nt,
@@ -354,7 +362,7 @@ class FullGaussianCovariance:
         terms = [
             # (G, row factor per leg a, b; col factor per leg c, d)
             (SS, sig[a] * sig[b], sig[a] * sig[b]),
-            (NN, noi[a] * noi[b], noi[a] * noi[b]),
+            (NN, noi[a] * noi[b], noi[a] * noi[b]),     # second entry: noise x noise
             # Wick 1 (a-c, b-d): signal ac x noise bd, noise ac x signal bd
             ((S[A_, C_] * Nd[B_, D_][:, :, None]), sig[a] * noi[b], sig[a] * noi[b]),
             ((Nd[A_, C_][:, :, None] * S[B_, D_]), noi[a] * sig[b], noi[a] * sig[b]),
@@ -383,6 +391,33 @@ class FullGaussianCovariance:
                 out[np.ix_(ia, np.arange(nt), ib, np.arange(nt))] = blk.transpose(0, 2, 1, 3)
         return out
 
+    def _noise_exact(self, G):
+        """The noise x noise piece summed over ALL multipoles.
+
+        Its angular power is flat, so the l sum is a completeness relation:
+        sum_{l} (2l+1)/2 <K_l>_i <K_l>_j -> delta_ij / Delta x_i for the
+        Legendre (w), associated Legendre (gamma_t) and Wigner d (xi+/-)
+        bin averages, i.e.
+          sum_l K_i(l) K_j(l)/(2l+1) = delta_ij / (8 pi^2 Delta x_i),
+          Delta x_i = cos(theta_i) - cos(theta_{i+1}),
+        and zero between different kinds (xi+ x xi-: E and B noise cancel).
+        This is the real-space pair-count result (e.g. gamma_t:
+        sigma_e^2 / (n_l n_s Omega_s 2 pi theta dtheta)); the l sum cut at
+        LMAX instead is 4.8% low in the first theta bin and puts a 1.6%
+        correlation between neighboring bins (noise = "lsum", the
+        ref_covariance.py convention)."""
+        obs = self.layout["obs"]
+        kinds = np.array([o[2] for o in obs])
+        xe = np.cos(self.edges)
+        diag = 1.0 / (8.0 * np.pi**2 * (xe[:-1] - xe[1:]))        # (nt,)
+        same = (kinds[:, None] == kinds[None, :]).astype(float)
+        g = G[:, :, 0] * same                                      # l independent
+        no, nt = len(obs), self.nt
+        out = np.zeros((no, nt, no, nt))
+        for t in range(nt):
+            out[:, t, :, t] = g * diag[t]
+        return out
+
     def _ytransform(self, C):
         """T on the theta index of every cs observable (rows and columns)."""
         cs = np.array([o[0] == "cs" for o in self.layout["obs"]])
@@ -400,10 +435,13 @@ class FullGaussianCovariance:
         no, nt = len(self.layout["obs"]), self.nt
         cov = np.zeros((no, nt, no, nt))
         pieces = []
-        for G, row, col in self._terms():
+        for n, (G, row, col) in enumerate(self._terms()):
             if not np.any(G):
                 continue
-            C = self._ytransform(self._project(G, M))
+            if n == 1 and self.noise == "exact":
+                C = self._ytransform(self._noise_exact(G))
+            else:
+                C = self._ytransform(self._project(G, M))
             C *= row[:, :, None, None] * col[None, None, :, :]
             cov += C
             if return_terms:
@@ -429,7 +467,7 @@ class FullGaussianCovariance:
 # convenience: from a ClusterReference
 # ----------------------------------------------------------------------
 def full_covariance(ref, selection_mode="signal", counts=None, cg_lens_bins=(0, 1, 2),
-                    return_object=False, M=None):
+                    return_object=False, M=None, noise="exact"):
     """Joint covariance at the point of a reference_cluster.ClusterReference
     whose settings["lens_bins"] cover every lens bin (0 .. nl-1).
 
@@ -456,7 +494,7 @@ def full_covariance(ref, selection_mode="signal", counts=None, cg_lens_bins=(0, 
         selection=ref.selection(), shear_m=p["shear_m"],
         n_lens_arcmin2=s["n_lens_arcmin2"], n_src_arcmin2=s["n_src_arcmin2"],
         sigma_e=s["sigma_e"], cg_lens_bins=cg_lens_bins,
-        selection_mode=selection_mode, counts_cov=cN)
+        selection_mode=selection_mode, counts_cov=cN, noise=noise)
     cov = fc.full(M)
     info = dict(info, counts=N, counts_cov=cN, layout=fc.layout)
     return (cov, info, fc) if return_object else (cov, info)
