@@ -468,13 +468,22 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
     CLAccuracyBoost = CLAccuracyBoost * AccuracyBoost
     CLIntegrationAccuracy = max(
         0, CLIntegrationAccuracy + abs(3*(CLAccuracyBoost - 1.0)))
-    ci.init_ntable_lmax(int(_CONFIG["lmax"] + 20000*(CLAccuracyBoost - 1)))
-    ci.init_accuracy_boost(CLAccuracyBoost, int(CLIntegrationAccuracy))
-    ci.init_photoz_conventions(
-        int(_CONFIG["photoz_interpolation_type"]),
-        int(_CONFIG["photoz_zmid_convention"]))
+    ci.init_ntable_lmax(
+        lmax=int(_CONFIG["lmax"] + 20000*(CLAccuracyBoost - 1)))
+    # init_accuracy_boost sets the C-FAST-PT internal grid to the accuracy
+    # boost times the internal boost it saw at its first call in the
+    # process (init_cosmolike sets that one first). Called after it,
+    # init_fpt_internal_boost would overwrite the product with the bare
+    # internal boost, so the order is the likelihood's: internal boost,
+    # then accuracy boost.
     ci.init_fpt_internal_boost(
-        float(_CONFIG["internal_accuracyboost"]))
+        internal_boost=float(_CONFIG["internal_accuracyboost"]))
+    ci.init_accuracy_boost(
+        accuracy_boost=CLAccuracyBoost,
+        integration_accuracy=int(CLIntegrationAccuracy))
+    ci.init_photoz_conventions(
+        interpolation_type=int(_CONFIG["photoz_interpolation_type"]),
+        zmid_convention=int(_CONFIG["photoz_zmid_convention"]))
     if binning is None:
         binning = (_DATASET["ntheta"], _DATASET["theta_min_arcmin"],
                    _DATASET["theta_max_arcmin"])
