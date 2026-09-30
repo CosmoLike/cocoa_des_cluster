@@ -334,12 +334,11 @@ Open:
   in the seven projects, test_example1/2 of each, the mnu -> 0 limit,
   the Python reference with hmf_matter cb at Omega_nu h^2 = 0.00083 and
   0.00644, delta chi2 of cb vs total and of the emulator-path
-  approximation). Waiting for the owner: (1) the default of
-  combo_4x2pt_N / combo_6x2pt_N (1 = the DES model needs the synthetic
-  data regenerated, tests/frozen of examples 1-2 refrozen, and the
-  EMUL2 expected chi2 and README numbers redone); (2) the neutrino
-  states of the CAMB yamls (one massive state today, three degenerate
-  in DES: up to 2.6% in the counts at the same Omega_nu h^2).
+  approximation). Owner's decisions (2026-09-30): combo_4x2pt_N and
+  combo_6x2pt_N default to 1 (the synthetic data and covariance are
+  regenerated with it and tests/frozen of examples 1-2 refrozen, in the
+  overnight run; the EMUL2 expected chi2 and README numbers are redone
+  after it); the CAMB yamls keep one massive neutrino state.
 - Shared core: zmean() (lens mean redshift: w_gg pivot, evolving bias,
   point-mass lens redshift, HOD) is cached on Ntable.random and the n(z)
   only, so it keeps the value of the lens photo-z shifts at the last

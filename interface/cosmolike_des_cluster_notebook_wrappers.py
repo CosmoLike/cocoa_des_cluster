@@ -195,10 +195,10 @@ _CONFIG = {
     "adopt_limber_gg": 0,
     "include_HOD_GX": 0,
     "include_halo_IA": 0,
-    # halo field of sigma(M) and dn/dM: 0 = total matter (the shipped
-    # yaml and data), 1 = cold dark matter + baryons (the P_cb of the
-    # CAMB run is then handed over too)
-    "halo_matter_field": 0,
+    # halo field of sigma(M) and dn/dM: 0 = total matter, 1 = cold dark
+    # matter + baryons (the cluster yamls and the shipped data; the P_cb
+    # of the CAMB run is then handed over too)
+    "halo_matter_field": 1,
     # cluster model (structs_cluster.h; the likelihood yaml documents
     # every switch)
     "cluster_kernel_mode": 0,       # 0 = volume, 1 = abundance weighted

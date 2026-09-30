@@ -27,8 +27,8 @@ include_halo_IA: 0
 # 0 = total matter; 1 = cold dark matter + baryons, as the massive
 # neutrinos free-stream out of halos (the DES Y1 cluster model; sigma(M)
 # from CAMB's delta_nonu P(k); the emulator path approximates it). The
-# shipped synthetic data were made with 0
-halo_matter_field: 0
+# shipped synthetic data and covariance are made with 1
+halo_matter_field: 1
 lmax: 75000 
 kmax_boltzmann: 10.0
 speed: 1
