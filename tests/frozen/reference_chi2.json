@@ -1,9 +1,15 @@
 {
   "_meta": {
     "chi2_tolerance": 0.2,
-    "generated_utc": "2026-09-30T12:23:09Z",
+    "generated_utc": "2026-09-30T18:58:23Z",
     "omp_num_threads": "4"
   },
   "example1_nla": 0.0,
-  "example2_nla": 0.0
+  "example2_nla": 0.0,
+  "example3_nla": 1.624597164709238e-14,
+  "example3_tatt": 1.5083872834105272e-14,
+  "example4_2x2pt_nla": 2.2149459993101875e-13,
+  "example4_2x2pt_tatt": 2.4244254669140325e-13,
+  "example4_nla": 2.4161972387602086e-13,
+  "example4_tatt": 2.6100262043995003e-13
 }

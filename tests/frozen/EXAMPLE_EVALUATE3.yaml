@@ -2,49 +2,38 @@ timing: True
 debug: False
 stop_at_error: True
 
-# CL+GC (4x2pt + N) of arXiv 2503.13631 on the synthetic DES Y6-like data:
-# cluster counts N, cluster lensing (Sigma = Y gamma_t), cluster clustering
-# w_cc, cluster x galaxy w_cg and galaxy clustering w_gg (MagLim bins 1-3).
-# The data vector is the model at the point of the evaluate block below
-# (scripts/make_synthetic_data.py, Table I of the paper), so chi2 ~ 0 there.
+# Cosmic shear (xi+ and xi-) on the DES Y3 placeholder data set: the
+# galaxy-only likelihoods of this project (cosmic_shear, combo_3x2pt,
+# combo_2x2pt) read data/des_y3_real.dataset, a copy of the DES Y3 3x2pt
+# data set of the project des_y3 (Metacalibration sources, 4 bins).
+# The data vector is the DES Y3 measurement and the point of the evaluate
+# block below is not a fit to it, so chi2 sits far from its minimum there
+# (unlike EXAMPLE_EVALUATE1/2, whose synthetic data vector is the model).
+# The unit tests evaluate this point against a model vector generated at
+# it (tests/test_example3.py).
 likelihood:
-  des_cluster.combo_4x2pt_N:
+  des_cluster.cosmic_shear:
     path: ./external_modules/data/des_cluster
-    data_file: des_cluster_y6_4x2ptN.dataset
+    data_file: des_y3_real.dataset
     print_datavector: False
-    print_datavector_file: "./projects/des_cluster/chains/theory_4x2pt_N.modelvector"
+    print_datavector_file: "./projects/des_cluster/chains/theory_cosmic_shear.modelvector"
     # WARNING: keep accuracyboost <= 3 (above it the integration tables of the
     # donor project desy1xplanck broke down; not re-measured here).
     accuracyboost: 1.0
-    # integer 0, 1 or 2; 1 for the Y6 inputs (the MagLim lens n(z) tails reach
-    # z = 2.99: delta chi2 vs high accuracy 1.65 at 0, 0.048 at 1)
-    integration_accuracy: 1
+    # integer 0, 1 or 2; 0 is the default of the galaxy-only likelihoods (the
+    # cluster combinations run with 1, which their Y6 MagLim lens n(z) need)
+    integration_accuracy: 0
     lmax: 75000 # lmax computed for real space correlation function
+    # the value of EXAMPLE_EVALUATE4 (3x2pt), not the 7.5 default of this
+    # likelihood: the unit tests evaluate both examples against one model
+    # vector, so their numerical settings must agree
     kmax_boltzmann: 10.0
     # 1 EE2, 2 Halofit
     non_linear_emul: 2
-    IA_model: 0 # NLA (0); the cluster lensing code has no TATT
+    IA_model: 0 # NLA (0) or TATT (1)
     IA_code: 0  # CFASTPT (0) or FASTPT (1) (only works if not NLA)
     IA_redshift_evolution: 3
     debug: false
-    # radial kernel of clusters in the 2pt functions: 0 = volume only (what
-    # DES ran), 1 = abundance weighted
-    cluster_kernel_mode: 0
-    # selection bias: 0 = none, 1 = Y1 (mass dependent), 2 = Y6 (scale
-    # dependent, on the data vector; eq 23)
-    cluster_selection_model: 2
-    # cluster lensing: 1 = Sigma = Y gamma_t (eq 15), 0 = gamma_t (the data
-    # and covariance files must be in the same space)
-    cluster_ytransform: 1
-    # 1 = intrinsic alignment of the sources in the 2-halo cluster-lensing term
-    cluster_include_ia: 1
-    # cluster magnification coefficient C_c (eq 28: -2); 0 switches it off
-    cluster_magnification: -2.0
-    # Tinker 2010 amplitude: 0 = 0.368 at every z (what DES ran), 1 = alpha(z)
-    cluster_hmf_alpha_mode: 0
-    # w_cc and w_cg: 1 = Limber at every multipole, 0 = non-Limber
-    cluster_adopt_limber_cc: 1
-    cluster_adopt_limber_cg: 1
 
 params:
   As_1e9:
@@ -183,11 +172,12 @@ params:
     derived: 'lambda omegan2, H0: omegan2/((H0/100)**2)'
     latex: \Omega_\mathrm{\nu}
   # ----------------------------------------------------------------------------
-  # The nuisance parameters (sources, MagLim lenses, clusters) and their
-  # priors come from the likelihood defaults: likelihood/params_source_y6.yaml,
-  # params_lens_maglim.yaml and params_cluster.yaml. CL+GC fixes the bias and
-  # photo-z shift of lens bins 4-6, and the point masses of galaxy-galaxy
-  # lensing, which it does not contain (fixed_params of combo_4x2pt_N.yaml).
+  # The nuisance parameters of the sources (photo-z shifts, shear
+  # calibration, intrinsic alignment) and their priors come from the
+  # likelihood defaults: likelihood/params_source.yaml (DES Y3 Metacal
+  # values). The TATT terms (DES_A2_1, DES_A2_2, DES_BTA_1) are sampled
+  # there, so they need a value below even though NLA (IA_model: 0) ignores
+  # them.
   # ----------------------------------------------------------------------------
 
 theory:
@@ -210,42 +200,29 @@ sampler:
   evaluate:
     N: 1
     override:
-      # Table I of arXiv 2503.13631 (the point of the synthetic data vector)
-      As_1e9: 2.19
-      ns: 0.96859
-      H0: 69.0
-      omegab: 0.048
+      As_1e9: 2.1
+      ns: 0.96605
+      H0: 67.32
+      omegab: 0.04
       omegam: 0.3
-      # Omega_nu h^2 = 0.00083: mnu = 0.00083 x 94.0708/(3.046/3)^0.75 eV
-      mnu: 0.07719273818983689
+      mnu: 0.06
       w0pwa: -1.0
       w: -1.0
-      # sources: photo-z shift, shear calibration
-      DES_DZ_S1: 0.034
-      DES_DZ_S2: 0.028
-      DES_DZ_S3: 0.011
-      DES_DZ_S4: -0.010
-      DES_M1: 0.0
-      DES_M2: 0.0
-      DES_M3: 0.0
-      DES_M4: 0.0
-      # NLA: amplitude a1, redshift power eta1
-      DES_A1_1: 0.0
-      DES_A1_2: 0.0
-      # MagLim lenses (bins 1-3): photo-z shift, linear bias
-      DES_DZ_L1: 0.005
-      DES_DZ_L2: 0.003
-      DES_DZ_L3: 0.001
-      DES_B1_1: 1.42
-      DES_B1_2: 1.66
-      DES_B1_3: 1.70
-      # clusters: mass-observable relation (eqs 18-19)
-      DES_CL_LNLAMBDA0: 4.26
-      DES_CL_A_LAMBDA: 0.943
-      DES_CL_SIGMA_INT: 0.15
-      DES_CL_B_LAMBDA: 0.207
-      # clusters: selection bias (eq 23)
-      DES_CL_BS1: 1.1
-      DES_CL_BS2: 0.2
-      DES_CL_R0: 30.0
-output: ./projects/des_cluster/chains/EXAMPLE_EVALUATE1
+      # sources: photo-z shift, shear calibration (the means of their priors)
+      DES_DZ_S1: 0.0
+      DES_DZ_S2: 0.0
+      DES_DZ_S3: 0.0
+      DES_DZ_S4: 0.0
+      DES_M1: -0.0063
+      DES_M2: -0.0198
+      DES_M3: -0.0241
+      DES_M4: -0.0369
+      # intrinsic alignment: amplitude a1 and redshift power eta1 (NLA);
+      # a2 (DES_A2_1), eta2 (DES_A2_2) and b_TA (DES_BTA_1) enter only under
+      # TATT (IA_model: 1), and a2 = b_TA = 0 switches those terms off
+      DES_A1_1: 0.7
+      DES_A1_2: -1.7
+      DES_A2_1: 0.0
+      DES_A2_2: -1.51541
+      DES_BTA_1: 0.0
+output: ./projects/des_cluster/chains/EXAMPLE_EVALUATE3
