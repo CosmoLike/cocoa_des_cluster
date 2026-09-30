@@ -11,7 +11,7 @@ The data set is Y6-like in the following sense: the lens and source redshift dis
 
 | file | content |
 |---|---|
-| `des_cluster_y6.dataset` | the base dataset descriptor: file names, six lens and four source bins, 20 angular bins between 2.5 and 250 arcmin, three cluster redshift bins ($z_\lambda$ edges 0.2, 0.4, 0.55, 0.65), four richness bins ($\lambda$ edges 20, 30, 45, 60, 500), the survey area, and the lens bin paired with each cluster redshift bin in $w_{cg}$ (`cg_lens_bins`). The likelihoods do not load it directly: its `mask_file` key names a file that is not in this folder |
+| `des_cluster_y6.dataset` | the base dataset descriptor: file names, six lens and four source bins, 20 angular bins between 2.5 and 250 arcmin, three cluster redshift bins ($z_\lambda$ edges 0.2, 0.4, 0.55, 0.65), four richness bins ($\lambda$ edges 20, 30, 45, 60, 500), the survey area, and the lens bin paired with each cluster redshift bin in $w_{cg}$ (`cg_lens_bins`). The likelihood defaults and the examples name the two descriptors of the next row, not this file. Its `mask_file` key names the 6x2pt + N mask, so this file loaded on its own is the 6x2pt + N data set |
 | `des_cluster_y6_4x2ptN.dataset`, `des_cluster_y6_6x2ptN.dataset` | the descriptors that `combo_4x2pt_N` and `combo_6x2pt_N` load: the base descriptor (`DEFAULT(des_cluster_y6.dataset)`) with the mask of each combination |
 | `des_cluster_y6.datavector` | the joint synthetic data vector, shared by the two combinations (2812 entries; columns: index, value) |
 | `des_cluster_y6.cov` | the joint covariance of the 2812 entries, shared by the two combinations (columns: i, j, value; upper triangle with the diagonal, zeros included) |
