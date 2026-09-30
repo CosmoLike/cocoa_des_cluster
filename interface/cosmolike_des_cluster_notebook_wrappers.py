@@ -195,6 +195,10 @@ _CONFIG = {
     "adopt_limber_gg": 0,
     "include_HOD_GX": 0,
     "include_halo_IA": 0,
+    # halo field of sigma(M) and dn/dM: 0 = total matter (the shipped
+    # yaml and data), 1 = cold dark matter + baryons (the P_cb of the
+    # CAMB run is then handed over too)
+    "halo_matter_field": 0,
     # cluster model (structs_cluster.h; the likelihood yaml documents
     # every switch)
     "cluster_kernel_mode": 0,       # 0 = volume, 1 = abundance weighted
@@ -322,6 +326,8 @@ def init_cosmolike(CLprobe="6x2pt_N", with_data=False, lmax=None):
     ci.init_adopt_limber_gg(adopt_limber_gg=int(_CONFIG["adopt_limber_gg"]))
     ci.init_include_HOD_GX(include_HOD_GX=int(_CONFIG["include_HOD_GX"]))
     ci.init_include_halo_IA(include_halo_IA=int(_CONFIG["include_halo_IA"]))
+    ci.init_halo_matter_field(
+        halo_matter_field=int(_CONFIG["halo_matter_field"]))
 
     ci.init_ntable_lmax(lmax=int(lmax))
     ci.init_accuracy_boost(
@@ -400,7 +406,8 @@ def _camb_cosmology(**kwargs):
       kwargs = the arguments of cnu.get_camb_cosmology.
 
     Returns:
-      its tuple (log10k_2D, z_2D, lnPL, lnPNL, G, z_G, z_1D, chi).
+      its tuple (log10k_2D, z_2D, lnPL, lnPNL, G, z_G, z_1D, chi,
+      omegan2, lnPL_cb).
     """
     key = tuple(sorted(kwargs.items()))
     if _CAMB_CACHE["key"] != key:
@@ -450,7 +457,8 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
       nothing; the interface state is the result.
     """
     (log10k_interp_2D, z_interp_2D, lnPL, lnPNL,
-     G_growth, z_growth, z_interp_1D, chi) = _camb_cosmology(
+     G_growth, z_growth, z_interp_1D, chi,
+     omegan2, lnPL_cb) = _camb_cosmology(
         omegam=omegam, omegab=omegab, H0=H0, ns=ns, As_1e9=As_1e9,
         w=w, w0pwa=w0pwa, mnu=mnu, AccuracyBoost=AccuracyBoost,
         kmax=kmax, k_per_logint=k_per_logint,
@@ -494,6 +502,12 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
     ci.init_binning(int(binning[0]), binning[1], binning[2])
     ci.init_bias(bias_model=_CONFIG["bias_model"])
 
+    # Omega_nu h^2 always goes along, as the likelihood sends it; the
+    # linear P_cb only under halo_matter_field = 1, where sigma(M)
+    # reads it (an empty list removes the table of a previous call)
+    lnPL_cb_sent = []
+    if int(_CONFIG["halo_matter_field"]) == 1:
+        lnPL_cb_sent = lnPL_cb
     ci.set_cosmology(omegam=omegam,
                      omegab=omegab,
                      H0=H0,
@@ -504,7 +518,9 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
                      G=G_growth,
                      z_G=z_growth,
                      z_1D=z_interp_1D,
-                     chi=chi)
+                     chi=chi,
+                     omegan2=omegan2,
+                     lnP_linear_cb=lnPL_cb_sent)
 
     # lens, source and cluster nuisances, in the likelihood's order
     ci.set_point_mass(PMV=PM_FID if PM is None else PM)
