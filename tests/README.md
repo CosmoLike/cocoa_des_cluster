@@ -77,6 +77,9 @@ stored with Git LFS: a clone without `git lfs pull` holds a pointer
 file in place of each, and every test then stops at the manifest
 check, naming the file.
 
+The whole suite (28 tests) takes about 10 minutes on an Apple M2
+laptop (611 s of pytest time at the forced 4 OpenMP threads).
+
 ## The tests <a name="the_tests"></a>
 
 Each example gets a $\chi^2$ drift check and a race-condition check;

@@ -97,7 +97,9 @@ DCHI2_FLOOR = 1.0e-6
 # project's frozen state. While it is None the test prints the value
 # it measures and assertion 4 is skipped; record the printed value
 # here (with the date and platform) to arm it.
-DCHI2_MEASURED = None
+# measured on the frozen state of tests/frozen: arm64 macOS (Apple M2),
+# clang, default build, OMP_NUM_THREADS = 4, 2026-09-30
+DCHI2_MEASURED = 7.148978
 DCHI2_RTOL = 0.05
 
 
