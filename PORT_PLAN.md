@@ -83,7 +83,7 @@ scratchpad `fable_review_port_plan.md`, math in
 
 - Cluster radial kernel: volume-only q_i(z) ~ dV/dz <phi_i|z> by default
   (Y1 eq 15; what DES ran); abundance-weighted q_iA is a switch.
-- C_cs = int dchi/fK^2 {[W_kappa - W_IA](b_A W_c - C_c W_mag,c) P_NL
+- C_cs = int dchi/fK^2 {[W_kappa - W_IA](b_A W_c + C_c W_mag,c) P_NL (C_c = -2)
   + W_kappa W_c P1h_A}; 1-halo without bias, IA or magnification; cluster
   magnification over the full foreground (lighthouse keeps it inside the
   bin).
