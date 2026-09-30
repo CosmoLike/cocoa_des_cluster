@@ -1,0 +1,155 @@
+# Cluster port plan: 4x2pt + N in cosmolike_core
+
+Goal: port the cluster part of the original CosmoLike (lighthouse +
+cosmolike_core branch `cluster_chto`, arXiv 2008.10757) into cocoa's
+cosmolike_core, optimized on the cosmo2D.c / halo.c designs, and run the
+DES "CL+GC" (= 4x2pt + N) and "CL+3x2pt" (= 6x2pt + N) analyses of
+arXiv 2503.13631 (Y6 methods, the target model) / 2503.13632 (Y3 data)
+from this project.
+
+Reference code: lighthouse branch `Ystatistics` (Chun-Hao To's latest
+DES Y6 work, d4bb423, 2026-09-02; the local checkout `des_y6_comparison`
+adds only compile/shear-calibration/comparison commits) with
+cosmolike_core branch `cluster_chto` (1b861b1, 2026-08-21).
+
+Source studies (scratchpad of the 2026-09-29 session; key facts copied
+below): `papers_model_spec.md` (model spec, parameter tables, binning,
+public data), the port audit (function map, compile state, bugs,
+optimization patterns, interface design), the lighthouse live-path map,
+`fullsky_cluster_projections.md` (full-sky projection math).
+
+## 1. Findings that set the strategy
+
+1. The cocoa cluster files (`cluster_util.c`, `cosmo2D_cluster.c`) are
+   not a partial port: they were written against functions that are
+   commented out in the current library (`W_cluster`, `zdistr_cluster`,
+   `recompute_*`, `massfunc`, `B1`, `PT_*`, `interpol` 8-arg, ...).
+   190 + 244 compile errors; every cluster struct field is commented
+   out; ~20 real bugs (an infinite loop `j<N_z; i++`, pointer
+   subtraction, `!(ntomo>0)` dropping the first pair, halo-exclusion
+   double bias, write past `Cl[LMAX_NOLIMBER]`, ...). The redshift draft
+   (pasted by Vivian) was a commented-out block with 17 confirmed bugs.
+   `origin/dev` holds a newer rewrite (Nov-Dec 2025) that does not
+   compile; it fixes the file layout and the struct naming.
+   => The port is a REWRITE on the house patterns. Old files are a
+   physics map; lighthouse's live build is the numbers reference.
+2. No public cluster data vectors or covariances exist (Y1 or Y3; the
+   Y3 release page still says "when the paper is accepted"). The public
+   Y3 redMaPPer catalog reproduces the paper's counts exactly
+   (5632 / 6308 / 4551 in z_lambda [0.2,0.4,0.55,0.65]); median
+   sigma_z/(1+z) = 0.0060 / 0.0063 / 0.0066.
+   => Synthetic data (Y6-like fiducial), Gaussian covariance.
+3. Standards (Vivian): cosmo2D.c and halo.c are THE standard (Limber
+   `_work` batch APIs, full-sky bin-averaged Legendre projections,
+   FKEM FFTLog non-Limber). Flat-sky and the old cluster non-Limber are
+   not ported. Cluster code lives in files ending in `_cluster`.
+4. Lighthouse's live build differs from the published Y6 model in places
+   (flat-sky gamma_t with J2 Hankel, an "all pairs" cluster x source
+   hack, halo exclusion code that no paper uses). We follow the paper.
+
+## 2. Target model (2503.13631, equation numbers of that paper)
+
+- Blocks: N (counts, 3 z_lambda x 4 lambda bins), cs (cluster lensing,
+  gamma_t -> Sigma through the Y transform, Park+2021), cc (w_cc, auto
+  z bin, all richness pairs), cg (w_cg, cluster z bin i x lens bin i),
+  plus ss, gs, gg of the 3x2pt. CL+GC = N + cs + cc + cg + gg (lens bins
+  1-3); CL+3x2pt adds ss, gs and all lens bins.
+- Counts (16): N_iA = Omega_s int dz dV/dz dOmega <phi_i|z> int dM
+  P(lambda in A|M,z) dn/dM.
+- Mass function and bias: Tinker (halo.c `fnu`, `hb1nu`), M200m.
+- MOR (18)-(19): lognormal, <ln lambda|M> = ln lambda_0 + A ln(M/M_piv)
+  + B ln((1+z)/1.45), sigma^2 = sigma_int^2 + (e^<ln lambda> - 1) /
+  e^{2 <ln lambda>}, M_piv = 5e14 Msun/h (from lighthouse code; not in
+  the papers). P(lambda_obs in A|M) is a closed-form erf difference.
+- Cluster bias (21): richness-weighted Tinker b_h. Cluster lensing
+  spectrum: b_cA P_NL (2-halo) + 1-halo NFW (22) with Bhattacharya+13
+  c(M). w_cc, w_cg: linear bias x P_NL.
+- Selection bias (23), at data-vector level: Sigma and w_cg times
+  b_s1 + b_s2 exp(-theta chi(zbar)/r0); w_cc times its square.
+- Magnification: lens C_l fixed, clusters C_c = -2. IA in cluster
+  lensing: NLA now (TATT later). No cluster photo-z nuisance.
+- Scale cuts: Sigma > 2 Mpc/h, w_cg and w_gg > 8, w_cc > 16 Mpc/h.
+- Binning: z_lambda [0.2,0.4,0.55,0.65]; lambda [20,30,45,60,500];
+  20 log theta bins 2.5-250'. Lenses MagLim (6 bins Y6, 4 bins Y3),
+  sources 4 bins. => des_cluster needs the MagLim machinery back from
+  desy1xplanck (stretch DZ2, fixed BMAG).
+- Non-Limber: w_gg and w_cc auto spectra (FKEM split, cosmo2D.c design).
+- Parameters: Table I of 2503.13631 (MOR 4, selection 3, cosmology 6,
+  lens/source nuisances, IA).
+
+## 3. Decisions (Fable review, 2026-09-29; full text in the session
+scratchpad `fable_review_port_plan.md`, math in
+`fullsky_cluster_projections.md`)
+
+- Cluster radial kernel: volume-only q_i(z) ~ dV/dz <phi_i|z> by default
+  (Y1 eq 15; what DES ran); abundance-weighted q_iA is a switch.
+- C_cs = int dchi/fK^2 {[W_kappa - W_IA](b_A W_c - C_c W_mag,c) P_NL
+  + W_kappa W_c P1h_A}; 1-halo without bias, IA or magnification; cluster
+  magnification over the full foreground (lighthouse keeps it inside the
+  bin).
+- Limber everywhere first; FKEM non-Limber for all w_cc pairs of a z bin
+  later; w_cg non-Limber as an option (paper: Limber).
+- Y transform: Sigma = B(theta) . (T gamma_t) with T = 2S + SD on the
+  angular grid, the same 20x20 matrix for every block; Sigma_crit never
+  enters; gamma_t at all theta bins regardless of the mask; the last theta
+  bin of each cs block always masked; covariance T C T^T. Never port
+  lighthouse's T^+ B T. Switch `cluster.ytransform` (0 = Y1 gamma_t).
+- Full-sky projections reuse the w_gammat_tomo / w_gg_tomo kernels (same
+  theta binning, LMAX = 1e5 suffices for the 1-halo term at 2.5').
+- Y1 switches: selection_model (1 = mass-dependent inside the bias
+  integral, 2 = scale-dependent on the data vector), magnification,
+  include_ia, ytransform. Y1 cluster data are not public.
+- Mass range [1e12, 1e16] Msun/h; richness edges [20,30,45,60,500];
+  neutrinos: whatever sigma2 reads now, a cb option later.
+- Covariance: Gaussian C_l^2 + noise, full-sky bin-averaged, Y on cs;
+  counts Poisson + sample variance; N x 2pt = 0 (stated omissions: SSC,
+  trispectrum).
+- Isolation (Vivian): cluster code only in *_cluster files; no cluster
+  fields in structs.h, no cluster functions in the core; core internals
+  needed by clusters are copied, not exported.
+- Accuracy: cluster tables size themselves from knobs init_accuracy_boost
+  already scales (halo_na_lens, halo_nm/hdi ladder, halo_nk_step,
+  nz_fine_sampling_factor, N_a, N_ell): no core edit.
+
+## 4. Architecture (contract: cosmolike_core 5be792a)
+
+| file | content |
+|---|---|
+| `structs_cluster.h/.c` | global `cluster`: keys, switches, probes, richness bins, <phi_i|z>, pairs, MOR / selection parameters, mass limits |
+| `redshift_spline_cluster.c/.h` | <phi_i|z> fine-z table, nz_cluster, g_cluster (magnification), pair maps |
+| `radial_weights_cluster.c/.h` | W_cluster, W_mag_cluster |
+| `halo_cluster.c/.h` | P(A|M,z) erf, n_A(a), b_A(a), P1h_A(k,a), cluster_warmup (replaces cluster_util.c) |
+| `cosmo2D_cluster.c/.h` | Limber batches C_cs/C_cc/C_cg, Legendre w, counts |
+| `generic_interface_cluster.cpp/.hpp` | setters, block sizes, masked assembly with Y and selection bias, IP-like class for the joint vector (no edit to generic_interface.*) |
+
+Data-vector order (lighthouse): ss, gs, gg, cg, N, cc, cs; N [z][lambda];
+cs [(zc,zs) pair][lambda][theta]; cc [z][lambda1<=lambda2][theta];
+cg [(zc,zg) pair][lambda][theta].
+
+## 5. Validation
+
+- Ground truth: the independent Python reference
+  (`tests/reference/`), 1e-4 per table, delta^T C^-1 delta < 0.01 per
+  block (whole-code budget 0.2); cs compared in Y space.
+- Lighthouse `.so` (`tests/lighthouse_reference/`): 1-3% sanity check
+  (CQUAD 1e-2 integrals, flat-sky gamma_c, bin-restricted magnification).
+- House protocol: IEEE default build is the reference; determinism OMP
+  1/8; DEBUG and AGGRESSIVE builds; single-threaded warm-up.
+- Milestones: M0 = counts + Limber w_cc end to end (chi2 on a synthetic
+  vector); M1 = every 4x2pt + N block Limber + covariance + synthetic
+  data + mask generator (Sigma > 2, w_cg/w_gg > 8, w_cc > 16 Mpc/h; Y3
+  post-cut sanity counts 12/404/149/124/31); M2 = FKEM w_cc; M3 = options.
+
+## 6. Work split (Phase 1b, parallel against the frozen contract)
+
+- A: redshift_spline_cluster.c + radial_weights_cluster.c
+- B: halo_cluster.c
+- E: cosmo2D_cluster.c
+- F: generic_interface_cluster.cpp/.hpp, des_cluster interface.cpp
+  bindings, MakefileCosmolike, likelihood combos (combo_4x2pt_N,
+  combo_6x2pt_N), dataset keys
+- D: des_cluster inputs (Y6 n(z), MagLim restoration from desy1xplanck,
+  cluster selection kernels, params_cluster.yaml, mask generator)
+- C (running): Python reference + Gaussian covariance
+- lighthouse reference outputs (running)
+- Fable: code/physics review after Phase 1b, and at M0/M1.
