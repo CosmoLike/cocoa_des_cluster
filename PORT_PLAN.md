@@ -251,6 +251,28 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
   scaling is still weak on the fresh machine (6x2pt + N 0.152 -> 0.108 s,
   1.4x); its cause is not yet measured (next: time each block at 1, 2,
   4, 8 threads; classify samples by the OpenMP runtime frames).
+- 2026-09-30 (morning), done:
+  - cosmo2D.c: the five real-space Legendre sums grouped (4 x 4; xi+- 2
+    pairs x 4 theta), a880d36; every frozen example of the six galaxy
+    projects and the 6x2pt + N vector bitwise identical at OMP 1 / 4 / 8.
+    Re-timed once (6x2pt + N 0.135 s at 4 threads, 0.094 s at 8; 3x2pt
+    0.082 / 0.057), but another job overlapped that run: PROVISIONAL,
+    re-time on an idle machine.
+  - Tests (84c3db4 .. 504cef1): the examples and the suite are the cluster
+    combos (example1 = 4x2pt + N, example2 = 6x2pt + N); frozen chi2 and
+    race tests, accuracy advisory (delta chi2 0.004 / 0.050), and the
+    cache-consistency ladder with the MOR and selection sectors and a
+    fresh-process comparison. 8 tests, 5.5 min.
+  - Sampler examples (7323262): MCMC (CAMB and EMUL2), PolyChord,
+    minimize, profile, Nautilus for both combos; EXAMPLE_EMUL2_EVALUATE3/4
+    are the 1000-evaluation perf benchmarks; scripts/make_example_files.py
+    regenerates all of them. EMUL2 vs CAMB at equal mnu: delta chi2 1.6
+    (counts 1.5% median).
+  - Notebook layer (core ef05ab6; b40e524, 8fcc016): cosmo2D_wrapper_
+    cluster / halo_wrapper_cluster, bindings, notebook wrappers,
+    EXAMPLE_EVALUATE1.ipynb (runs headless from the rebuilt .so).
+  - Cocoa: des_cluster and des_y6 registered in set_installation_options
+    (skipped by default; des_cluster pinned to branch main).
 
 Open:
 - Cluster optimization left: the P1h table (~12% of the cosmolike thread
@@ -264,3 +286,20 @@ Open:
   cb-neutrino option (Fable P1.2: counts 2-4% at the fiducial, >10% at
   the top of the Omega_nu h^2 prior), Y1 switches end to end, the
   parameter-recovery MCMC.
+
+Backlog (Vivian, 2026-09-30):
+- Cluster versions of the data-vector plotting scripts of
+  cosmolike_core/cosmolike_notebook_utils (plot_datavectors.py,
+  plot_response.py), in their own *_cluster files, so des_cluster gets
+  the same notebooks as the other projects.
+- Non-Limber w_cc and w_cg on the cosmo2D.c FKEM design: the original
+  code runs both non-Limber (Limber is off by -13% / -16% at 225' for the
+  first z bin, lowest richness). Now the first physics item.
+- combo_4x2pt_N samples DES_PM1..6 although it has no gamma_t block
+  (prior-only directions): fix them in its yaml.
+- Core: init_binning with a new theta range and the same Ntheta returns
+  the old range's real-space values (Legendre kernels keyed on Ntheta and
+  Ntable.random, not on the theta range); found by the wrapper work, only
+  checked on the cluster block.
+- The independent check of the model against the paper (a Fable review)
+  is LAST: the week of 2026-10-05.
