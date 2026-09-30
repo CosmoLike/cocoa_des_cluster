@@ -314,9 +314,32 @@ Open:
   nonlimber_cluster_study_2026-09-30.md). Most of the reference code's
   low-z shift is RSD, which the port lacks: owner decisions pending (w_cg
   non-Limber or Limber, cluster RSD on or off, and eight smaller ones).
-- Neutrinos in the mass function: study done (test/studies/
-  neutrino_cb_study_2026-09-30.md). omega_nu h^2 alone is not enough; a
-  linear P_cb table is needed too. Ten owner decisions pending.
+- Neutrinos in the mass function (study: test/studies/
+  neutrino_cb_study_2026-09-30.md). Done as edits, NOT built or run:
+  one global switch like.halo_model[4], yaml key halo_matter_field
+  (0 = total matter, the default everywhere; 1 = cold dark matter +
+  baryons: sigma(M) from the linear P_cb, rho_cb in R(M) and in the
+  rho/M of dn/dM; r_Delta, M/rho_m, lensing kernels and the 2-halo
+  b(nu_cb) x total nonlinear P stay total matter; p_mm/p_my/p_yy abort
+  under 1; sigma_cb(z) = sigma_cb(0) D_total(z) as in the DES code).
+  Core 3ef74b1 (Omega_nu, the P_cb table and setter, the switch),
+  6f84ee8 (the consumers), bb70a7a (get_camb_cosmology 10-tuple); in
+  every project the set_cosmology keywords omegan2 and lnP_linear_cb,
+  init_halo_matter_field, the likelihood (CAMB omnuh2 always, delta_nonu
+  under 1; emulator path: omegan2 from mnu, P_cb = P_lin/(1 - f_nu)^2)
+  and the yaml key; here also the notebook wrappers, compare_reference
+  (--halo-matter-field, --omnuh2), make_synthetic_data (hmf_matter follows
+  the key) and tests/test_neutrino_cb.py. Verification pending: the
+  neutrino_impl session's overnight.sh (switch-off data vectors bitwise
+  in the seven projects, test_example1/2 of each, the mnu -> 0 limit,
+  the Python reference with hmf_matter cb at Omega_nu h^2 = 0.00083 and
+  0.00644, delta chi2 of cb vs total and of the emulator-path
+  approximation). Waiting for the owner: (1) the default of
+  combo_4x2pt_N / combo_6x2pt_N (1 = the DES model needs the synthetic
+  data regenerated, tests/frozen of examples 1-2 refrozen, and the
+  EMUL2 expected chi2 and README numbers redone); (2) the neutrino
+  states of the CAMB yamls (one massive state today, three degenerate
+  in DES: up to 2.6% in the counts at the same Omega_nu h^2).
 - Shared core: zmean() (lens mean redshift: w_gg pivot, evolving bias,
   point-mass lens redshift, HOD) is cached on Ntable.random and the n(z)
   only, so it keeps the value of the lens photo-z shifts at the last
@@ -333,10 +356,9 @@ Open:
 - Refreeze the six projects only if a later change needs it (every suite
   passes against the current frozen references); attribute the
   pre-existing lsst_y1 drift (+0.034) first.
-- Phase 4 physics: FKEM non-Limber w_cc, TATT in cluster lensing, a
-  cb-neutrino option (Fable P1.2: counts 2-4% at the fiducial, >10% at
-  the top of the Omega_nu h^2 prior), Y1 switches end to end, the
-  parameter-recovery MCMC.
+- Phase 4 physics: FKEM non-Limber w_cc, TATT in cluster lensing, Y1
+  switches end to end, the parameter-recovery MCMC (the cb-neutrino
+  option: see the neutrino item above).
 
 Backlog (Vivian, 2026-09-30):
 - Done 2026-09-30: the cluster plotting functions (core a153258), the
