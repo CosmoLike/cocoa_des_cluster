@@ -603,6 +603,8 @@ MagLim lenses (`params_lens_maglim.yaml`):
 
 4x2pt + N uses lens bins 1-3 only and has no galaxy-galaxy lensing block, so `combo_4x2pt_N.yaml` fixes the bias and the photo-z shift of lens bins 4-6 at their fiducial values and the six point masses at zero (its `fixed_params` block): these parameters enter only blocks that the 4x2pt + N mask removes. 6x2pt + N samples the bias and the photo-z shift of all six bins and the six point masses. The clusters have no photo-z nuisance parameter: their redshift selection enters through the fixed kernels $\langle\phi_i|z\rangle$ of `data/des_y6_cluster.nz`.
 
+[likelihood/README.md](likelihood/README.md) lists, for every likelihood of this project, what its `fixed_params` block fixes and which parameters it must not vary, with the reason for each.
+
 The fiducial cosmology of the synthetic data is `As_1e9` = 2.19, `ns` = 0.96859, `H0` = 69, `omegab` = 0.048, `omegam` = 0.3, $\Omega_\nu h^2 = 0.00083$ (`mnu` = 0.077 eV), and $w = -1$.
 
 # Synthetic data <a name="des_cluster_data"></a>
