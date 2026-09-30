@@ -279,18 +279,57 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
     DES_PM1..6 in 4x2pt + N (every other sampled nuisance parameter of
     both combos moves it); combo_4x2pt_N.yaml fixes them at 0 in
     fixed_params, 4x2pt + N samples 31 parameters (was 37), chi2 and data
-    vector bitwise unchanged. Waits for the refreeze: tests/frozen
-    (example1) and the pm sector of test_cache_consistency.py, which
-    requires a sampled point mass in every combo.
+    vector bitwise unchanged. test_cache_consistency.py skips the point-
+    mass phase for 4x2pt + N only (UNSAMPLED); tests/frozen (example1)
+    waits for the refreeze.
   - data/des_cluster_y6.dataset loads on its own (c1f0a64): its mask_file
     names des_cluster_y6_6x2ptN.mask, and its header describes the
     synthetic files.
+  - SIMDe paths of the cluster files (core c21ac5b, bf68f5a, 09d71c6)
+    built and verified: the full unmasked 6x2pt + N vector and the P1h,
+    C_l and real-space tables bitwise equal to the scalar fallback and to
+    the pre-SIMDe files at 3 points x OMP 1/4/8; two one-rounding mutants
+    caught; DEBUG build sanitizer-clean. 6x2pt + N 127 -> 122 ms at 4
+    threads on Apple Silicon (NEON); the gain on x86 AVX2 and bitwise
+    identity under GCC are unmeasured. No further SIMDe candidate: the
+    largest cluster loop left is the P_NL read at the Limber nodes (11%),
+    libm-bound.
+  - Pair-packed cluster bindings retired (b7a82af, fa0f401; core 2084023,
+    25e8d84): the per-bin bindings carry the galaxy names (w_cc_tomo,
+    C_cs_tomo_limber, ...); every kept output bitwise unchanged.
+  - Shared-code fixes built and verified in the six galaxy projects: the
+    three cache keys (167f2a3, 7c70f10, 8261100: fail before, bitwise
+    after), the grouped scale-cut sums (5473cc1: bitwise), the fine n(z)
+    tables keyed on the fine-sampling factor (cbb66a0). Notebook growth
+    table on the dense grid (core 6a105e2 and every wrapper); FAST-PT
+    internal boost set before the accuracy boost in every wrapper.
 
 Open:
 - Cluster optimization left: the P1h table (~12% of the cosmolike thread
   time) could tabulate only the Limber k range (~1/3 fewer ln k nodes, not
   bitwise); cc/cg exact tables on N_ell_internal instead of N_ell (a knob
-  test, ~3%).
+  test, ~3%); C_cc and C_cg read P_NL at the Limber nodes on identical
+  grids every step (sharing it: ~4-5%).
+- Non-Limber w_cc / w_cg: design study done (test/studies/
+  nonlimber_cluster_study_2026-09-30.md). Most of the reference code's
+  low-z shift is RSD, which the port lacks: owner decisions pending (w_cg
+  non-Limber or Limber, cluster RSD on or off, and eight smaller ones).
+- Neutrinos in the mass function: study done (test/studies/
+  neutrino_cb_study_2026-09-30.md). omega_nu h^2 alone is not enough; a
+  linear P_cb table is needed too. Ten owner decisions pending.
+- Shared core: zmean() (lens mean redshift: w_gg pivot, evolving bias,
+  point-mass lens redshift, HOD) is cached on Ntable.random and the n(z)
+  only, so it keeps the value of the lens photo-z shifts at the last
+  Ntable change (in a likelihood run: the unshifted n(z) at init). Owner
+  decision pending: follow the current shifts, or fix it at the
+  fiducial n(z).
+- Shared core: a photo-z shift of one source bin moves the other source
+  bins by 1e-5 - 3e-4 relative (the lensing-efficiency range extends to
+  the largest shift of any bin, 84c54c9); deferred to the next refreeze.
+- Shared core: C_cl_tomo (non-Limber C_gg) may drop the foreground
+  magnification from the FFTLog term but not from the subtracted Limber
+  terms (reported by the CosmoCov session); under test. The DES projects
+  fix b_mag != 0 and run the non-Limber w_gg.
 - Refreeze the six projects only if a later change needs it (every suite
   passes against the current frozen references); attribute the
   pre-existing lsst_y1 drift (+0.034) first.
@@ -300,29 +339,20 @@ Open:
   parameter-recovery MCMC.
 
 Backlog (Vivian, 2026-09-30):
-- Cluster versions of the data-vector plotting scripts of
-  cosmolike_core/cosmolike_notebook_utils (plot_datavectors.py,
-  plot_response.py), in their own *_cluster files, so des_cluster gets
-  the same notebooks as the other projects.
+- Done 2026-09-30: the cluster plotting functions (core a153258), the
+  SIMDe paths, the retired pair-packed bindings, the shared-code cache
+  bugs and the notebook growth grid (see "afternoon, done" above).
 - Non-Limber w_cc and w_cg on the cosmo2D.c FKEM design: the original
   code runs both non-Limber (Limber is off by -13% / -16% at 225' for the
-  first z bin, lowest richness). Now the first physics item.
-- Core: init_binning with a new theta range and the same Ntheta returns
-  the old range's real-space values (Legendre kernels keyed on Ntheta and
-  Ntable.random, not on the theta range); found by the wrapper work, only
-  checked on the cluster block.
-- SIMDe vector paths for cosmo2D_cluster.c and halo_cluster.c, as
-  cosmo2D.c and halo.c have (AVX2 on x86, NEON on Apple Silicon from one
-  source, each behind a fallback guard): the cluster files rely on
-  compiler auto-vectorization only. Important for MCMC runs on x86.
-- Retire the pair-packed cluster Python bindings; keep the per-bin C++
-  bindings the notebooks use (as the 3x2pt has), under the natural names,
-  and move tests/validation to them.
-- Shared-code bugs to fix: real-space values not refreshed when the theta
-  range changes at fixed Ntheta; the HOD tables' missing source n(z) cache
-  key; the notebook cosmology helper's coarse growth grid.
+  first z bin, lowest richness). Now the first physics item (see Open).
 - Tests for the galaxy-only likelihoods of this project (cosmic_shear,
-  combo_3x2pt, combo_2x2pt), ported from des_y3.
+  combo_3x2pt, combo_2x2pt), ported from des_y3: written (5726bbb ..
+  4bc9f2b), not yet run; they need the frozen state regenerated.
+- plot_datavectors.py defects found and not fixed (owner to decide):
+  plot_C_gs_tomo_limber fails on a sign-changing C_gs in absolute mode;
+  docstrings that name a different drawn quantity or swap rows and
+  columns; wrong-length param/legend refused after the figure exists;
+  the galaxy colorbar spans param[0]..param[-1], not min..max.
 - Core, not cluster: extend the scale-cut code (cosmo2D_scuts.c, today
   cosmic shear and shear x CMB lensing) to galaxy-galaxy lensing and
   galaxy clustering, Limber part only. Reason: some projects use lens =
