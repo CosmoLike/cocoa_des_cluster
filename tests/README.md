@@ -153,14 +153,14 @@ process, three steps per sector, evaluating after every step:
 | lens photo-z | every `DES_DZ_L` | `gs`, `gg`, `cg` |
 | shear calibration | every `DES_M` | `ss`, `gs`, `cs` |
 | galaxy bias | every `DES_B1` | `gs`, `gg`, `cg` |
-| point mass | every `DES_PM` | `gs` |
+| point mass (6x2pt + N only) | every `DES_PM` | `gs` |
 | mass-observable relation | `DES_CL_LNLAMBDA0`, `DES_CL_A_LAMBDA`, `DES_CL_SIGMA_INT`, `DES_CL_B_LAMBDA` | `cg`, `N`, `cc`, `cs` |
 | selection bias | `DES_CL_BS1`, `DES_CL_BS2`, `DES_CL_R0` | `cg`, `cc`, `cs` |
 
 The cluster blocks read the galaxy-side sectors through their second
 leg: cluster lensing carries the sources, cluster x galaxy carries
-the lenses. 4x2pt + N has no `ss` and no `gs` block, so its point-mass
-steps must leave the whole vector untouched. What must hold, for each
+the lenses. 4x2pt + N has no `ss` and no `gs` block and fixes the
+point masses at zero, so its ladder has no point-mass phase. What must hold, for each
 combination:
 
 1. every step changes every unmasked entry of the blocks its sector

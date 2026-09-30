@@ -34,7 +34,7 @@ well-defined point). The sectors, and the blocks each one must move:
     3 x lens-photo-z steps (every DZ_L)         gs gg cg
     3 x shear-calibration steps (every M)       ss gs cs
     3 x galaxy-bias steps (every B1)            gs gg cg
-    3 x point-mass steps (every PM)             gs
+    3 x point-mass steps (every PM)             gs (6x2pt + N only)
     3 x mass-observable steps (the four MOR)    cg N cc cs
     3 x selection-bias steps (b_s1, b_s2, r_0)  cg cc cs
 
@@ -145,6 +145,12 @@ RESPONSE = {
 # before every galaxy-side sector it depends on.
 PHASES = ("cosmo", "ia", "dz_source", "dz_lens", "m", "bias", "pm",
           "mor", "selection")
+# Sectors a combination does not sample, so its ladder has no such
+# phase: 4x2pt + N has no gs block and fixes the point masses at zero
+# (likelihood/combo_4x2pt_N.yaml). Every other sector must be sampled;
+# a sector listed here must not be (either way a renamed or mislaid
+# parameter fails the test instead of silently shortening the ladder).
+UNSAMPLED = {"example1": ("pm",)}
 DELTAS = {
     "cosmo": {"omegam": 0.002, "H0": 0.2, "As_1e9": 0.02},
     # the amplitude and the redshift power move together: at the
@@ -423,11 +429,19 @@ class TestCacheConsistency(unittest.TestCase):
             self.sector_deltas = {
                 s: _deltas_for(s, [n for n in fid if _sector_of(n) == s])
                 for s, _ in SECTORS}
+            unsampled = UNSAMPLED.get(example, ())
             for s in PHASES:
-                self.assertTrue(self.sector_deltas[s],
-                                f"no sampled parameters in sector {s}")
+                if s in unsampled:
+                    self.assertFalse(
+                        self.sector_deltas[s],
+                        f"sector {s} is sampled in {example}, which "
+                        "UNSAMPLED says it does not sample")
+                else:
+                    self.assertTrue(self.sector_deltas[s],
+                                    f"no sampled parameters in sector {s}")
+            walk = tuple(s for s in PHASES if s not in unsampled)
 
-            phases = PHASES if order == "forward" else tuple(reversed(PHASES))
+            phases = walk if order == "forward" else tuple(reversed(walk))
             steps = {s: 0 for s in self.sector_deltas}
             u.evaluate_chi2(model, self._point_at(fid, steps))
             prev = np.array(ci.compute_data_vector_cluster_masked())
@@ -502,7 +516,7 @@ class TestCacheConsistency(unittest.TestCase):
             # point must reproduce bitwise
             scr = {s: SCRAMBLE_STEP for s in self.sector_deltas}
             excursions = [("the scramble", scr)]
-            for s in PHASES:
+            for s in walk:
                 # dict(steps, **{s: ...}) copies the final step counts
                 # with sector s alone moved to the excursion step
                 excursions.append((f"the {s} excursion",
