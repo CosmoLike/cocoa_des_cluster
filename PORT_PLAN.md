@@ -273,6 +273,18 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
     EXAMPLE_EVALUATE1.ipynb (runs headless from the rebuilt .so).
   - Cocoa: des_cluster and des_y6 registered in set_installation_options
     (skipped by default; des_cluster pinned to branch main).
+- 2026-09-30 (afternoon), done:
+  - Backlog item "combo_4x2pt_N samples DES_PM1..6" (c1d4a14): a one-
+    parameter scan of the masked vector gives exactly zero response to
+    DES_PM1..6 in 4x2pt + N (every other sampled nuisance parameter of
+    both combos moves it); combo_4x2pt_N.yaml fixes them at 0 in
+    fixed_params, 4x2pt + N samples 31 parameters (was 37), chi2 and data
+    vector bitwise unchanged. Waits for the refreeze: tests/frozen
+    (example1) and the pm sector of test_cache_consistency.py, which
+    requires a sampled point mass in every combo.
+  - data/des_cluster_y6.dataset loads on its own (c1f0a64): its mask_file
+    names des_cluster_y6_6x2ptN.mask, and its header describes the
+    synthetic files.
 
 Open:
 - Cluster optimization left: the P1h table (~12% of the cosmolike thread
@@ -295,8 +307,6 @@ Backlog (Vivian, 2026-09-30):
 - Non-Limber w_cc and w_cg on the cosmo2D.c FKEM design: the original
   code runs both non-Limber (Limber is off by -13% / -16% at 225' for the
   first z bin, lowest richness). Now the first physics item.
-- combo_4x2pt_N samples DES_PM1..6 although it has no gamma_t block
-  (prior-only directions): fix them in its yaml.
 - Core: init_binning with a new theta range and the same Ntheta returns
   the old range's real-space values (Legendre kernels keyed on Ntheta and
   Ntable.random, not on the theta range); found by the wrapper work, only
