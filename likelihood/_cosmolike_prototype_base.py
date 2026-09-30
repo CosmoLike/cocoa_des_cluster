@@ -526,7 +526,11 @@ class _cosmolike_prototype_base(DataSetLikelihood):
       # cluster abundance of rare massive halos amplifies 5-15x.
       z_growth = self.z_interp_1D[self.z_interp_1D <= self.z_interp_2D[-1]]
       G_growth = np.sqrt(PKL.P(z_growth,0.0005)/PKL.P(0,0.0005))*(1+z_growth)
-      G_growth /= G_growth[-1]
+      # historical normalization of the table (every project): divided by
+      # G at the last z_2D node; cosmolike's growfac still normalizes to
+      # G(z = 0) = 1 on its side
+      z_norm = self.z_interp_2D[-1]
+      G_growth /= np.sqrt(PKL.P(z_norm,0.0005)/PKL.P(0,0.0005))*(1+z_norm)
       # Apply baryon suppression factors from theory block (if enabled)
       # The baryon suppression theory block computes S(k,z) for each requested z
       # and applies calibration masking. Here we simply retrieve and apply those factors.
