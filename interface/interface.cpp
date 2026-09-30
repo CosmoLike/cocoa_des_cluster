@@ -44,6 +44,8 @@ namespace py = pybind11;
 #include "cosmolike/cosmo2D_scuts_wrapper.hpp"
 #include "cosmolike/halo_wrapper.hpp"
 #include "cosmolike/generic_interface_cluster.hpp"
+#include "cosmolike/cosmo2D_wrapper_cluster.hpp"
+#include "cosmolike/halo_wrapper_cluster.hpp"
 
 PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
 {
@@ -1289,10 +1291,22 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
     );
 
   m.def("phi_cluster",
-      &phi_cluster,
+      py::overload_cast<const double, const int>(
+        &cosmolike_interface::phi_cluster_cpp
+      ),
       "Selection kernel <phi_ni|z> at true redshift z",
       py::arg("z").none(false),
       py::arg("ni").none(false).noconvert()
+    );
+
+  m.def("phi_cluster",
+      py::overload_cast<const arma::Col<double>>(
+        &cosmolike_interface::phi_cluster_cpp
+      ),
+      "Selection kernel <phi_ni|z> of every cluster bin at many true "
+      "redshifts (vectorized): array (z, cluster z bin)",
+      py::arg("z").none(false),
+      py::return_value_policy::move
     );
 
   m.def("zmid_cluster",
@@ -1302,10 +1316,9 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
     );
 
   m.def("nz_cluster",
-      [](const double z, const int ni, const int nl) {
-        cluster_warmup();
-        return nz_cluster(z, ni, nl);
-      },
+      py::overload_cast<const double, const int, const int>(
+        &cosmolike_interface::nz_cluster_cpp
+      ),
       "Normalized true-redshift distribution of clusters in bin ni "
       "(richness bin nl for the abundance-weighted kernel)",
       py::arg("z").none(false),
@@ -1313,38 +1326,79 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::arg("nl").none(false).noconvert()
     );
 
+  m.def("nz_cluster",
+      py::overload_cast<const arma::Col<double>>(
+        &cosmolike_interface::nz_cluster_cpp
+      ),
+      "Normalized true-redshift distribution of clusters at many "
+      "redshifts (vectorized): array (z, cluster z bin, richness bin), "
+      "per unit z",
+      py::arg("z").none(false),
+      py::return_value_policy::move
+    );
+
   m.def("g_cluster",
-      [](const double a, const int ni, const int nl) {
-        cluster_warmup();
-        return g_cluster(a, ni, nl);
-      },
+      py::overload_cast<const double, const int, const int>(
+        &cosmolike_interface::g_cluster_cpp
+      ),
       "Lensing efficiency of the cluster distribution (magnification)",
       py::arg("a").none(false),
       py::arg("ni").none(false).noconvert(),
       py::arg("nl").none(false).noconvert()
     );
 
+  m.def("g_cluster",
+      py::overload_cast<const arma::Col<double>>(
+        &cosmolike_interface::g_cluster_cpp
+      ),
+      "Lensing efficiency of the cluster distribution at many scale "
+      "factors, 0 < a <= 1 (vectorized): array (a, cluster z bin, "
+      "richness bin)",
+      py::arg("a").none(false),
+      py::return_value_policy::move
+    );
+
   m.def("W_cluster",
-      [](const double a, const int ni, const int nl) {
-        cluster_warmup();
-        return W_cluster(a, ni, nl, hoverh0(a));
-      },
+      py::overload_cast<const double, const int, const int>(
+        &cosmolike_interface::W_cluster_cpp
+      ),
       "Cluster density kernel W_cluster = nz_cluster H/H0 at scale factor a",
       py::arg("a").none(false),
       py::arg("ni").none(false).noconvert(),
       py::arg("nl").none(false).noconvert()
     );
 
+  m.def("W_cluster",
+      py::overload_cast<const arma::Col<double>>(
+        &cosmolike_interface::W_cluster_cpp
+      ),
+      "Cluster density kernel W_cluster = nz_cluster H/H0 at many scale "
+      "factors, 0 < a < 1 (vectorized): array (a, cluster z bin, "
+      "richness bin), per unit comoving distance in c/H0",
+      py::arg("a").none(false),
+      py::return_value_policy::move
+    );
+
   m.def("W_mag_cluster",
-      [](const double a, const int ni, const int nl) {
-        cluster_warmup();
-        return W_mag_cluster(a, f_K(chi(a)), ni, nl);
-      },
+      py::overload_cast<const double, const int, const int>(
+        &cosmolike_interface::W_mag_cluster_cpp
+      ),
       "Cluster magnification kernel 1.5 Omega_m f_K/a g_cluster at scale "
       "factor a (without the coefficient C_c)",
       py::arg("a").none(false),
       py::arg("ni").none(false).noconvert(),
       py::arg("nl").none(false).noconvert()
+    );
+
+  m.def("W_mag_cluster",
+      py::overload_cast<const arma::Col<double>>(
+        &cosmolike_interface::W_mag_cluster_cpp
+      ),
+      "Cluster magnification kernel 1.5 Omega_m f_K/a g_cluster at many "
+      "scale factors, 0 < a < 1 (vectorized, without the coefficient "
+      "C_c): array (a, cluster z bin, richness bin)",
+      py::arg("a").none(false),
+      py::return_value_policy::move
     );
 
   m.def("N_cs", &N_cs, "cs pair index of (cluster bin, source bin); -1 if none",
@@ -1388,7 +1442,9 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
     );
 
   m.def("prob_richness_bin_given_m",
-      &prob_richness_bin_given_m,
+      py::overload_cast<const double, const double, const int>(
+        &cosmolike_interface::prob_richness_bin_given_m_cpp
+      ),
       "Probability that a halo of ln mass lnM (M in Msun/h) at redshift z "
       "has observed richness in bin nl (closed-form erf)",
       py::arg("lnM").none(false),
@@ -1396,36 +1452,79 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::arg("nl").none(false).noconvert()
     );
 
+  m.def("prob_richness_bin_given_m",
+      py::overload_cast<const arma::Col<double>, const arma::Col<double>>(
+        &cosmolike_interface::prob_richness_bin_given_m_cpp
+      ),
+      "Probability that a halo has observed richness in each richness bin "
+      "on a grid of ln masses (M in Msun/h) and redshifts (vectorized): "
+      "array (lnM, z, richness bin)",
+      py::arg("lnM").none(false),
+      py::arg("z").none(false),
+      py::return_value_policy::move
+    );
+
   m.def("ncl_richness",
-      [](const double a, const int nl) {
-        cluster_warmup();
-        return ncl_richness(a, nl);
-      },
+      py::overload_cast<const double, const int>(
+        &cosmolike_interface::ncl_richness_cpp
+      ),
       "Comoving number density of clusters in richness bin nl, (c/H0)^-3",
       py::arg("a").none(false),
       py::arg("nl").none(false).noconvert()
     );
 
+  m.def("ncl_richness",
+      py::overload_cast<const arma::Col<double>>(
+        &cosmolike_interface::ncl_richness_cpp
+      ),
+      "Comoving number density of clusters at many scale factors "
+      "(vectorized): array (a, richness bin) in (c/H0)^-3; 0 outside the "
+      "a range of the cluster bins",
+      py::arg("a").none(false),
+      py::return_value_policy::move
+    );
+
   m.def("bcl_richness",
-      [](const double a, const int nl) {
-        cluster_warmup();
-        return bcl_richness(a, nl);
-      },
+      py::overload_cast<const double, const int>(
+        &cosmolike_interface::bcl_richness_cpp
+      ),
       "Richness-weighted linear bias of richness bin nl (eq 21)",
       py::arg("a").none(false),
       py::arg("nl").none(false).noconvert()
     );
 
+  m.def("bcl_richness",
+      py::overload_cast<const arma::Col<double>>(
+        &cosmolike_interface::bcl_richness_cpp
+      ),
+      "Richness-weighted linear bias (eq 21) at many scale factors "
+      "(vectorized): array (a, richness bin); 0 outside the a range of "
+      "the cluster bins",
+      py::arg("a").none(false),
+      py::return_value_policy::move
+    );
+
   m.def("pcm_1h_richness",
-      [](const double k, const double a, const int nl) {
-        cluster_warmup();
-        return pcm_1h_richness(k, a, nl);
-      },
+      py::overload_cast<const double, const double, const int>(
+        &cosmolike_interface::pcm_1h_richness_cpp
+      ),
       "One-halo cluster-matter power spectrum of richness bin nl (eq 22); "
       "k in (c/H0)^-1, P in (c/H0)^3",
       py::arg("k").none(false),
       py::arg("a").none(false),
       py::arg("nl").none(false).noconvert()
+    );
+
+  m.def("pcm_1h_richness",
+      py::overload_cast<const arma::Col<double>, const arma::Col<double>>(
+        &cosmolike_interface::pcm_1h_richness_cpp
+      ),
+      "One-halo cluster-matter power spectrum (eq 22) on a grid of "
+      "wavenumbers and scale factors (vectorized): array (k, a, richness "
+      "bin); k in (c/H0)^-1, P in (c/H0)^3",
+      py::arg("k").none(false),
+      py::arg("a").none(false),
+      py::return_value_policy::move
     );
 
   m.def("C_cs_tomo_limber",
@@ -1564,6 +1663,148 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
   m.def("N_cluster_tomo",
       &cosmolike_interface::N_cluster_tomo_cpp,
       "Expected number of clusters: array (cluster z bin, richness bin)",
+      py::return_value_policy::move
+    );
+
+  // --------------------------------------------------------------------
+  // CLUSTERS: BIN-INDEXED ARRAYS OF THE 2D STATISTICS (NOTEBOOKS)
+  // --------------------------------------------------------------------
+  // The cluster analog of xi_pm_tomo / w_gammat_tomo / C_gs_tomo_limber
+  // (cosmo2D_wrapper_cluster.cpp): arrays indexed by the bins themselves,
+  // (theta or ell, richness bin, cluster z bin, source or lens bin), with
+  // zeros outside the enumerated pairs. The wrappers of the section above
+  // return the same numbers in the pair-packed layout of the data vector.
+  m.def("get_cs_redshift_bins",
+      &cosmolike_interface::cs_bins,
+      "Get cluster lensing redshift binning: row n = (cluster z bin, "
+      "source bin) of cs pair n"
+    );
+
+  m.def("get_cg_redshift_bins",
+      &cosmolike_interface::cg_bins,
+      "Get cluster x galaxy clustering redshift binning: row n = (cluster "
+      "z bin, lens bin) of cg pair n"
+    );
+
+  m.def("get_cc_richness_bins",
+      &cosmolike_interface::cc_richness_bins,
+      "Get cluster clustering richness binning: row n = (nl1, nl2), "
+      "nl1 <= nl2, of w_cc richness pair n"
+    );
+
+  m.def("w_gammat_cluster_tomo_bins",
+      &cosmolike_interface::w_gammat_cluster_tomo_bins_cpp,
+      "Compute cluster lensing gamma_t (real space) at all tomographic,"
+      " richness and theta bins, before the Y transform, the selection bias"
+      " and the shear calibration: array (theta, richness bin, cluster z"
+      " bin, source bin)",
+      py::return_value_policy::move
+    );
+
+  m.def("w_sigma_cluster_tomo_bins",
+      &cosmolike_interface::w_sigma_cluster_tomo_bins_cpp,
+      "Compute cluster lensing (real space) as the data vector holds it at"
+      " all tomographic, richness and theta bins (no mask): Sigma = Y"
+      " gamma_t (gamma_t if ytransform = 0) times the selection bias and"
+      " the shear calibration: array (theta, richness bin, cluster z bin,"
+      " source bin)",
+      py::return_value_policy::move
+    );
+
+  m.def("w_cc_tomo_bins",
+      &cosmolike_interface::w_cc_tomo_bins_cpp,
+      "Compute cluster clustering w_cc (real space) at all tomographic,"
+      " richness and theta bins, before the selection bias: array (theta,"
+      " richness bin 1, richness bin 2, cluster z bin); limber: 1 = Limber,"
+      " 0 = non-Limber (not implemented yet)",
+      (py::arg("limber") = 1).none(false).noconvert(),
+      py::return_value_policy::move
+    );
+
+  m.def("w_cg_tomo_bins",
+      &cosmolike_interface::w_cg_tomo_bins_cpp,
+      "Compute cluster x galaxy clustering w_cg (real space) at all"
+      " tomographic, richness and theta bins, before the selection bias:"
+      " array (theta, richness bin, cluster z bin, lens bin); limber:"
+      " 1 = Limber, 0 = non-Limber (not implemented yet)",
+      (py::arg("limber") = 1).none(false).noconvert(),
+      py::return_value_policy::move
+    );
+
+  m.def("N_cluster_tomo_bins",
+      &cosmolike_interface::N_cluster_tomo_bins_cpp,
+      "Compute the expected number of clusters (eq 16) at all richness and"
+      " cluster z bins: array (richness bin, cluster z bin)",
+      py::return_value_policy::move
+    );
+
+  m.def("C_cs_tomo_limber_bins",
+      py::overload_cast<const double, const int, const int, const int>(
+        &cosmolike_interface::C_cs_tomo_limber_bins_cpp
+      ),
+      "Compute cluster lensing (fourier - limber) at a single richness and"
+      " tomographic bin and ell value (exact quadrature, no table)",
+      py::arg("l").none(false).noconvert(),
+      py::arg("nl").none(false).noconvert(),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("ns").none(false).noconvert()
+    );
+
+  m.def("C_cs_tomo_limber_bins",
+      py::overload_cast<const arma::Col<double>>(
+        &cosmolike_interface::C_cs_tomo_limber_bins_cpp
+      ),
+      "Compute cluster lensing (fourier - limber) at all richness and"
+      " tomographic bins and many ell (vectorized): array (ell, richness"
+      " bin, cluster z bin, source bin)",
+      py::arg("l").none(false),
+      py::return_value_policy::move
+    );
+
+  m.def("C_cc_tomo_limber_bins",
+      py::overload_cast<const double, const int, const int, const int>(
+        &cosmolike_interface::C_cc_tomo_limber_bins_cpp
+      ),
+      "Compute cluster clustering (fourier - limber) at a single richness"
+      " pair, cluster z bin and ell value (exact quadrature, no table)",
+      py::arg("l").none(false).noconvert(),
+      py::arg("nl1").none(false).noconvert(),
+      py::arg("nl2").none(false).noconvert(),
+      py::arg("ni").none(false).noconvert()
+    );
+
+  m.def("C_cc_tomo_limber_bins",
+      py::overload_cast<const arma::Col<double>>(
+        &cosmolike_interface::C_cc_tomo_limber_bins_cpp
+      ),
+      "Compute cluster clustering (fourier - limber) at all richness pairs"
+      " and cluster z bins and many ell (vectorized): array (ell, richness"
+      " bin 1, richness bin 2, cluster z bin)",
+      py::arg("l").none(false),
+      py::return_value_policy::move
+    );
+
+  m.def("C_cg_tomo_limber_bins",
+      py::overload_cast<const double, const int, const int, const int>(
+        &cosmolike_interface::C_cg_tomo_limber_bins_cpp
+      ),
+      "Compute cluster x galaxy clustering (fourier - limber) at a single"
+      " richness and tomographic bin and ell value (exact quadrature, no"
+      " table)",
+      py::arg("l").none(false).noconvert(),
+      py::arg("nl").none(false).noconvert(),
+      py::arg("ni").none(false).noconvert(),
+      py::arg("ng").none(false).noconvert()
+    );
+
+  m.def("C_cg_tomo_limber_bins",
+      py::overload_cast<const arma::Col<double>>(
+        &cosmolike_interface::C_cg_tomo_limber_bins_cpp
+      ),
+      "Compute cluster x galaxy clustering (fourier - limber) at all"
+      " richness and tomographic bins and many ell (vectorized): array (ell,"
+      " richness bin, cluster z bin, lens bin)",
+      py::arg("l").none(false),
       py::return_value_policy::move
     );
 

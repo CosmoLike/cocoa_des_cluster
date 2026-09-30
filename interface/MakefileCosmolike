@@ -225,14 +225,18 @@ CPPSOURCES += \
 		${ROOTDIR}/external_modules/code/cosmolike/cosmo2D_wrapper.cpp \
 		${ROOTDIR}/external_modules/code/cosmolike/cosmo2D_scuts_wrapper.cpp \
 		${ROOTDIR}/external_modules/code/cosmolike/halo_wrapper.cpp \
-		${ROOTDIR}/external_modules/code/cosmolike/generic_interface_cluster.cpp
+		${ROOTDIR}/external_modules/code/cosmolike/generic_interface_cluster.cpp \
+		${ROOTDIR}/external_modules/code/cosmolike/cosmo2D_wrapper_cluster.cpp \
+		${ROOTDIR}/external_modules/code/cosmolike/halo_wrapper_cluster.cpp
 
 OBJECTCPP += \
 		./generic_interface.o \
 		./cosmo2D_wrapper.o \
 		./cosmo2D_scuts_wrapper.o \
 		./halo_wrapper.o \
-		./generic_interface_cluster.o
+		./generic_interface_cluster.o \
+		./cosmo2D_wrapper_cluster.o \
+		./halo_wrapper_cluster.o
 
 $(OBJECTC): $(CSOURCES)
 	$(CC) $(CFLAGS) -fPIC -c $(CSOURCES)
