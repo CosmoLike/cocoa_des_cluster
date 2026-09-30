@@ -235,24 +235,32 @@ def build_point(model):
 
 
 def evaluate(combo, data_path, data_file):
-    """(model, likelihood, point, chi2, data vector) at the fiducial."""
+    """(model, likelihood, point, chi2, data vector, derived) at the fiducial.
+
+    The posterior call runs CAMB and the likelihood, and leaves the cobaya
+    provider at this cosmology. The masked model vector is then read with
+    the likelihood's own get_datavector, which repeats the computation of
+    logp (set_cosmo_related, the nuisance setters, the masked data vector)
+    from that provider state and the likelihood's input parameters, and
+    returns the vector instead of the log-likelihood.
+    """
     from cobaya.model import get_model
     os.chdir(os.environ["ROOTDIR"])
     model = get_model(cobaya_info(combo, data_path, data_file))
     lik = model.likelihood[f"des_cluster.combo_{combo}"]
-    captured = {}
-    compute_logp = lik.compute_logp
-
-    def capture(datavector):
-        captured["dv"] = np.array(datavector, dtype=float)
-        return compute_logp(datavector)
-
-    lik.compute_logp = capture
     point = build_point(model)
     post = model.logposterior(point, cached=False)
     chi2 = -2.0 * float(post.loglikes[0])
     derived = dict(zip(model.parameterization.derived_params(), post.derived))
-    return model, lik, point, chi2, captured["dv"], derived
+    # to_input resolves every input parameter at this point (sampled,
+    # fixed, and those computed from them); the likelihood takes its own
+    # subset, lik.input_params, as logp does
+    all_inputs = model.parameterization.to_input(point)
+    lik_inputs = {}
+    for name in lik.input_params:
+        lik_inputs[name] = all_inputs[name]
+    dv = np.array(lik.get_datavector(**lik_inputs), dtype=float)
+    return model, lik, point, chi2, dv, derived
 
 
 def write_placeholder_dataset(tmp):
