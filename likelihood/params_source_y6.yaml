@@ -65,23 +65,25 @@
   #                                        cluster lensing)
   #   eta2 Gauss(0, 3),  fiducial 0       (CL+3x2pt only)
   #   b_TA fixed to 1
+  # The cluster baseline runs NLA (IA_model: 0): only a1 and eta1 enter.
   DES_A1_1:
     prior:
       min: -5
       max:  5
     ref:
       dist: norm
-      loc: 0.7
+      loc: 0.0
       scale: 0.5
     proposal: 0.75
     latex: A_\mathrm{1-IA,DES}^1
   DES_A1_2:
     prior:
-      min: -5
-      max:  5
+      dist: norm
+      loc: 0.0
+      scale: 3.0
     ref:
       dist: norm
-      loc: -1.7
+      loc: 0.0
       scale: 0.5
     proposal: 0.75
     latex: A_\mathrm{1-IA,DES}^2
@@ -94,25 +96,15 @@
   # ------------------------------------------------------------------------
   # ------------------------------------------------------------------------
   # ------------------------------------------------------------------------
+  # TATT terms: unused under NLA, so fixed (a free, unused parameter is a
+  # flat direction for the sampler). For a TATT run (CL+3x2pt) free them
+  # with the Table I priors above: a2 flat [-5, 5] (fiducial -1.36),
+  # eta2 Gauss(0, 3).
   DES_A2_1:
-    prior:
-      min: -5.0
-      max: 5.0
-    ref:
-      dist: norm
-      loc: -1.36
-      scale: 0.2
-    proposal: 0.2
+    value: 0.0
     latex: A_\mathrm{2-IA,DES}^1
   DES_A2_2:
-    prior:
-      min: -5.0
-      max: 5.0
-    ref:
-      dist: norm
-      loc: -2.5
-      scale: 0.2
-    proposal: 0.2
+    value: 0.0
     latex: A_\mathrm{2-IA,DES}^2
   DES_A2_3:
     value: 0.0
@@ -123,15 +115,9 @@
   # ------------------------------------------------------------------------
   # ------------------------------------------------------------------------
   # ------------------------------------------------------------------------
+  # b_TA is fixed to 1 in 2503.13631 Table I (and unused under NLA)
   DES_BTA_1:
-    prior:
-      min: 0.0
-      max: 2.0
-    ref:
-      dist: norm
-      loc: 1.0
-      scale: 0.1
-    proposal: 0.1
+    value: 1.0
     latex: A_\mathrm{BTA-IA,DES}^1
   DES_BTA_2:
     value: 0
