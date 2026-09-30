@@ -178,13 +178,25 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
   ref_covariance_full.py (joint Gaussian covariance, 2812 entries);
   chi2 ~ 1e-25 at the fiducial for both combos.
 
+- Tinker alpha switch (8c71ddd; default fixed 0.368 = DES); IPCluster
+  correlation-matrix PD test (17bcfc7); volume-kernel sharing and P1h
+  build only with cluster lensing (cc60e5e, bitwise).
+- Synthetic Y6-like data (1b0bf3f, 37a538a): chi2 = 0 at the fiducial for
+  both combos; covariance with the exact noise x noise term (0ebb03e);
+  S/N 109 (4x2pt + N), 157 (6x2pt + N).
+- Accuracy knobs (b45ff48, knob_sweep.py): the cluster combos run
+  integration_accuracy 1: delta chi2 vs high accuracy 1.65 at 0 (galaxy
+  gammat 0.92, w_gg 0.47: the Y6 MagLim lens n(z) tails reach z = 2.99)
+  -> 0.048 at 1; cluster blocks 6e-3 either way; boost / lmax irrelevant.
+- Timing (M2, quiet, every parameter jittered, cosmolike only, hdi 1):
+  6x2pt + N 0.42 s (4 threads) / 0.34 s (8); 4x2pt + N 0.38 / 0.30;
+  cluster lensing 0.14 / 0.11; lighthouse (1 thread): 28.3 s / 26.6 s /
+  23.8 s -> 83x / 89x / 225x faster. 4 -> 8 threads only 1.1-1.4x: the
+  serial Python glue and serial table builds dominate (next target).
+
 Open:
-- Regenerate the synthetic data with the final code (gammat covariance
-  block under review: sigma/|signal| looked ~15x too small).
-- Knob sweep (tests/validation/knob_sweep.py): fastest settings with
-  delta chi2 < 0.2; timing 4 vs 8 threads on a quiet machine;
-  optimization pass (volume-kernel sharing of W_c / W_mag,c, P1h build
-  gated on cluster lensing - in progress).
+- Profile-driven optimization (serial parts first: likelihood glue,
+  serial cluster fills; then _work-level packing / SIMD reads).
 - Rebuild the six other projects against 84c54c9 and run their suites;
   refreeze after attributing the pre-existing drift (lsst_y1 +0.034).
 - HOD NaN (include_HOD_GX = 1) in des_y3 Y3 and desy1xplanck MagLim:
