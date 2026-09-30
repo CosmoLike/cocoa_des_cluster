@@ -191,8 +191,8 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
 - Timing (M2, quiet, every parameter jittered, cosmolike only, hdi 1):
   6x2pt + N 0.42 s (4 threads) / 0.34 s (8); 4x2pt + N 0.38 / 0.30;
   cluster lensing 0.14 / 0.11; lighthouse (1 thread): 28.3 s / 26.6 s /
-  23.8 s -> 83x / 89x / 225x faster. 4 -> 8 threads only 1.1-1.4x (the
-  profile below: serial galaxy non-Limber w_gg, not the Python glue).
+  23.8 s -> 83x / 89x / 225x faster. 4 -> 8 threads only 1.1-1.4x (cause
+  not yet measured; see the profile note below).
   NOTE: those numbers were taken at load 15-20 and are ~2.7x too slow;
   the fresh-machine table below supersedes them.
 - Timing, fresh machine (after a reboot, load 3-7; tests/validation/
@@ -240,12 +240,17 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
   0.061), w_cg 0.051 / 0.046 (0.062 / 0.054), N 0.022 / 0.022, 3x2pt
   unchanged (0.23 / 0.19). Against lighthouse (1 thread) at 8 threads:
   6x2pt + N 96x, 4x2pt + N 100x, cluster lensing 274x.
-- Profile findings (not cluster code): the main-thread serial time,
-  which caps 4 -> 8 thread scaling, is the galaxy non-Limber w_gg path of
-  cosmo2D.c (C_gg_tomo_limber_linpsopt_nointerp_ells, W_RSD, f_growth,
-  cfftlog); the Python glue is ~40 ms per evaluation. Flagged as a
-  separate task (cosmo2D.c belongs to the galaxy sessions), together
-  with the same Legendre tiling for xi_pm / gammat / w_gg.
+- Profile findings: the Python glue is ~40 ms per evaluation on the
+  loaded machine (not the bottleneck). RETRACTED: an earlier version of
+  this note said the 4 -> 8 thread scaling is capped by serial code in
+  the galaxy non-Limber w_gg path of cosmo2D.c. Reading the code,
+  C_gg_tomo_limber_work and cfftlog_ells_p2 are threaded throughout; the
+  profile was taken at 2 threads on a loaded machine (the main thread
+  waiting on barriers), and with -fomit-frame-pointer the sampler can
+  drop the OpenMP-outlined frame, so threaded samples looked serial. The
+  scaling is still weak on the fresh machine (6x2pt + N 0.152 -> 0.108 s,
+  1.4x); its cause is not yet measured (next: time each block at 1, 2,
+  4, 8 threads; classify samples by the OpenMP runtime frames).
 
 Open:
 - Cluster optimization left: the P1h table (~12% of the cosmolike thread
