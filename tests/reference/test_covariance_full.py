@@ -165,9 +165,9 @@ out = dict(sizes=list(ci.compute_data_vector_cluster_sizes()),
            starts=list(ci.compute_data_vector_cluster_starts()),
            mask=list(ci.get_mask_cluster()),
            gs=[list(map(int, x)) for x in ci.get_gs_redshift_bins()],
-           cs=[[ci.ZC_cs(n), ci.ZS_cs(n)] for n in range(12)],
-           cg=[[ci.ZC_cg(n), ci.ZG_cg(n)] for n in range(3)],
-           cc=[[ci.NL1_cc(n), ci.NL2_cc(n)] for n in range(10)])
+           cs=[list(map(int, x)) for x in ci.get_cs_redshift_bins()],
+           cg=[list(map(int, x)) for x in ci.get_cg_redshift_bins()],
+           cc=[list(map(int, x)) for x in ci.get_cc_richness_bins()])
 print("LAYOUT_JSON " + json.dumps(out))
 """
 

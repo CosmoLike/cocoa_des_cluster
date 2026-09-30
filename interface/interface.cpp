@@ -1268,7 +1268,7 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
     );
 
   // --------------------------------------------------------------------
-  // CLUSTERS: THIN WRAPPERS OF THE C FUNCTIONS (TESTS)
+  // CLUSTERS: HALO MODEL AND RADIAL KERNELS (halo_wrapper_cluster.cpp)
   // --------------------------------------------------------------------
   // Wrappers of cosmology-dependent functions call cluster_warmup() first,
   // so no lazily filled cluster table is ever built inside a threaded
@@ -1401,46 +1401,6 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::return_value_policy::move
     );
 
-  m.def("N_cs", &N_cs, "cs pair index of (cluster bin, source bin); -1 if none",
-      py::arg("ni").none(false).noconvert(),
-      py::arg("ns").none(false).noconvert()
-    );
-
-  m.def("ZC_cs", &ZC_cs, "Cluster bin of cs pair n",
-      py::arg("n").none(false).noconvert()
-    );
-
-  m.def("ZS_cs", &ZS_cs, "Source bin of cs pair n",
-      py::arg("n").none(false).noconvert()
-    );
-
-  m.def("N_cg", &N_cg, "cg pair index of (cluster bin, lens bin); -1 if none",
-      py::arg("ni").none(false).noconvert(),
-      py::arg("ng").none(false).noconvert()
-    );
-
-  m.def("ZC_cg", &ZC_cg, "Cluster bin of cg pair n",
-      py::arg("n").none(false).noconvert()
-    );
-
-  m.def("ZG_cg", &ZG_cg, "Lens bin of cg pair n",
-      py::arg("n").none(false).noconvert()
-    );
-
-  m.def("N_cc_richness", &N_cc_richness,
-      "w_cc richness-pair index of (nl1, nl2), nl1 <= nl2",
-      py::arg("nl1").none(false).noconvert(),
-      py::arg("nl2").none(false).noconvert()
-    );
-
-  m.def("NL1_cc", &NL1_cc, "First richness bin of w_cc richness pair n",
-      py::arg("n").none(false).noconvert()
-    );
-
-  m.def("NL2_cc", &NL2_cc, "Second richness bin of w_cc richness pair n",
-      py::arg("n").none(false).noconvert()
-    );
-
   m.def("prob_richness_bin_given_m",
       py::overload_cast<const double, const double, const int>(
         &cosmolike_interface::prob_richness_bin_given_m_cpp
@@ -1527,153 +1487,13 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::return_value_policy::move
     );
 
-  m.def("C_cs_tomo_limber",
-      [](const double l, const int nl, const int ni, const int ns) {
-        cluster_warmup();
-        return C_cs_tomo_limber(l, nl, ni, ns);
-      },
-      "Cluster lensing Limber C_l (cached table) at one multipole",
-      py::arg("l").none(false),
-      py::arg("nl").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert(),
-      py::arg("ns").none(false).noconvert()
-    );
-
-  m.def("C_cs_tomo_limber",
-      &cosmolike_interface::C_cs_tomo_limber_cluster_cpp,
-      "Cluster lensing Limber C_l batch at many multipoles: array "
-      "(cs pair n, richness bin nl, ell)",
-      py::arg("l").none(false),
-      py::return_value_policy::move
-    );
-
-  m.def("C_cc_tomo_limber",
-      [](const double l, const int nl1, const int nl2, const int ni) {
-        cluster_warmup();
-        return C_cc_tomo_limber(l, nl1, nl2, ni);
-      },
-      "Cluster clustering Limber C_l (cached table) at one multipole",
-      py::arg("l").none(false),
-      py::arg("nl1").none(false).noconvert(),
-      py::arg("nl2").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert()
-    );
-
-  m.def("C_cc_tomo_limber",
-      &cosmolike_interface::C_cc_tomo_limber_cluster_cpp,
-      "Cluster clustering Limber C_l batch at many multipoles: array "
-      "(cluster bin ni, richness pair n, ell)",
-      py::arg("l").none(false),
-      py::return_value_policy::move
-    );
-
-  m.def("C_cg_tomo_limber",
-      [](const double l, const int nl, const int ni, const int ng) {
-        cluster_warmup();
-        return C_cg_tomo_limber(l, nl, ni, ng);
-      },
-      "Cluster-galaxy Limber C_l (cached table) at one multipole",
-      py::arg("l").none(false),
-      py::arg("nl").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert(),
-      py::arg("ng").none(false).noconvert()
-    );
-
-  m.def("C_cg_tomo_limber",
-      &cosmolike_interface::C_cg_tomo_limber_cluster_cpp,
-      "Cluster-galaxy Limber C_l batch at many multipoles: array "
-      "(cg pair n, richness bin nl, ell)",
-      py::arg("l").none(false),
-      py::return_value_policy::move
-    );
-
-  m.def("w_gammat_cluster_tomo",
-      [](const int nt, const int nl, const int ni, const int ns) {
-        cluster_warmup();
-        return w_gammat_cluster_tomo(nt, nl, ni, ns);
-      },
-      "Cluster gamma_t (before Y transform and selection bias) at theta bin nt",
-      py::arg("nt").none(false).noconvert(),
-      py::arg("nl").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert(),
-      py::arg("ns").none(false).noconvert()
-    );
-
-  m.def("w_gammat_cluster_tomo",
-      &cosmolike_interface::w_gammat_cluster_tomo_cpp,
-      "Cluster gamma_t (before Y transform and selection bias) at every "
-      "theta bin: array (cs pair n, richness bin nl, theta)",
-      py::return_value_policy::move
-    );
-
-  m.def("w_cc_tomo",
-      [](const int nt, const int nl1, const int nl2, const int ni,
-         const int limber) {
-        cluster_warmup();
-        return w_cc_tomo(nt, nl1, nl2, ni, limber);
-      },
-      "Cluster-cluster w(theta) (no selection bias) at theta bin nt",
-      py::arg("nt").none(false).noconvert(),
-      py::arg("nl1").none(false).noconvert(),
-      py::arg("nl2").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert(),
-      py::arg("limber").none(false).noconvert()
-    );
-
-  m.def("w_cc_tomo",
-      &cosmolike_interface::w_cc_tomo_cpp,
-      "Cluster-cluster w(theta) (no selection bias) at every theta bin: "
-      "array (cluster bin ni, richness pair n, theta)",
-      py::arg("limber").none(false).noconvert(),
-      py::return_value_policy::move
-    );
-
-  m.def("w_cg_tomo",
-      [](const int nt, const int nl, const int ni, const int ng,
-         const int limber) {
-        cluster_warmup();
-        return w_cg_tomo(nt, nl, ni, ng, limber);
-      },
-      "Cluster-galaxy w(theta) (no selection bias) at theta bin nt",
-      py::arg("nt").none(false).noconvert(),
-      py::arg("nl").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert(),
-      py::arg("ng").none(false).noconvert(),
-      py::arg("limber").none(false).noconvert()
-    );
-
-  m.def("w_cg_tomo",
-      &cosmolike_interface::w_cg_tomo_cpp,
-      "Cluster-galaxy w(theta) (no selection bias) at every theta bin: "
-      "array (cg pair n, richness bin nl, theta)",
-      py::arg("limber").none(false).noconvert(),
-      py::return_value_policy::move
-    );
-
-  m.def("N_cluster_tomo",
-      [](const int nl, const int ni) {
-        cluster_warmup();
-        return N_cluster_tomo(nl, ni);
-      },
-      "Expected number of clusters in richness bin nl and z bin ni (eq 16)",
-      py::arg("nl").none(false).noconvert(),
-      py::arg("ni").none(false).noconvert()
-    );
-
-  m.def("N_cluster_tomo",
-      &cosmolike_interface::N_cluster_tomo_cpp,
-      "Expected number of clusters: array (cluster z bin, richness bin)",
-      py::return_value_policy::move
-    );
-
   // --------------------------------------------------------------------
   // CLUSTERS: BIN-INDEXED ARRAYS OF THE 2D STATISTICS (NOTEBOOKS)
   // --------------------------------------------------------------------
   // The cluster analog of xi_pm_tomo / w_gammat_tomo / C_gs_tomo_limber
   // (cosmo2D_wrapper_cluster.cpp): arrays indexed by the bins themselves,
   // (theta or ell, richness bin, cluster z bin, source or lens bin), with
-  // zeros outside the enumerated pairs. The wrappers of the section above
-  // return the same numbers in the pair-packed layout of the data vector.
+  // zeros outside the enumerated pairs.
   m.def("get_cs_redshift_bins",
       &cosmolike_interface::cs_bins,
       "Get cluster lensing redshift binning: row n = (cluster z bin, "

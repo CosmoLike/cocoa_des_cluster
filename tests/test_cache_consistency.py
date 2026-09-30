@@ -338,25 +338,37 @@ class TestCacheConsistency(unittest.TestCase):
             k += ntheta
         self.assertEqual(k, blocks["gs"].stop, "gs block layout")
 
+        # the pair tables of the interface, in the row order of the
+        # blocks: row n holds (cluster z bin, lens bin) of cg pair n and
+        # (cluster z bin, source bin) of cs pair n, stored as floats
+        cg_bins = np_.array(ci.get_cg_redshift_bins()).astype(int)
+        cs_bins = np_.array(ci.get_cs_redshift_bins()).astype(int)
+
         # one cluster pair owns nrich rows: nper entries in a row of
         # rows. // is the integer division (block length / nper = the
         # number of pairs); arange(nper) % ntheta counts 0..ntheta-1
         # again and again, the theta bin along every row
         nper = ntheta * nrich
+        ncg = sizes[BLOCKS.index("cg")] // nper
+        self.assertEqual(ncg, cg_bins.shape[0],
+                         "cg block pairs != rows of get_cg_redshift_bins")
         k = blocks["cg"].start
-        for n in range(sizes[BLOCKS.index("cg")] // nper):
-            selbin[k:k + nper] = ci.ZC_cg(n)
+        for n in range(ncg):
+            selbin[k:k + nper] = cg_bins[n, 0]
             selpow[k:k + nper] = 1
             seltheta[k:k + nper] = np_.arange(nper) % ntheta
             k += nper
         self.assertEqual(k, blocks["cg"].stop, "cg block layout")
 
+        ncs = sizes[BLOCKS.index("cs")] // nper
+        self.assertEqual(ncs, cs_bins.shape[0],
+                         "cs block pairs != rows of get_cs_redshift_bins")
         k = blocks["cs"].start
-        for n in range(sizes[BLOCKS.index("cs")] // nper):
-            selbin[k:k + nper] = ci.ZC_cs(n)
+        for n in range(ncs):
+            selbin[k:k + nper] = cs_bins[n, 0]
             selpow[k:k + nper] = 1
             seltheta[k:k + nper] = np_.arange(nper) % ntheta
-            mfac[k:k + nper] = (-1, ci.ZS_cs(n))
+            mfac[k:k + nper] = (-1, cs_bins[n, 1])
             k += nper
         self.assertEqual(k, blocks["cs"].stop, "cs block layout")
 

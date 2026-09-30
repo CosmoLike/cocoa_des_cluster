@@ -54,9 +54,9 @@ What it does
    row, and where): phi_cluster, nz_cluster, g_cluster; ncl_richness,
    bcl_richness at the a nodes of the cluster tables (and between them);
    pcm_1h_richness for k in [1e-3, 200] h/Mpc; N_cluster_tomo; the Limber
-   C_cs, C_cc, C_cg (array wrappers, and the cached tables for l >=
-   LMIN_tab) at l = 2 .. 5e4; gamma_t, Sigma = T gamma_t, w_cc, w_cg
-   (Limber) at every theta bin; the selection factor and T; and the
+   C_cs, C_cc, C_cg (exact quadrature) at l = 2 .. 5e4; gamma_t, Sigma =
+   T gamma_t, w_cc, w_cg (Limber) at every theta bin, which read the
+   cached C_l tables; the selection factor and T; and the
    cluster blocks of the joint data vector, scored with delta^T C^-1 delta
    per block under the Y6 scale cuts AND with no cuts (the most
    aggressive positive-definite mask when the uncut covariance is not;
@@ -102,7 +102,6 @@ YAML = os.path.join(LIKDIR, "combo_4x2pt_N.yaml")
 DATASET = os.path.join(DATA, "des_cluster_y6_4x2ptN.dataset")
 PROBE = "4x2pt_N"
 ELL_TEST = np.array([2.0, 10.0, 100.0, 1000.0, 1.0e4, 5.0e4])
-LMIN_TAB = 20                         # limits.LMIN_tab: first l of the cached C_l tables
 BLOCKS = ("ss", "gs", "gg", "cg", "N", "cc", "cs")
 CLUSTER_BLOCKS = ("N", "cs", "cc", "cg")
 TABLE_TOL = 1e-4
@@ -467,9 +466,15 @@ def c_evaluate(ci, cfg, R, info, workdir, full=True):
     ci.init_data_cluster(info["covf"], ds["mask_file"], info["dvf"])
     set_cosmology_c(ci, R)
     ci.cluster_warmup()
-    C["pairs_cs"] = [(ci.ZC_cs(n), ci.ZS_cs(n)) for n in range(nzc * int(ds["source_ntomo"]))]
-    C["pairs_cc"] = [(ci.NL1_cc(n), ci.NL2_cc(n)) for n in range(nA * (nA + 1) // 2)]
-    C["pairs_cg"] = [(ci.ZC_cg(n), ci.ZG_cg(n)) for n in range(nzc)]
+    # the pair tables of the interface, in the row order of the data
+    # vector: row n = (cluster z bin, source bin) of cs pair n, (nl1, nl2)
+    # of richness pair n, (cluster z bin, lens bin) of cg pair n
+    cs_bins = np.array(ci.get_cs_redshift_bins()).astype(int)
+    cc_bins = np.array(ci.get_cc_richness_bins()).astype(int)
+    cg_bins = np.array(ci.get_cg_redshift_bins()).astype(int)
+    C["pairs_cs"] = [tuple(row) for row in cs_bins.tolist()]
+    C["pairs_cc"] = [tuple(row) for row in cc_bins.tolist()]
+    C["pairs_cg"] = [tuple(row) for row in cg_bins.tolist()]
     if full:
         zk, zg = R["val_zk"], R["val_zg"]
         C["phi"] = np.array([[ci.phi_cluster(z, i) for z in zk] for i in range(nzc)])
@@ -483,24 +488,32 @@ def c_evaluate(ci, cfg, R, info, workdir, full=True):
         kp, zp = R["val_k_p1h"], R["val_z_p1h"]
         C["p1h"] = np.array([[[ci.pcm_1h_richness(k * COVERH0, 1.0 / (1.0 + z), A) for k in kp]
                               for A in range(nA)] for z in zp]) * COVERH0**3
-        C["N"] = np.array(ci.N_cluster_tomo())
+        # the interface returns (richness bin, cluster z bin); the
+        # reference and the data vector hold (cluster z bin, richness bin)
+        C["N"] = np.array(ci.N_cluster_tomo_bins()).T
         C["T"] = np.array(ci.get_cluster_ytransform_matrix())
         C["B"] = np.array(ci.get_cluster_selection_factor())
+    # The interface returns bin-indexed arrays, (ell or theta, bin, bin,
+    # bin); the comparison below works in the pair order of the data
+    # vector. Indexing two axes with the two bin columns of a pair table
+    # picks one entry per pair (a[:, :, zc, zs] has shape (ell, nl, pair)),
+    # and transpose(2, 1, 0) reverses the three axes.
+    zc_cs, zs_cs = cs_bins[:, 0], cs_bins[:, 1]
+    nl1_cc, nl2_cc = cc_bins[:, 0], cc_bins[:, 1]
+    zc_cg, zg_cg = cg_bins[:, 0], cg_bins[:, 1]
     ells = R["val_ells"]
-    C["C_cs"] = np.array(ci.C_cs_tomo_limber(l=ells))            # (pair, nl, ell)
-    C["C_cc"] = np.array(ci.C_cc_tomo_limber(l=ells))            # (ni, pair, ell)
-    C["C_cg"] = np.array(ci.C_cg_tomo_limber(l=ells))            # (pair, nl, ell)
-    if full:
-        et = ells[ells >= LMIN_TAB]
-        C["C_cs_tab"] = np.array([[[ci.C_cs_tomo_limber(l, A, i, s) for l in et]
-                                   for A in range(nA)] for (i, s) in C["pairs_cs"]])
-        C["C_cc_tab"] = np.array([[[ci.C_cc_tomo_limber(l, A, B, i) for l in et]
-                                   for (A, B) in C["pairs_cc"]] for i in range(nzc)])
-        C["C_cg_tab"] = np.array([[[ci.C_cg_tomo_limber(l, A, i, g) for l in et]
-                                   for A in range(nA)] for (i, g) in C["pairs_cg"]])
-    C["gt"] = np.array(ci.w_gammat_cluster_tomo())               # (pair, nl, theta)
-    C["wcc"] = np.array(ci.w_cc_tomo(1))                         # (ni, pair, theta)
-    C["wcg"] = np.array(ci.w_cg_tomo(1))                         # (pair, nl, theta)
+    Ccs = np.array(ci.C_cs_tomo_limber_bins(l=ells))             # (ell, nl, ni, ns)
+    Ccc = np.array(ci.C_cc_tomo_limber_bins(l=ells))             # (ell, nl1, nl2, ni)
+    Ccg = np.array(ci.C_cg_tomo_limber_bins(l=ells))             # (ell, nl, ni, ng)
+    C["C_cs"] = Ccs[:, :, zc_cs, zs_cs].transpose(2, 1, 0)       # (pair, nl, ell)
+    C["C_cc"] = Ccc[:, nl1_cc, nl2_cc, :].transpose(2, 1, 0)     # (ni, pair, ell)
+    C["C_cg"] = Ccg[:, :, zc_cg, zg_cg].transpose(2, 1, 0)       # (pair, nl, ell)
+    gt = np.array(ci.w_gammat_cluster_tomo_bins())               # (theta, nl, ni, ns)
+    wcc = np.array(ci.w_cc_tomo_bins(limber=1))                  # (theta, nl1, nl2, ni)
+    wcg = np.array(ci.w_cg_tomo_bins(limber=1))                  # (theta, nl, ni, ng)
+    C["gt"] = gt[:, :, zc_cs, zs_cs].transpose(2, 1, 0)          # (pair, nl, theta)
+    C["wcc"] = wcc[:, nl1_cc, nl2_cc, :].transpose(2, 1, 0)      # (ni, pair, theta)
+    C["wcg"] = wcg[:, :, zc_cg, zg_cg].transpose(2, 1, 0)        # (pair, nl, theta)
     C["dv_cut"] = np.array(ci.compute_data_vector_cluster_masked())
     C["mask_cut"] = np.array(ci.get_mask_cluster())
     m_all = cluster_uncut_mask(ci, cfg)
@@ -681,15 +694,6 @@ def compare_all(C, R, cfg, full=True, blocks=CLUSTER_BLOCKS, cov_full=None, pd_c
         compare(rows, "C_cc_tomo_limber (exact l)", C["C_cc"], Ccc_ref, labels=lab_cc(ells))
     if "cg" in blocks:
         compare(rows, "C_cg_tomo_limber (exact l)", C["C_cg"], Ccg_ref, labels=lab_cg(ells))
-    if full:
-        tab = ells >= LMIN_TAB
-        et = ells[tab]
-        compare(rows, "C_cs_tomo_limber (table, l>=20)", C["C_cs_tab"], Ccs_ref[..., tab],
-                labels=lab_cs(et))
-        compare(rows, "C_cc_tomo_limber (table, l>=20)", C["C_cc_tab"], Ccc_ref[..., tab],
-                labels=lab_cc(et))
-        compare(rows, "C_cg_tomo_limber (table, l>=20)", C["C_cg_tab"], Ccg_ref[..., tab],
-                labels=lab_cg(et))
 
     lab_t = lambda ix: f"zc{pairs_cs[ix[0]][0]} zs{pairs_cs[ix[0]][1]} l{ix[1]} th={th[ix[2]]:.3g}'"
     if "cs" in blocks:
@@ -905,7 +909,7 @@ def run_lighthouse_child(cfg, workdir, threads, out):
                     for A in range(nA)])            # (c/H0)^-3, as lighthouse
     b_c = np.array([[ci.bcl_richness(x, A) if o else 0.0 for x, o in zip(a, ok)]
                     for A in range(nA)])
-    N_c = np.array(ci.N_cluster_tomo())
+    N_c = np.array(ci.N_cluster_tomo_bins()).T     # (cluster z bin, richness bin)
     # at the z of lighthouse's tabulated P(lambda bin|M) (mor_z)
     a_m = 1.0 / (1.0 + L["mor_z"])
     n_c_m = np.array([[ci.ncl_richness(x, A) for x in a_m] for A in range(nA)])
