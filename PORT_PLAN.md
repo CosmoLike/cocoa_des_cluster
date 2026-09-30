@@ -301,5 +301,20 @@ Backlog (Vivian, 2026-09-30):
   the old range's real-space values (Legendre kernels keyed on Ntheta and
   Ntable.random, not on the theta range); found by the wrapper work, only
   checked on the cluster block.
+- SIMDe vector paths for cosmo2D_cluster.c and halo_cluster.c, as
+  cosmo2D.c and halo.c have (AVX2 on x86, NEON on Apple Silicon from one
+  source, each behind a fallback guard): the cluster files rely on
+  compiler auto-vectorization only. Important for MCMC runs on x86.
+- Retire the pair-packed cluster Python bindings; keep the per-bin C++
+  bindings the notebooks use (as the 3x2pt has), under the natural names,
+  and move tests/validation to them.
+- Shared-code bugs to fix: real-space values not refreshed when the theta
+  range changes at fixed Ntheta; the HOD tables' missing source n(z) cache
+  key; the notebook cosmology helper's coarse growth grid.
+- Tests for the galaxy-only likelihoods of this project (cosmic_shear,
+  combo_3x2pt, combo_2x2pt), ported from des_y3.
+- NOT in this port: the covariance beyond Gaussian (super-sample,
+  trispectrum) and the counts x 2pt block. They wait for the port of
+  CosmoCov to Cocoa, the next big project.
 - The independent check of the model against the paper (a Fable review)
   is LAST: the week of 2026-10-05.
