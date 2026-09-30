@@ -1,0 +1,45 @@
+path: null
+data_file: Y3xPlanckPR4.dataset
+# WARNING: keep accuracyboost <= 3. The chi2 is converged at the default 1.0
+# (differences <= 0.004 through boost 3.25), and above that the 6x2pt integration
+# tables break down: chi2 shifts by +0.05 at 3.75, +0.26 at 4, +27 at 5.
+accuracyboost: 1.0
+internal_accuracyboost: 1.0 # C-FAST-PT convolution grid / output grid
+integration_accuracy: 0 # integer 0, 1 or 2
+# n(z) interpolation: 0 = cubic spline, 1 = linear, 2+ = Steffen (monotone)
+photoz_interpolation_type: 0
+# n(z) file z column: 0 = Z_LOW (left bin edges), 1 = Z_MID (sample points)
+photoz_zmid_convention: 0
+lmax: 75000 
+kmax_boltzmann: 10.0
+speed: 1
+non_linear_emul: 2
+external_nz_modeling: 0
+use_emulator: 0
+debug: False
+# IA REDSHIFT EVOLUTION: 0 = NO_IA (AMPLITUDES SET TO ZERO), 
+#                        1 = IA_NLA_LF
+#                        2 = IA_REDSHIFT_BINNING, 
+#                        3 = IA_REDSHIFT_EVOLUTION
+IA_redshift_evolution: 3
+# IA_MODEL: 0 = NLA, 1 = TATT
+IA_model: 0 
+# IA_code: 0 = C FASTPT, 1 = Python PAST-PT
+IA_code: 0
+
+# BIAS REDSHIFT EVOLUTION [b1,b2,bs2,b3,bmag] (see bias.c)
+bias_model: [0,0,0,1,0]
+
+add_baryons_on_dv: False
+which_bsims_add_on_dv: "antilles-2"
+
+use_baryon_pca: False
+create_baryon_pca: False
+baryon_pca_select_sims: "antilles-2-99/antilles-101-378/antilles-380-400"
+filename_baryon_pca: "./projects/des_cluster/chains/pca.txt"
+external_baryon_suppression: False
+
+print_datavector: False
+print_datavector_file: "./projects/des_cluster/chains/theory.modelvector"
+
+params: !defaults [params_source, params_lens_maglim]
