@@ -1,0 +1,3 @@
+# CL+GC (4x2pt + N): des_cluster_y6.dataset with the CL+GC scale-cut mask
+DEFAULT(des_cluster_y6.dataset)
+mask_file = des_cluster_y6_4x2ptN.mask

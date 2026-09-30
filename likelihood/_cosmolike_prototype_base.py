@@ -520,7 +520,12 @@ class _cosmolike_prototype_base(DataSetLikelihood):
       else:
         raise LoggedError(self.log, "non_linear_emul = %d is an invalid option", non_linear_emul)
 
-      G_growth = np.sqrt(PKL.P(self.z_interp_2D,0.0005)/PKL.P(0,0.0005))*(1+self.z_interp_2D)
+      # G on the dense 1D z grid (clipped to the P(k) interpolator range):
+      # cosmolike reads G linearly in z, and on the coarse 2D grid
+      # (dz ~ 0.03) the linear read misses D by up to 7e-5, which the
+      # cluster abundance of rare massive halos amplifies 5-15x.
+      z_growth = self.z_interp_1D[self.z_interp_1D <= self.z_interp_2D[-1]]
+      G_growth = np.sqrt(PKL.P(z_growth,0.0005)/PKL.P(0,0.0005))*(1+z_growth)
       G_growth /= G_growth[-1]
       # Apply baryon suppression factors from theory block (if enabled)
       # The baryon suppression theory block computes S(k,z) for each requested z
@@ -566,6 +571,7 @@ class _cosmolike_prototype_base(DataSetLikelihood):
         lnP_linear=lnPL, 
         lnP_nonlinear=lnPNL, 
         G=G_growth,
+        z_G=z_growth,
         z_1D=self.z_interp_1D,
         chi=self.provider.get_comoving_radial_distance(self.z_interp_1D)*h # convert to Mpc/h
       )

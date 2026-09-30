@@ -1,9 +1,9 @@
 {
   "_meta": {
-    "generated_utc": "2026-09-30T02:02:37Z",
+    "generated_utc": "2026-09-30T03:25:13Z",
     "omp_num_threads": "4"
   },
-  "example1_nla": 2.632080520261678e-14,
-  "example2_2x2pt_nla": 2.481885164482194e-13,
-  "example2_nla": 2.8115657412803605e-13
+  "example1_nla": 2.941742071053925e-14,
+  "example2_2x2pt_nla": 3.0791107499195727e-13,
+  "example2_nla": 3.441592252743093e-13
 }
