@@ -15,6 +15,12 @@ Model (equation numbers of 2503.13631):
   (22) P^1h_A(k,z) = int dlnM dn/dlnM P(A|M,z) (M/rho_m) u(k|M,z) / n_A(z)
   <phi_i|z> = [erf((z_hi - z)/(sqrt2 s_z)) - erf((z_lo - z)/(sqrt2 s_z))]/2,
               s_z = sigma_z0 (1+z)       (or a top hat in z)
+              photoz="table": the piecewise-linear interpolant (numpy.interp)
+              of a tabulated <phi_i|z> (data/des_y6_cluster.nz format),
+              zero outside the zero nodes that bracket the nonzero values of
+              each column: the kernel the C port reads (structs_cluster.h).
+              Every table node is a quadrature break (the kinks of the
+              interpolant), so the z integrals are exact for it.
   (16) N_iA = Omega_s int dz chi^2 (c/H) <phi_i|z> n_A(z),  Omega_s in sr
 
 Radial kernels of the 2-pt functions (dN/dz normalized to unit integral):
@@ -90,7 +96,8 @@ class ClusterModel:
                  zc_edges=(0.2, 0.4, 0.55, 0.65), area_deg2=4143.0,
                  photoz="gaussian", sigma_z0=0.006, M_piv=5e14, z_piv=1.45,
                  lnM_min=np.log(1e12), lnM_max=np.log(1e16),
-                 mass_panel_width=0.25, mass_order=8, nsig_support=10.0):
+                 mass_panel_width=0.25, mass_order=8, nsig_support=10.0,
+                 phi_table=None):
         self.cosmo = cosmo
         self.halo = halo
         self.mor = dict(mor)
@@ -107,6 +114,20 @@ class ClusterModel:
         self.lnM_range = (float(lnM_min), float(lnM_max))
         self.lnM, self.wM = gl_panels([lnM_min, lnM_max], mass_panel_width, mass_order)
         self.nsig = nsig_support
+        if photoz == "table":
+            if phi_table is None:
+                raise ValueError("photoz='table' needs phi_table = (z, columns)")
+            ztab, tab = (np.asarray(x, dtype=float) for x in phi_table)
+            if tab.ndim != 2 or tab.shape != (ztab.size, self.nzc):
+                raise ValueError(f"phi_table: expected ({ztab.size}, {self.nzc}), "
+                                 f"got {tab.shape}")
+            self.phi_z, self.phi_tab = ztab, tab
+            # support of bin i: the zero nodes bracketing its nonzero values
+            self.phi_support = []
+            for i in range(self.nzc):
+                nz = np.nonzero(tab[:, i] > 0)[0]
+                lo, hi = max(nz[0] - 1, 0), min(nz[-1] + 1, ztab.size - 1)
+                self.phi_support.append((ztab[lo], ztab[hi]))
 
     # ------------------------------------------------------------------
     # mass-observable relation
@@ -175,6 +196,10 @@ class ClusterModel:
         """<phi_i|z_true>: probability that z_lambda falls in bin i."""
         z = np.asarray(z, dtype=float)
         lo, hi = self.zc_edges[i], self.zc_edges[i + 1]
+        if self.photoz == "table":
+            a, b = self.phi_support[i]
+            out = np.interp(z, self.phi_z, self.phi_tab[:, i])
+            return np.where((z >= a) & (z <= b), out, 0.0)
         if self.photoz == "tophat":
             return ((z >= lo) & (z < hi)).astype(float)
         s = self.sigma_z0 * (1.0 + z)
@@ -182,6 +207,8 @@ class ClusterModel:
 
     def support(self, i):
         lo, hi = self.zc_edges[i], self.zc_edges[i + 1]
+        if self.photoz == "table":
+            return self.phi_support[i]
         if self.photoz == "tophat":
             return lo, hi
         s = self.nsig * self.sigma_z0
@@ -189,6 +216,10 @@ class ClusterModel:
 
     def breaks(self, i):
         a, b = self.support(i)
+        if self.photoz == "table":
+            # every node of the piecewise-linear interpolant is a kink
+            zt = self.phi_z
+            return sorted({a, b} | set(zt[(zt >= a) & (zt <= b)].tolist()))
         return sorted({a, b, self.zc_edges[i], self.zc_edges[i + 1]})
 
     def dVdz(self, z):

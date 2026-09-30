@@ -87,6 +87,7 @@ DEFAULT_SETTINGS = dict(
     zc_edges=[0.2, 0.4, 0.55, 0.65],
     area_deg2=4143.0,
     photoz="gaussian", sigma_z0=0.006,
+    phi_table_file=None,         # photoz="table": <phi_i|z> file (data/des_y6_cluster.nz format)
     M_piv=5e14, z_piv=1.45,
     lnM_min=np.log(1e12), lnM_max=np.log(1e16),
     mass_panel_width=0.25, mass_order=8,
@@ -101,6 +102,8 @@ DEFAULT_SETTINGS = dict(
     lens_nz=os.path.join(LIGHTHOUSE_NZ, "lens.nz"),
     lens_bins=[0, 1, 2],
     kmax=100.0, halofit="takahashi", k_per_logint=None,
+    pk_nl_z_order=3,             # 3 = cubic, 1 = linear in z between CAMB nodes (ref_cosmology)
+    source_g_zmax=None,          # DIAGNOSTIC: cut the source n(z) of W_kappa above this z
     # noise for the covariance (lighthouse dataY6.yaml): arcmin^-2, per-component sigma_e
     n_lens_arcmin2=[0.1380, 0.1016, 0.1071, 0.1381, 0.1054, 0.1045],
     n_src_arcmin2=[2.1402, 2.14455, 2.1518, 2.11845],
@@ -129,16 +132,21 @@ class ClusterReference:
         t0 = time.time()
         self.cosmo = cosmo if cosmo is not None else Cosmology(
             {k: p[k] for k in COSMO_KEYS}, kmax=s["kmax"], halofit=s["halofit"],
-            k_per_logint=s["k_per_logint"])
+            k_per_logint=s["k_per_logint"], nl_z_order=s["pk_nl_z_order"])
         self._log("CAMB", t0)
         t0 = time.time()
+        phi_table = None
+        if s["photoz"] == "table":
+            tab = np.loadtxt(s["phi_table_file"])
+            phi_table = (tab[:, 0], tab[:, 1:])
         self.halo = HaloModel(self.cosmo, hmf_matter=s["hmf_matter"])
         self.cluster = ClusterModel(
             self.cosmo, self.halo, {k: p[k] for k in MOR_KEYS},
             lambda_edges=s["lambda_edges"], zc_edges=s["zc_edges"],
             area_deg2=s["area_deg2"], photoz=s["photoz"], sigma_z0=s["sigma_z0"],
             M_piv=s["M_piv"], z_piv=s["z_piv"], lnM_min=s["lnM_min"], lnM_max=s["lnM_max"],
-            mass_panel_width=s["mass_panel_width"], mass_order=s["mass_order"])
+            mass_panel_width=s["mass_panel_width"], mass_order=s["mass_order"],
+            phi_table=phi_table)
         self._log("halo model", t0)
         self.nz_src = NzBins(s["source_nz"])
         self.nz_lens = NzBins(s["lens_nz"])
@@ -190,7 +198,7 @@ class ClusterReference:
                            z_panel=s["z_panel"], z_panel_far=s["z_panel_far"], order=s["z_order"],
                            mag_ell_prefactor=s["mag_ell_prefactor"],
                            spin2_prefactor=s["spin2_prefactor"], C_c=s["C_c"],
-                           include_1h=s["include_1h"])
+                           include_1h=s["include_1h"], source_g_zmax=s["source_g_zmax"])
 
     def spectra(self, with_cov_spectra=True):
         if self._spectra is None:

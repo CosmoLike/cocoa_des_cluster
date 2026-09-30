@@ -61,11 +61,19 @@ class Cosmology:
       halofit        CAMB halofit_version for P_NL ("takahashi")
       num_massive_nu number of degenerate massive species (3)
       z_nodes        z nodes of the P tables (default_pk_redshifts)
+      nl_z_order     spline order in z of the ln P_NL table (3 = cubic,
+                     1 = linear between the CAMB z nodes). CAMB's Halofit
+                     finds its nonlinear scale by bisection to |sigma - 1|
+                     <= 1e-3 (halofit.f90), so ln P_NL carries ~1e-3 node-
+                     to-node noise in z at k > k_NL; a cubic spline through
+                     it and a linear read of the same nodes (cosmolike's
+                     p_nonlin) then differ by that much between nodes. A C
+                     comparison uses 1 and hands the C side these nodes.
     """
 
     def __init__(self, params, kmax=100.0, halofit="takahashi",
                  num_massive_nu=3, z_nodes=None, accuracy_boost=1.0,
-                 k_per_logint=None):
+                 k_per_logint=None, nl_z_order=3):
         p = dict(params)
         self.params = p
         self.h = h = float(p["h"])
@@ -137,7 +145,8 @@ class Cosmology:
         self.k_pk = k
         self.lnk_pk = np.log(k)
         self._tabs = {"lin": np.log(plin), "nl": np.log(pnl), "cb": np.log(pcb)}
-        self._spl = {key: RectBivariateSpline(self.z_pk, self.lnk_pk, tab, kx=3, ky=3)
+        self._spl = {key: RectBivariateSpline(self.z_pk, self.lnk_pk, tab,
+                                              kx=(nl_z_order if key == "nl" else 3), ky=3)
                      for key, tab in self._tabs.items()}
         # end slopes d ln P / d ln k (per z node) for the extrapolation
         self._slope_lo = {key: (tab[:, 1] - tab[:, 0]) / (self.lnk_pk[1] - self.lnk_pk[0])
@@ -260,6 +269,11 @@ class NzBins:
         zz = np.linspace(self.z_nodes[0], self.z_nodes[-1], 30001)
         self.zmean = np.array([np.trapz(zz * s(zz), zz) / np.trapz(s(zz), zz)
                                for s in self.splines])
+
+    def support(self, i, shift=0.0, stretch=1.0):
+        """Ends (z) of the open interval where n_i(z; shift, stretch) != 0."""
+        zb = self.zmean[i]
+        return tuple(zb + stretch * (self.z_nodes[j] - zb) + shift for j in (0, -1))
 
     def __call__(self, z, i, shift=0.0, stretch=1.0):
         z = np.asarray(z, dtype=float)

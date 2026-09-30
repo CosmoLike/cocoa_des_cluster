@@ -35,6 +35,7 @@ from ref_cosmology import COVERH0
 from ref_cluster import gl_panels, lensing_efficiency
 
 C1RHOCRIT = 0.01389      # nuisance.c1rhocrit_ia (cosmolike)
+EDGE_EPS = 1e-9          # half-gap of the node pair at an n(z) support end
 ONEPLUSZ0_IA = 1.62      # nuisance.oneplusz0_ia (IA_REDSHIFT_EVOLUTION)
 
 
@@ -74,7 +75,7 @@ class LimberModel:
     def __init__(self, cosmo, cluster, nz_src, nz_lens, nuis, kernel_mode=0,
                  ells=None, lens_bins=None, z_panel=0.01, z_panel_far=0.02, order=8,
                  mag_ell_prefactor=True, spin2_prefactor=True, C_c=-2.0,
-                 include_1h=True, dz_fine=2e-4):
+                 include_1h=True, dz_fine=2e-4, source_g_zmax=None):
         self.cosmo = cosmo
         self.cl = cluster
         self.nz_src = nz_src
@@ -89,6 +90,7 @@ class LimberModel:
         self.e1 = e1 if mag_ell_prefactor else np.ones_like(e1)
         self.e2 = e2 if spin2_prefactor else np.ones_like(e2)
         self.dz_fine = dz_fine
+        self.source_g_zmax = source_g_zmax
 
         # --- node sets -------------------------------------------------
         zc_top = max(cluster.support(i)[1] for i in range(cluster.nzc))
@@ -104,20 +106,33 @@ class LimberModel:
     # ------------------------------------------------------------------
     # kernels
     # ------------------------------------------------------------------
-    def _fine(self):
+    def _fine(self, edges=()):
+        """Fine z grid of the lensing-efficiency trapezoids. `edges` are the
+        ends of an n(z) support: n(z) jumps to 0 there (NzBins), and a
+        trapezoid cell straddling the jump is wrong by O(dz n_edge), a
+        relative error of 1e-4 - 1e-3 on g at redshifts behind most of the
+        bin's sources (where g is small). A pair of nodes EDGE_EPS inside
+        and outside each end makes the trapezoid exact up to O(dz^2)."""
         zf = np.arange(0.0, self.z_top + self.dz_fine, self.dz_fine)
+        if len(edges):
+            pts = np.concatenate([[e - EDGE_EPS, e + EDGE_EPS] for e in edges])
+            zf = np.unique(np.concatenate([zf, pts[pts > 0]]))
         return zf, self.cosmo.chi(zf)
 
     def source_kernels(self, ns):
         """W_kappa (s, n) and W_src (s, n) and C1 (n) on a node set."""
         cosmo, nu = self.cosmo, self.nuis
-        zf, chif = self._fine()
         Om = cosmo.Omega_m
         pref = 1.5 * Om / COVERH0**2 * ns.chi * (1.0 + ns.z)
         Wk, Ws = [], []
         for s in range(self.nz_src.nbin):
             dz = nu["source_dz"][s]
+            zf, chif = self._fine(self.nz_src.support(s, shift=dz))
             nf = self.nz_src(zf, s, shift=dz)
+            if self.source_g_zmax is not None:
+                # DIAGNOSTIC ONLY: the lensing efficiency ignores sources
+                # above source_g_zmax (emulates a truncated C integral)
+                nf = np.where(zf <= self.source_g_zmax, nf, 0.0)
             g = lensing_efficiency(ns.z, ns.chi, zf, nf, chif)
             Wk.append(pref * g)
             Ws.append(self.nz_src(ns.z, s, shift=dz) * ns.E / COVERH0)
@@ -129,12 +144,12 @@ class LimberModel:
     def lens_kernels(self, ns):
         """W_g (g, n) and W_mag,g (g, n) for the lens bins in use."""
         cosmo, nu = self.cosmo, self.nuis
-        zf, chif = self._fine()
         pref = 1.5 * cosmo.Omega_m / COVERH0**2 * ns.chi * (1.0 + ns.z)
         Wg, Wm = [], []
         for g in self.lens_bins:
             dz = nu["lens_dz"][g]
             st = nu.get("lens_stretch", [1.0] * self.nz_lens.nbin)[g]
+            zf, chif = self._fine(self.nz_lens.support(g, shift=dz, stretch=st))
             nf = self.nz_lens(zf, g, shift=dz, stretch=st)
             Wm.append(pref * lensing_efficiency(ns.z, ns.chi, zf, nf, chif))
             Wg.append(self.nz_lens(ns.z, g, shift=dz, stretch=st) * ns.E / COVERH0)
