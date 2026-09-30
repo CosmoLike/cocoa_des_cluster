@@ -40,6 +40,12 @@ Array layouts (the cluster wrappers of cosmo2D_wrapper_cluster.cpp):
 the first axis is the angular bin or the multipole, the others are the
 bins in the order (richness bin, cluster z bin, source or lens bin);
 w_cc carries (richness bin 1, richness bin 2, cluster z bin).
+cluster_blocks and data_cluster_blocks return the cluster blocks of
+a joint vector (a theory vector, the data, its errors) in these same
+layouts, so a model and the data go to the plotting functions
+(cosmolike_notebook_utils.plot_datavectors_cluster) side by side. The
+3x2pt blocks of 6x2pt + N (xi, gamma_t, w_theta) come back in the
+layouts of the galaxy plotting functions (cnu.plot_xi, ...).
 
 Every wrapper accepts the same accuracy arguments and applies the
 house folds: CLAccuracyBoost multiplies by AccuracyBoost, the
@@ -725,6 +731,62 @@ def C_cg_tomo_limber(ell, **kwargs):
 
 
 # ----------------------------------------------------------------------
+# Galaxy observables: the 3x2pt blocks of 6x2pt + N (real space)
+# ----------------------------------------------------------------------
+# The same state, read through the galaxy functions of the interface.
+# The return layouts are those of the galaxy plotting functions
+# (cnu.plot_xi, cnu.plot_gammat_tomo_limber, cnu.plot_wtheta_tomo).
+def xi(**kwargs):
+    """Real-space shear correlations xi_plus/minus on the theta grid.
+
+    Arguments:
+      kwargs = binning, cosmology, accuracy and nuisance arguments of
+               _state.
+
+    Returns:
+      (theta, xi_plus, xi_minus): theta in arcmin, the xi 3D arrays
+      (n_theta, n_source, n_source).
+    """
+    _state(**kwargs)
+    (xip, xim) = ci.xi_pm_tomo()
+    return (np.array(ci.get_binning_real_space()),
+            np.array(xip), np.array(xim))
+
+
+def gamma_t(**kwargs):
+    """Galaxy-galaxy lensing gamma_t on the theta grid.
+
+    Arguments:
+      kwargs = binning, cosmology, accuracy and nuisance arguments of
+               _state.
+
+    Returns:
+      (theta, gammat): theta in arcmin, gammat a 3D array
+      (n_theta, n_lens, n_source).
+    """
+    _state(**kwargs)
+    return (np.array(ci.get_binning_real_space()),
+            np.array(ci.w_gammat_tomo()))
+
+
+def w_theta(**kwargs):
+    """Galaxy clustering w(theta) on the theta grid.
+
+    Arguments:
+      kwargs = binning, cosmology, accuracy and nuisance arguments of
+               _state.
+
+    Returns:
+      (theta, wtheta): theta in arcmin, wtheta a 3D array
+      (n_theta, n_lens, n_lens); the auto-correlations are on the
+      diagonal.
+    """
+    _state(**kwargs)
+    return (np.array(ci.get_binning_real_space()),
+            np.array(ci.w_gg_tomo()))
+
+
+# ----------------------------------------------------------------------
 # Halo-model ingredients and radial kernels
 # ----------------------------------------------------------------------
 # These take redshifts, masses in Msun/h and wavenumbers in h/Mpc and
@@ -893,3 +955,87 @@ def get_chi2(**kwargs):
       float chi2.
     """
     return ci.compute_chi2_cluster(get_datavector(**kwargs))
+
+
+def cluster_blocks(vector):
+    """The cluster blocks of a joint vector as bin-indexed arrays.
+
+    The joint vector is flat (ss, gs, gg, cg, N, cc, cs); this puts
+    its four cluster blocks back into the array layouts of the
+    observable wrappers, so a data vector, its errors or a masked
+    theory vector can be compared with N_cluster, sigma_cluster, w_cc
+    and w_cg bin by bin. Requires init_cosmolike (the pair lists and
+    the block positions come from the interface).
+
+    Arguments:
+      vector = 1D array of the full data-vector length (the layout of
+               get_datavector).
+
+    Returns:
+      dict of arrays:
+        "N"  (n_richness, n_cluster_z),
+        "cs" (n_theta, n_richness, n_cluster_z, n_source),
+        "cc" (n_theta, n_richness, n_richness, n_cluster_z), filled
+             symmetrically in the two richness bins,
+        "cg" (n_theta, n_richness, n_cluster_z, n_lens).
+      Bin combinations the data vector does not hold are NaN.
+    """
+    vector = np.asarray(vector, dtype=np.float64)
+    sizes = np.array(ci.compute_data_vector_cluster_sizes()).astype(int)
+    starts = np.array(ci.compute_data_vector_cluster_starts()).astype(int)
+    # block order of the joint vector: ss, gs, gg, cg, N, cc, cs
+    block = {name: vector[starts[i]:starts[i] + sizes[i]]
+             for i, name in enumerate(("ss", "gs", "gg", "cg", "N", "cc", "cs"))}
+
+    ntheta = _DATASET["ntheta"]
+    nrichness = len(_DATASET["richness_edges"]) - 1
+    ncluster = _DATASET["cluster_ntomo"]
+    nsource = _DATASET["source_ntomo"]
+    nlens = _DATASET["lens_ntomo"]
+    # row n of each list is one pair of the block, in block order
+    cs_pairs = np.array(ci.get_cs_redshift_bins()).astype(int)
+    cc_pairs = np.array(ci.get_cc_richness_bins()).astype(int)
+    cg_pairs = np.array(ci.get_cg_redshift_bins()).astype(int)
+
+    # N block: [cluster z bin][richness bin]
+    N = block["N"].reshape(ncluster, nrichness).T.copy()
+
+    # cs block: [(cluster z, source) pair][richness bin][theta]
+    cs = np.full((ntheta, nrichness, ncluster, nsource), np.nan)
+    rows = block["cs"].reshape(len(cs_pairs), nrichness, ntheta)
+    for n, (ni, ns_) in enumerate(cs_pairs):
+        cs[:, :, ni, ns_] = rows[n].T
+
+    # cc block: [cluster z bin][richness pair (nl1 <= nl2)][theta]
+    cc = np.full((ntheta, nrichness, nrichness, ncluster), np.nan)
+    rows = block["cc"].reshape(ncluster, len(cc_pairs), ntheta)
+    for n, (nl1, nl2) in enumerate(cc_pairs):
+        cc[:, nl1, nl2, :] = rows[:, n, :].T
+        cc[:, nl2, nl1, :] = rows[:, n, :].T
+
+    # cg block: [(cluster z, lens) pair][richness bin][theta]
+    cg = np.full((ntheta, nrichness, ncluster, nlens), np.nan)
+    rows = block["cg"].reshape(len(cg_pairs), nrichness, ntheta)
+    for n, (ni, ng) in enumerate(cg_pairs):
+        cg[:, :, ni, ng] = rows[n].T
+
+    return {"N": N, "cs": cs, "cc": cc, "cg": cg}
+
+
+def data_cluster_blocks():
+    """The cluster data and their 1-sigma errors, bin by bin.
+
+    Requires init_cosmolike(with_data=True). The errors are the square
+    roots of the covariance diagonal. Entries the mask removes (the
+    scale cuts) are NaN in both, which is how the plotting functions
+    of plot_datavectors_cluster skip them.
+
+    Returns:
+      (data, error): two dicts in the layout of cluster_blocks.
+    """
+    mask = np.array(ci.get_mask_cluster()).astype(bool)
+    data = np.array(ci.get_dv_masked_cluster(), dtype=np.float64)
+    error = np.sqrt(np.diag(np.array(ci.get_cov_masked_cluster())))
+    data[~mask] = np.nan
+    error[~mask] = np.nan
+    return cluster_blocks(data), cluster_blocks(error)
