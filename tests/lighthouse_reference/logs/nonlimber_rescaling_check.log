@@ -1,0 +1,88 @@
+
+-------------------------------------------
+Initializing Standard Runmode/Cosmology
+-------------------------------------------
+Cosmology set to Planck_15
+Source redshifts: multi-histo file /Users/vivianmiranda/data/COCOA/september2026/test/cocoa/Cocoa/projects/des_cluster/tests/lighthouse_reference/inputs/source_y6.nz, containing 4 tomography bins
+redshift_spline.c 300 0.000000e+00 3.000000e+00
+tomo.shear_zmin[0] = 0.010,tomo.shear_zmax[0] = 2.990
+tomo.shear_zmin[1] = 0.010,tomo.shear_zmax[1] = 2.990
+tomo.shear_zmin[2] = 0.010,tomo.shear_zmax[2] = 2.990
+tomo.shear_zmin[3] = 0.010,tomo.shear_zmax[3] = 2.990
+bin 0: <z_s>=0.409406
+bin 1: <z_s>=0.536974
+bin 2: <z_s>=0.846892
+bin 3: <z_s>=1.157232
+init_source_sample_mpp complete
+Lens redshifts: multi-histo file /Users/vivianmiranda/data/COCOA/september2026/test/cocoa/Cocoa/projects/des_cluster/tests/lighthouse_reference/inputs/lens_y6.nz, containing 6 tomography bins
+tomo.clustering_zmin[0] = 0.010,tomo.clustering_zmax[0] = 2.990
+tomo.clustering_zmin[1] = 0.010,tomo.clustering_zmax[1] = 2.990
+tomo.clustering_zmin[2] = 0.010,tomo.clustering_zmax[2] = 2.830
+tomo.clustering_zmin[3] = 0.010,tomo.clustering_zmax[3] = 2.990
+tomo.clustering_zmin[4] = 0.010,tomo.clustering_zmax[4] = 2.990
+tomo.clustering_zmin[5] = 0.010,tomo.clustering_zmax[5] = 2.990
+z_mean of tomo bin 1 = 0.311 (histogram file)
+z_mean of tomo bin 2 = 0.440 (histogram file)
+z_mean of tomo bin 3 = 0.629 (histogram file)
+z_mean of tomo bin 4 = 0.784 (histogram file)
+z_mean of tomo bin 5 = 0.909 (histogram file)
+z_mean of tomo bin 6 = 1.018 (histogram file)
+24 GGL Powerspectra
+init_lens_sample_mpp complete
+init_binning_mpp complete
+CLUSTER lambda-bin 0: [20.00,30.00]
+CLUSTER lambda-bin 1: [30.00,45.00]
+CLUSTER lambda-bin 2: [45.00,60.00]
+CLUSTER lambda-bin 3: [60.00,500.00]
+Cluster.N200_Nbin = 4
+
+
+CLUSTER z-bin 0: [0.20,0.40]
+CLUSTER z-bin 1: [0.40,0.55]
+CLUSTER z-bin 2: [0.55,0.65]
+12 CGL Powerspectra
+setting cluster x galaxy tomo[0] = (0,0)
+setting cluster x galaxy tomo[1] = (1,1)
+setting cluster x galaxy tomo[2] = (2,2)
+Set footprint file to None
+do nonlinear: 0
+
+------------------------------
+Initializing 4x2ptN Probes
+------------------------------
+Shear-Shear computation initialized
+Position-Position computation initialized
+Position-Shear computation initialized
+Cluster x redmagic computation initialized
+Cluster lensing computation initialized
+ClusterN computation initialized
+Cluster x cluster computation initialized
+4x2ptN: like.pos_pos = 1, like.shear_pos = 1, like.shear_shear = 1, like.clusterCG = 1, like.clusterWL = 1, like.clusterN = 1, like.clusterCC = 1
+
+like.Ntheta = 20
+Total number of data points like.Ndata=2812
+do Y calculation: 1
+
+---------------------------------------
+Initializing mask
+---------------------------------------
+PATH TO MASK: /Users/vivianmiranda/data/COCOA/september2026/test/cocoa/Cocoa/projects/des_cluster/tests/lighthouse_reference/inputs/ones_2812.mask
+2812 bins within angular mask
+like.pos_pos = 1, like.shear_pos = 1,like.shear_shear = 1, like.ks = 0, like.gk = 0
+
+tomo.cluster_Nbin =3, Cluster.N200_Nbin = 4
+2812 data points left after masking probes
+READ MASK FILE
+cc_nz0_l0_l3 w_memo/w_fresh-1: [-0.0009 -0.0011 -0.0013 -0.0017 -0.002  -0.0025 -0.003  -0.0035 -0.0041 -0.0047 -0.0055 -0.0063 -0.0072 -0.0081 -0.009  -0.0103 -0.0128 -0.0176 -0.0234 -0.0331]
+   C_l memo/fresh-1 at l=1,2,5,10,20,50,100,199: [-0.0684 -0.0577 -0.0345 -0.0187 -0.0097 -0.0047 -0.0029 -0.0018]
+cc_nz0_l1_l1 w_memo/w_fresh-1: [-1.9587e-05 -2.4004e-05 -2.9170e-05 -3.4576e-05 -3.9063e-05 -4.0546e-05 -3.5492e-05 -1.7792e-05  2.3664e-05  1.0955e-04  2.7814e-04  5.9769e-04  1.1802e-03  2.1778e-03  3.7104e-03  5.6675e-03
+  7.6210e-03  9.9304e-03  1.5458e-02  2.3567e-02]
+   C_l memo/fresh-1 at l=1,2,5,10,20,50,100,199: [ 0.0503  0.0418  0.0237  0.0115  0.0044  0.0004 -0.0012 -0.0019]
+cc_nz0_l1_l2 w_memo/w_fresh-1: [-0.0008 -0.001  -0.0012 -0.0015 -0.0019 -0.0023 -0.0027 -0.0031 -0.0036 -0.0041 -0.0045 -0.0049 -0.005  -0.0045 -0.0034 -0.0021 -0.0021 -0.0037 -0.0021 -0.001 ]
+   C_l memo/fresh-1 at l=1,2,5,10,20,50,100,199: [-0.0031 -0.0027 -0.0025 -0.0027 -0.0032 -0.0036 -0.004  -0.0041]
+cc_nz0_l3_l3 w_memo/w_fresh-1: [0.0013 0.0016 0.0021 0.0026 0.0031 0.0038 0.0045 0.0053 0.0062 0.0072 0.0082 0.0094 0.0104 0.0113 0.0119 0.0129 0.0162 0.0229 0.0297 0.0422]
+   C_l memo/fresh-1 at l=1,2,5,10,20,50,100,199: [0.0949 0.0788 0.0454 0.024  0.0127 0.0066 0.005  0.0039]
+cg_zc0_zg0_l1 w_memo/w_fresh-1: [0.0001 0.0001 0.0002 0.0002 0.0003 0.0003 0.0004 0.0005 0.0006 0.0007 0.0008 0.001  0.0012 0.0015 0.0019 0.0026 0.0035 0.0048 0.0068 0.0098]
+   C_l memo/fresh-1 at l=1,2,5,10,20,50,100,199: [0.0239 0.0197 0.011  0.0054 0.0022 0.0006 0.     0.    ]
+cg_zc0_zg0_l3 w_memo/w_fresh-1: [0.0002 0.0002 0.0003 0.0004 0.0005 0.0006 0.0007 0.0008 0.001  0.0011 0.0014 0.0017 0.002  0.0025 0.0032 0.0042 0.0054 0.0072 0.01   0.0153]
+   C_l memo/fresh-1 at l=1,2,5,10,20,50,100,199: [0.0415 0.0336 0.0181 0.0083 0.0034 0.0009 0.     0.    ]
