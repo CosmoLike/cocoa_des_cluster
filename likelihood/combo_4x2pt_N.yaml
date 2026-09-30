@@ -4,7 +4,11 @@ data_file: des_cluster_y6_4x2ptN.dataset
 # donor project desy1xplanck broke down; not re-measured here).
 accuracyboost: 1.0
 internal_accuracyboost: 1.0 # C-FAST-PT convolution grid / output grid
-integration_accuracy: 0 # integer 0, 1 or 2
+# integer 0, 1 or 2. 1 for the Y6 inputs: the knob sweep (tests/validation/
+# knob_sweep.py) gives delta chi2 1.65 at 0 vs high accuracy (galaxy gammat
+# 0.92, w_gg 0.47: the MagLim lens n(z) tails reach z = 2.99) and 0.048 at 1
+# (cluster blocks 6e-3 either way), for ~30% more cosmolike time.
+integration_accuracy: 1
 # n(z) interpolation: 0 = cubic spline, 1 = linear, 2+ = Steffen (monotone)
 photoz_interpolation_type: 0
 # n(z) file z column: 0 = Z_LOW (left bin edges), 1 = Z_MID (sample points)
