@@ -1,4 +1,4 @@
-"""Accuracy advisory checks A1-A2: default vs high-accuracy settings.
+"""Accuracy advisory checks A1-A6: default vs high-accuracy settings.
 
 Every reference in this suite is computed with the examples' default
 numerical settings. These checks answer: how much numerical error do
@@ -13,21 +13,33 @@ cocoa_testing.HIGH_ACCURACY_CAMB_EXTRA_ARGS) and reports
     delta chi2 = chi2(high accuracy) - chi2(default, frozen)
 
 There is NO pass/fail: how much numerical error an analysis tolerates
-is a judgment call. The two checks cover the two cluster
-combinations, both with the NLA intrinsic-alignment model (the only
-one the cluster lensing code carries):
+is a judgment call. The first two checks cover the two cluster
+combinations, with the NLA intrinsic-alignment model (the only one
+the cluster lensing code carries); the other four cover the
+galaxy-only likelihoods on the DES-Y3 placeholder data set:
 
-  A1. 4x2pt + N (example1)
-  A2. 6x2pt + N (example2)
+  A1. 4x2pt + N (example1), NLA
+  A2. 6x2pt + N (example2), NLA
+  A3. cosmic shear (example3), NLA
+  A4. 2x2pt (example4_2x2pt), NLA
+  A5. 3x2pt (example4), NLA
+  A6. 3x2pt (example4), TATT
 
-Every check evaluates against the frozen copy of the synthetic data
-vector, which is the default-settings model at the frozen point
-(scripts/make_synthetic_data.py), so the chi2 sits at a minimum and
-the delta is a stable, quadratic response instead of a linear one.
-The numbers are those of the scale cuts in each example's mask: the
-masks hide the smallest scales, where the numerical error is largest
-(tests/validation/knob_sweep.py scans the knobs one by one with the
-small scales visible).
+TATT gets one check, on 3x2pt: the TATT tables enter cosmic shear and
+galaxy-galaxy lensing, and the 3x2pt vector holds both blocks, so the
+cosmic-shear and 2x2pt TATT checks would re-measure parts of A6 at
+minutes each.
+
+The cluster checks evaluate against the frozen copy of the synthetic
+data vector, which is the default-settings model at the frozen point
+(scripts/make_synthetic_data.py); the galaxy-only checks evaluate
+against the NLA or TATT vector generated at freeze time
+(cocoa_test_utils.SYNTHETIC_VECTORS). Either way the chi2 sits at a
+minimum and the delta is a stable, quadratic response instead of a
+linear one. The numbers are those of the scale cuts in each example's
+mask: the masks hide the smallest scales, where the numerical error
+is largest (tests/validation/knob_sweep.py scans the knobs one by one
+on the cluster combinations with the small scales visible).
 
 A high-accuracy evaluation takes minutes, not seconds. To run this
 file (from the Cocoa/ folder, cocoa environment active,
@@ -54,7 +66,7 @@ import cocoa_test_utils as u
 
 
 class TestAccuracyAdvisory(unittest.TestCase):
-    """Advisory checks A1-A2, sharing one frozen-state verification.
+    """Advisory checks A1-A6, sharing one frozen-state verification.
 
     setUpClass runs once: it moves to ROOTDIR, verifies every frozen
     file against the SHA-256 manifest (an edited frozen state must
@@ -71,30 +83,54 @@ class TestAccuracyAdvisory(unittest.TestCase):
         u.verify_frozen()
         cls.reference = u.load_reference()
 
-    def _accuracy_check(self, name, example, label):
+    def _accuracy_check(self, name, example, tatt, label):
         """Evaluate one configuration at high accuracy and report.
 
         Arguments:
-          name    = the advisory label (A1-A2) for the report.
+          name    = the advisory label (A1-A6) for the report.
           example = a key of cocoa_test_utils.EXAMPLES.
-          label   = one line naming the example and combination.
+          tatt    = True evaluates the TATT variant against the
+                    TATT-generated data vector (galaxy-only examples
+                    only), False the NLA one.
+          label   = one line naming the example, combination, and IA
+                    model.
         """
-        # False = the NLA model (the harness's tatt flag), the only IA
-        # model this suite evaluates
-        chi2_high = u.single_model_chi2(example, False, high_accuracy=True)
-        # the "_nla" suffix is the naming the frozen reference file uses
-        default_ref = self.reference[f"{example}_nla"]
+        chi2_high = u.single_model_chi2(example, tatt, high_accuracy=True)
+        # ternary: the reference key ends in "tatt" or "nla", the
+        # naming the frozen reference file uses
+        suffix = "tatt" if tatt else "nla"
+        default_ref = self.reference[f"{example}_{suffix}"]
         u.report_accuracy(f"{name}: {label}", chi2_high, default_ref)
 
     def test_a1_4x2pt_N_nla(self):
         """A1: 4x2pt + N, NLA, default vs high accuracy."""
-        self._accuracy_check("A1", "example1",
+        self._accuracy_check("A1", "example1", False,
                              "des_cluster example1 (4x2pt + N, NLA)")
 
     def test_a2_6x2pt_N_nla(self):
         """A2: 6x2pt + N, NLA, default vs high accuracy."""
-        self._accuracy_check("A2", "example2",
+        self._accuracy_check("A2", "example2", False,
                              "des_cluster example2 (6x2pt + N, NLA)")
+
+    def test_a3_cosmic_shear_nla(self):
+        """A3: cosmic shear, NLA, default vs high accuracy."""
+        self._accuracy_check("A3", "example3", False,
+                             "des_cluster example3 (cosmic shear, NLA)")
+
+    def test_a4_2x2pt_nla(self):
+        """A4: 2x2pt, NLA, default vs high accuracy."""
+        self._accuracy_check("A4", "example4_2x2pt", False,
+                             "des_cluster example4_2x2pt (2x2pt, NLA)")
+
+    def test_a5_3x2pt_nla(self):
+        """A5: 3x2pt, NLA, default vs high accuracy."""
+        self._accuracy_check("A5", "example4", False,
+                             "des_cluster example4 (3x2pt, NLA)")
+
+    def test_a6_3x2pt_tatt(self):
+        """A6: 3x2pt, TATT, default vs high accuracy."""
+        self._accuracy_check("A6", "example4", True,
+                             "des_cluster example4 (3x2pt, TATT)")
 
 
 # __name__ is "__main__" only when this file runs directly as a
