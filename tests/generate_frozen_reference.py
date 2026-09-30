@@ -9,9 +9,10 @@ they become the new references the tests compare against.
 What one run produces, all under tests/ (see cocoa_test_utils for how
 the tests consume each piece):
 
-  - frozen/data/: a copy of the CURRENT ../data folder, plus the
-    synthetic NLA data vector and its dataset descriptor
-    (cocoa_test_utils.SYNTHETIC_VECTORS).
+  - frozen/data/: a copy of the files of the CURRENT ../data folder
+    the cluster examples read: the synthetic DES Y6-like dataset
+    descriptors, joint data vector, covariance, masks, and n(z)
+    (DATA_IGNORE below lists what stays out).
   - frozen/EXAMPLE_EVALUATE{1,2}.yaml: snapshots of the current
     examples, kept for humans to diff (the tests never load them).
   - frozen/frozen_config_<example>.py: for each configuration of
@@ -22,8 +23,10 @@ the tests consume each piece):
     Writing out every resolved option and parameter is what makes the
     tests independent of later edits to the live files.
   - frozen/reference_chi2.json: one NLA reference chi2 per
-    configuration, computed FROM the frozen modules just written,
-    exactly the way the tests will compute them.
+    configuration (example1 = 4x2pt + N, example2 = 6x2pt + N),
+    computed FROM the frozen modules just written, exactly the way
+    the tests will compute them. The shipped data vector is the
+    model at the examples' fiducial point, so both sit near zero.
   - manifest_sha256.json: the SHA-256 pin of every frozen file.
 
 Usage (from the Cocoa/ folder, cocoa environment active,
@@ -53,6 +56,34 @@ PROJECT_DIR = os.path.dirname(u.TESTS_DIR)
 # ROOTDIR-relative on purpose: the frozen modules stay portable across
 # machines, and the tests overwrite it with the absolute path anyway.
 FROZEN_DATA_RELPATH = "./projects/des_cluster/tests/frozen/data"
+
+# Files of ../data the freeze leaves out: the cluster examples never
+# read them, so copying them would only grow the working tree and the
+# manifest (the DES-Y3 covariance and the baryon simulation table are
+# ~30 MB together). shutil.ignore_patterns matches each entry against
+# the file NAME with shell wildcards. The list:
+#   .DS_Store                macOS Finder metadata
+#   README.md                the description of ../data, not data
+#   des_y3_*                 the DES-Y3 3x2pt placeholder data set
+#   3x2pt_baseline.mask,     (data vector, covariance, n(z),
+#   ones.mask                descriptor) and its two 900-entry masks
+#   pca.txt,                 the baryon PCA inputs: the likelihood
+#   baryons_logPkR.h5        refuses baryon PCAs with clusters, so the
+#                            descriptor's two keys naming them are
+#                            never resolved
+#   y3_redmapper_counts.txt  the observed DES-Y3 counts, an input of
+#                            the covariance script, not of the model
+# A new file in ../data is frozen unless it is added here.
+DATA_IGNORE = (
+    ".DS_Store",
+    "README.md",
+    "des_y3_*",
+    "3x2pt_baseline.mask",
+    "ones.mask",
+    "pca.txt",
+    "baryons_logPkR.h5",
+    "y3_redmapper_counts.txt",
+)
 
 # The skeleton of one generated frozen-configuration module. The yaml
 # goes inside r""" so latex backslashes in parameter labels survive
@@ -117,17 +148,11 @@ def freeze_example(example, stamp):
     live.pop("output", None)
     live["debug"] = 30
     live["timing"] = False
-    # the 2x2pt configuration reuses example2's yaml with the
-    # likelihood renamed (combo_3x2pt -> combo_2x2pt: same options,
-    # same data, different probe selection inside cosmolike)
-    # .get falls back to its second argument when the key is
-    # absent, so most entries rename nothing
-    source_name = cfg.get("source_likelihood", cfg["likelihood"])
-    # pop removes the entry AND hands back its value: the block
-    # leaves under its old name and is reinserted under the new one
-    likelihood_block = live["likelihood"].pop(source_name)
-    live["likelihood"][cfg["likelihood"]] = likelihood_block
+    likelihood_block = live["likelihood"][cfg["likelihood"]]
     likelihood_block["path"] = FROZEN_DATA_RELPATH
+    # NLA: the only intrinsic-alignment model of the cluster lensing
+    # code, pinned here so the frozen configuration cannot inherit
+    # another value from an edited example
     likelihood_block["IA_model"] = 0
 
     # make_model builds the evaluable cobaya Model; building it is
@@ -184,127 +209,24 @@ def freeze_example(example, stamp):
           f"({len(live['params'])} in the live example yaml)", flush=True)
 
 
-def generate_datavector(dataset_name):
-    """Write one synthetic NLA data vector and its dataset descriptor.
-
-    The shipped data_file is real data, far from the fiducial's chi2
-    minimum; the synthetic vector puts the fiducial point AT the
-    minimum (see cocoa_test_utils.NLA_DATASET). The vector is
-    evaluated with datavector printing enabled against the ORIGINAL
-    frozen dataset (the descriptor written here does not exist yet;
-    the printed theory vector does not depend on which data vector it
-    is compared against). Runs inside a --vector-one worker
-    subprocess: it builds a model, and two different-dimension builds
-    in one process abort (see cocoa_testing).
-
-    Arguments:
-      dataset_name = a key of u.SYNTHETIC_VECTORS, which is also the
-                     file name of the descriptor to write.
-
-    Returns:
-      nothing; frozen/data/ gains the .modelvector and .dataset files.
-
-    Raises:
-      RuntimeError when the generated vector's length differs from
-      the original data vector (a masking or probe mismatch), or when
-      the dataset descriptor does not contain exactly one data_file
-      line to replace.
-    """
-    from cobaya.yaml import yaml_load
-
-    example = u.SYNTHETIC_VECTORS[dataset_name]
-    cfg = u.EXAMPLES[example]
-    # the original dataset name comes from the frozen configuration
-    # itself (load_frozen_info already points data_file at the
-    # synthetic descriptor, which does not exist yet)
-    frozen_info = yaml_load(u._frozen_module(example).yaml_string)
-    original_dataset = frozen_info["likelihood"][cfg["likelihood"]]["data_file"]
-
-    # str.replace swaps the extension, pairing the vector's file
-    # name with the descriptor's
-    vector_name = dataset_name.replace(".dataset", ".modelvector")
-    info = u.load_frozen_info(example, tatt=False)
-    likelihood_block = info["likelihood"][cfg["likelihood"]]
-    likelihood_block["data_file"] = original_dataset
-    likelihood_block["print_datavector"] = True
-    likelihood_block["print_datavector_file"] = (
-        FROZEN_DATA_RELPATH + "/" + vector_name)
-
-    print(f"generating {vector_name} ({example}, NLA point) ...", flush=True)
-    model = u.make_model(info)
-    point = u.build_point(model, example, tatt=False)
-    u.evaluate_chi2(model, point)
-
-    # sanity: the generated vector must have the same length as the
-    # original one, or the masks would select the wrong entries
-    data_dir = os.path.join(u.FROZEN_DIR, "data")
-    with open(os.path.join(data_dir, vector_name)) as f:
-        # sum(1 for _ in f) walks the file line by line and adds 1
-        # per line: a line count that never loads the whole file
-        # into memory (the with closes the file either way)
-        generated_lines = sum(1 for _ in f)
-    descriptor_path = os.path.join(data_dir, original_dataset)
-    with open(descriptor_path) as f:
-        # .read() with no size returns the whole file as one string
-        descriptor = f.read()
-    original_vector = None
-    # splitlines() cuts the text into a list of lines, newlines
-    # removed
-    for line in descriptor.splitlines():
-        if line.strip().startswith("data_file"):
-            # split("=", 1) cuts at the FIRST "=" only; [1] is the
-            # part after the cut, and strip() drops the blanks
-            # around it
-            original_vector = line.split("=", 1)[1].strip()
-    with open(os.path.join(data_dir, original_vector)) as f:
-        # the same load-nothing line count as above
-        original_lines = sum(1 for _ in f)
-    if generated_lines != original_lines:
-        raise RuntimeError(
-            f"generated data vector has {generated_lines} lines; the "
-            f"original {original_vector} has {original_lines}")
-
-    # the synthetic dataset descriptor: the original with only the
-    # data_file line replaced
-    replaced = 0
-    out_lines = []
-    # keepends=True leaves the newline on the end of every line, so
-    # joining the pieces rebuilds the file byte for byte and only
-    # the retyped line differs
-    for line in descriptor.splitlines(keepends=True):
-        if line.strip().startswith("data_file"):
-            out_lines.append(f"data_file = {vector_name}\n")
-            replaced += 1
-        else:
-            out_lines.append(line)
-    if replaced != 1:
-        raise RuntimeError(
-            f"{original_dataset}: expected exactly one data_file "
-            f"line, found {replaced}")
-    with open(os.path.join(data_dir, dataset_name), "w") as f:
-        # "".join(out_lines) glues the list into one string; each
-        # piece still ends in its own newline
-        f.write("".join(out_lines))
-    print(f"generated data vector: {vector_name} ({generated_lines} lines); "
-          f"descriptor: {dataset_name}", flush=True)
-
-
 def main():
     """Rebuild tests/frozen/ and the manifest from the current project.
 
-    Worker modes come first: --freeze-one X and --vector-one D each
-    run a single model-building step and exit. The parent spawns one
-    subprocess per step: a process that initializes configurations
-    with different data-set dimensions aborts inside cosmolike (see
+    The worker mode comes first: --freeze-one X runs a single
+    model-building step and exits. The parent spawns one subprocess
+    per step: a process that initializes configurations with
+    different data-set dimensions aborts inside cosmolike (see
     cocoa_testing), and one architecture serves every project.
 
     The parent's steps, in order: refuse without --overwrite; delete
     and recreate frozen/; copy the data and the example snapshots;
-    write the expanded frozen-configuration modules; generate the
-    synthetic data vector; evaluate the reference chi2 values from
-    those modules (the same code path the tests use); write the
-    reference file; hash everything into the manifest. The manifest
-    comes last so it covers every file the earlier steps produced.
+    write the expanded frozen-configuration modules; evaluate the
+    reference chi2 values from those modules (the same code path the
+    tests use); write the reference file; hash everything into the
+    manifest. The manifest comes last so it covers every file the
+    earlier steps produced. No data vector is generated: the shipped
+    one already is the model at the fiducial point (see
+    cocoa_test_utils).
 
     Returns:
       0 on success, 1 when --overwrite was not given (the usage text
@@ -318,11 +240,6 @@ def main():
         example = sys.argv[sys.argv.index("--freeze-one") + 1]
         stamp = sys.argv[sys.argv.index("--stamp") + 1]
         freeze_example(example, stamp)
-        return 0
-    if "--vector-one" in sys.argv:
-        u.require_cocoa_environment()
-        dataset_name = sys.argv[sys.argv.index("--vector-one") + 1]
-        generate_datavector(dataset_name)
         return 0
     if "--overwrite" not in sys.argv:
         print(__doc__)
@@ -338,12 +255,13 @@ def main():
 
     print("freezing ../data ...", flush=True)
     # the data copy is what lets users change ../data later without
-    # touching the tests; .DS_Store (macOS Finder metadata) would only
-    # pollute the manifest. ignore_patterns builds the filter function
-    # copytree calls in every folder; matching names are skipped.
+    # touching the tests; DATA_IGNORE names the files no cluster
+    # example reads. ignore_patterns builds the filter function
+    # copytree calls in every folder; matching names are skipped (the
+    # * spreads the tuple into separate arguments).
     shutil.copytree(os.path.join(PROJECT_DIR, "data"),
                     os.path.join(u.FROZEN_DIR, "data"),
-                    ignore=shutil.ignore_patterns(".DS_Store"))
+                    ignore=shutil.ignore_patterns(*DATA_IGNORE))
     for cfg in u.EXAMPLES.values():
         shutil.copy2(os.path.join(PROJECT_DIR, cfg["provenance"]),
                      os.path.join(u.FROZEN_DIR, cfg["provenance"]))
@@ -362,29 +280,24 @@ def main():
              "--stamp", stamp])
         if completed.returncode != 0:
             raise RuntimeError(f"freeze worker for {example} failed")
-    # the generated data vector must exist before the reference loop
-    # below: every reference evaluates against it
-    for dataset_name in u.SYNTHETIC_VECTORS:
-        completed = subprocess.run(
-            [sys.executable, self_path, "--vector-one", dataset_name])
-        if completed.returncode != 0:
-            raise RuntimeError(f"vector worker for {dataset_name} failed")
 
     reference = {
         "_meta": {
             "generated_utc": stamp,
             "omp_num_threads": os.environ["OMP_NUM_THREADS"],
+            "chi2_tolerance": u.CHI2_TOLERANCE,
         }
     }
     for example in u.EXAMPLES:
         # the "_nla" suffix names the IA model the reference was
-        # evaluated with, the key test_accuracy.py reads
+        # evaluated with, the key the test modules read
         key = f"{example}_nla"
         t0 = time.time()
         chi2 = u.single_model_chi2(example, False)
-        # :.6f = fixed six decimals; :.1f = one decimal for the
-        # elapsed seconds
-        print(f"{key}: chi2 = {chi2:.6f}  ({time.time() - t0:.1f}s)",
+        # :.6e = scientific notation with six decimals (the
+        # references sit near zero, where fixed decimals would print
+        # 0.000000); :.1f = one decimal for the elapsed seconds
+        print(f"{key}: chi2 = {chi2:.6e}  ({time.time() - t0:.1f}s)",
               flush=True)
         reference[key] = chi2
 
