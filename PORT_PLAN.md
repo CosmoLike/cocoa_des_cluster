@@ -313,6 +313,11 @@ Backlog (Vivian, 2026-09-30):
   key; the notebook cosmology helper's coarse growth grid.
 - Tests for the galaxy-only likelihoods of this project (cosmic_shear,
   combo_3x2pt, combo_2x2pt), ported from des_y3.
+- Core, not cluster: extend the scale-cut code (cosmo2D_scuts.c, today
+  cosmic shear and shear x CMB lensing) to galaxy-galaxy lensing and
+  galaxy clustering, Limber part only. Reason: some projects use lens =
+  source, so the lens sample is not narrow in redshift and a single
+  angle-to-k conversion per bin is not a good scale cut.
 - NOT in this port: the covariance beyond Gaussian (super-sample,
   trispectrum) and the counts x 2pt block. They wait for the port of
   CosmoCov to Cocoa, the next big project.
