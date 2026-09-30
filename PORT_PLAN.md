@@ -191,17 +191,50 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
 - Timing (M2, quiet, every parameter jittered, cosmolike only, hdi 1):
   6x2pt + N 0.42 s (4 threads) / 0.34 s (8); 4x2pt + N 0.38 / 0.30;
   cluster lensing 0.14 / 0.11; lighthouse (1 thread): 28.3 s / 26.6 s /
-  23.8 s -> 83x / 89x / 225x faster. 4 -> 8 threads only 1.1-1.4x: the
-  serial Python glue and serial table builds dominate (next target).
+  23.8 s -> 83x / 89x / 225x faster. 4 -> 8 threads only 1.1-1.4x (the
+  profile below: serial galaxy non-Limber w_gg, not the Python glue).
+- HOD NaN (include_HOD_GX = 1, des_y3 Y3 / desy1xplanck MagLim; old and
+  new code alike): halo.c's HOD a grid now spans the union of the table
+  range and every lens bin's [amin_lens, amax_lens] at every refill (the
+  magnification-widened amax_lens overran the grid's top end), with the
+  clustering photo-z key in its cache (0593d52).
+- All seven projects rebuilt against 0593d52 and their suites run
+  (test_accuracy_baryons excluded; frozen references untouched in every
+  project): des_cluster 3, lsst_y1 49, des_y3 55, desy1xplanck 37,
+  roman_kl 41, roman_fourier 37 passed; roman_real 73 passed, 3 failed:
+  test_halo frozen bias_norm (2.0e-4), ngal and bgal (4.9e-5) at rtol
+  1e-12. Attributed: with the pre-138696e set_cosmo_related bound
+  in-process (coarse G) every halo probe is bitwise its frozen value on
+  the current core, so the whole move is the dense growth grid (as that
+  commit's message records; halo integrals amplify the G error), and the
+  HOD a-grid fix and the tiling are bitwise there. The halo_reference
+  refreeze waits for Vivian's review of the growth deltas (handoff).
+- Optimization (d92b90d): a sampled profile (macOS `sample`, 6x2pt + N)
+  put the cluster Legendre sums at 20% of the cosmolike thread time;
+  4 rows x 4 theta register tiles, bitwise identical to the reference
+  loop (full data vector at three points, OMP 1 / 4 / 8), microbenchmark
+  39.5 -> 5.6 ms on the cluster lensing block. Timing after (same
+  script and load as M2; 4 / 8 threads, seconds): 6x2pt + N 0.367 / 0.296
+  (was 0.424 / 0.342), 4x2pt + N 0.310 / 0.266 (0.376 / 0.298), cluster
+  lensing 0.106 / 0.087 (0.144 / 0.106), w_cc 0.053 / 0.049 (0.074 /
+  0.061), w_cg 0.051 / 0.046 (0.062 / 0.054), N 0.022 / 0.022, 3x2pt
+  unchanged (0.23 / 0.19). Against lighthouse (1 thread) at 8 threads:
+  6x2pt + N 96x, 4x2pt + N 100x, cluster lensing 274x.
+- Profile findings (not cluster code): the main-thread serial time,
+  which caps 4 -> 8 thread scaling, is the galaxy non-Limber w_gg path of
+  cosmo2D.c (C_gg_tomo_limber_linpsopt_nointerp_ells, W_RSD, f_growth,
+  cfftlog); the Python glue is ~40 ms per evaluation. Flagged as a
+  separate task (cosmo2D.c belongs to the galaxy sessions), together
+  with the same Legendre tiling for xi_pm / gammat / w_gg.
 
 Open:
-- Profile-driven optimization (serial parts first: likelihood glue,
-  serial cluster fills; then _work-level packing / SIMD reads).
-- Rebuild the six other projects against 84c54c9 and run their suites;
-  refreeze after attributing the pre-existing drift (lsst_y1 +0.034).
-- HOD NaN (include_HOD_GX = 1) in des_y3 Y3 and desy1xplanck MagLim:
-  suspect halo.c's HOD a-range (3311-3312) bounded by the unstretched
-  lens range; fix on the zmax_lens_photoz model.
+- Cluster optimization left: the P1h table (~12% of the cosmolike thread
+  time) could tabulate only the Limber k range (~1/3 fewer ln k nodes, not
+  bitwise); cc/cg exact tables on N_ell_internal instead of N_ell (a knob
+  test, ~3%).
+- Refreeze the six projects only if a later change needs it (every suite
+  passes against the current frozen references); attribute the
+  pre-existing lsst_y1 drift (+0.034) first.
 - Phase 4 physics: FKEM non-Limber w_cc, TATT in cluster lensing, a
   cb-neutrino option (Fable P1.2: counts 2-4% at the fiducial, >10% at
   the top of the Omega_nu h^2 prior), Y1 switches end to end, the
