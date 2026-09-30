@@ -242,7 +242,7 @@ Now, users must follow all the steps below.
 
 - **Benchmark (1000 model evaluations)**:
 
-  `EXAMPLE_EMUL2_EVALUATE3.yaml` (4x2pt + N) and `EXAMPLE_EMUL2_EVALUATE4.yaml` (6x2pt + N) are the workloads for profiling cosmolike. Each runs 1000 evaluations with a fixed seed, and each evaluation draws every sampled parameter afresh from its `ref` distribution, so no cosmolike table is served from a cache. With the emulated Boltzmann inputs nearly all the run time is cosmolike. To profile, put the profiler (e.g., `perf stat` on Linux) in front of `cobaya-run`.
+  `EXAMPLE_EMUL2_BENCHMARK1.yaml` (4x2pt + N) and `EXAMPLE_EMUL2_BENCHMARK2.yaml` (6x2pt + N) are the workloads for profiling cosmolike. Each runs 1000 evaluations with a fixed seed, and each evaluation draws every sampled parameter afresh from its `ref` distribution, so no cosmolike table is served from a cache. With the emulated Boltzmann inputs nearly all the run time is cosmolike. To profile, put the profiler (e.g., `perf stat` on Linux) in front of `cobaya-run`.
 
   - Linux
 
@@ -250,12 +250,12 @@ Now, users must follow all the steps below.
           --mca pml ob1 --mca btl vader,tcp,self \
           --bind-to core:overload-allowed --report-bindings \
           --rank-by slot --map-by numa:pe=${OMP_NUM_THREADS} \
-          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_EVALUATE3.yaml -f
+          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_BENCHMARK1.yaml -f
 
   - macOS (arm)
 
         mpirun -n 1 --oversubscribe \
-          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_EVALUATE3.yaml -f
+          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_BENCHMARK1.yaml -f
 
 - **MCMC (Metropolis-Hastings Algorithm)**:
 
@@ -621,7 +621,7 @@ The files of `data/` that the cluster likelihoods read:
 | `des_y6_cluster.nz` | the selection kernels $\langle\phi_i\vert z\rangle$ of the three cluster redshift bins: the probability that a cluster at true redshift z lands in each $z_\lambda$ bin. It is a probability, not a normalized distribution, and it is sampled at z (no half-cell offset) |
 | `y3_redmapper_counts.txt` | the DES Y3 redMaPPer counts per redshift and richness bin, from the public Y3 catalog. The model does not read it: `make_synthetic_data.py` compares the model counts with it, and `make_cluster_mask.py` reads it for an optional cut on $w_{cc}$ that is off by default |
 
-The remaining files (`des_y3_real.dataset`, `des_y3_unblinded_final.txt`, `des_y3_cov_unblinded_final.txt`, `des_y3_lens.nz`, `des_y3_source.nz`, `3x2pt_baseline.mask`, `ones.mask`, `pca.txt`, `baryons_logPkR.h5`) are a copy of the DES Y3 3x2pt data set of the project des_y3. The galaxy-only likelihoods of this project (`cosmic_shear`, `combo_3x2pt`, `combo_2x2pt`) still point at it; the cluster likelihoods and the unit tests do not use it.
+The remaining files (`des_y3_real.dataset`, `des_y3_unblinded_final.txt`, `des_y3_cov_unblinded_final.txt`, `des_y3_lens.nz`, `des_y3_source.nz`, `3x2pt_baseline.mask`, `ones.mask`, `pca.txt`, `baryons_logPkR.h5`) are a copy of the DES Y3 3x2pt data set of the project des_y3. The galaxy-only likelihoods of this project (`cosmic_shear`, `combo_3x2pt`, `combo_2x2pt`) point at it, as do their examples `EXAMPLE_EVALUATE3.yaml` (cosmic shear) and `EXAMPLE_EVALUATE4.yaml` (3x2pt) and their unit tests; the cluster likelihoods do not use it.
 
 The scale cuts are defined at the mean redshift of each bin, at the fiducial cosmology: a point survives when its angle exceeds $R/\chi(\bar z)$, with $R = 2\,{\rm Mpc}/h$ for cluster lensing, $8\,{\rm Mpc}/h$ for $w_{cg}$ and $w_{gg}$, $16\,{\rm Mpc}/h$ for $w_{cc}$, and $6\,{\rm Mpc}/h$ for galaxy-galaxy lensing; cosmic shear uses a table of minimum angles per source pair. In cluster lensing, a (cluster bin, source bin) pair is masked entirely when the cluster bin's upper edge lies above the mean redshift of the source bin.
 

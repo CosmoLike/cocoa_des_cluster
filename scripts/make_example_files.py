@@ -8,7 +8,7 @@ sixteen files cannot drift apart:
 
   EXAMPLE_MCMC{1,2}.yaml                 Metropolis-Hastings, CAMB
   EXAMPLE_EMUL2_EVALUATE{1,2}.yaml       evaluate, emulated Boltzmann inputs
-  EXAMPLE_EMUL2_EVALUATE{3,4}.yaml       1000 evaluations at fresh draws of
+  EXAMPLE_EMUL2_BENCHMARK{1,2}.yaml      1000 evaluations at fresh draws of
                                          every parameter (the perf benchmark)
   EXAMPLE_EMUL2_MCMC{1,2}.yaml           Metropolis-Hastings
   EXAMPLE_EMUL2_POLY{1,2}.yaml           PolyChord
@@ -16,7 +16,7 @@ sixteen files cannot drift apart:
   EXAMPLE_EMUL2_PROFILE{1,2}.py          profile likelihood
   EXAMPLE_EMUL2_NAUTILUS{1,2}.py         Nautilus
 
-(1 = 4x2pt + N, 2 = 6x2pt + N; for EVALUATE, 3 and 4 likewise.) The EMUL2
+(1 = 4x2pt + N, 2 = 6x2pt + N in every name.) The EMUL2
 cosmology and theory blocks and the sampler blocks are read from the donor
 projects, which must be installed: projects/des_y3 (EXAMPLE_EMUL2_
 EVALUATE2.yaml, EXAMPLE_EMUL2_MCMC2.yaml) and projects/desy1xplanck
@@ -256,8 +256,20 @@ if __name__ == "__main__" and sys.argv[1] in ("scripts", "all"):
                   "                         make_finite=False,\n"
                   "                         cached=False,\n"
                   "                         return_derived=True)[0]\n")
-      assert t.count(old_call) == 1, (donor_file, t.count(old_call))
-      t = t.replace(old_call, new_call)
+      # a donor repaired in its own project already evaluates with
+      # return_derived=True: map that form onto the same text too
+      fixed_call = ("    # return_derived=True: emulbaosn needs rdrag, which emulrdrag also writes\n"
+                    "    # into the derived-parameter store; with return_derived=False that store\n"
+                    "    # is None and the evaluation fails. [0] is the log-likelihood\n"
+                    "    res2 = model.loglike(point,\n"
+                    "                         make_finite=False,\n"
+                    "                         cached=False,\n"
+                    "                         return_derived=True)[0]\n")
+      if t.count(old_call) == 1:
+        t = t.replace(old_call, new_call)
+      else:
+        assert t.count(fixed_call) == 1, (donor_file, "loglike call not found")
+        t = t.replace(fixed_call, new_call)
       left = [l for l in t.splitlines() if "desy1xplanck." in l or "/desy1xplanck" in l or "lsst_y1" in l or "projects/example" in l]
       assert not left, left[:5]
       open(P + "/" + name + ".py", "w").write(t)
@@ -275,5 +287,5 @@ BENCH_SAMPLER = """sampler:
     seed: 1234
 """
 if __name__ == "__main__" and sys.argv[1] in ("bench", "all"):
-  build(1, True, BENCH_SAMPLER, "EXAMPLE_EMUL2_EVALUATE3", extra_header=BENCH_NOTE)
-  build(2, True, BENCH_SAMPLER, "EXAMPLE_EMUL2_EVALUATE4", extra_header=BENCH_NOTE)
+  build(1, True, BENCH_SAMPLER, "EXAMPLE_EMUL2_BENCHMARK1", extra_header=BENCH_NOTE)
+  build(2, True, BENCH_SAMPLER, "EXAMPLE_EMUL2_BENCHMARK2", extra_header=BENCH_NOTE)

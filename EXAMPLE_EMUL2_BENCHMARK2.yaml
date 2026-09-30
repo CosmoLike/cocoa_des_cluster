@@ -186,4 +186,4 @@ sampler:
   evaluate:
     N: 1000
     seed: 1234
-output: ./projects/des_cluster/chains/EXAMPLE_EMUL2_EVALUATE4
+output: ./projects/des_cluster/chains/EXAMPLE_EMUL2_BENCHMARK2

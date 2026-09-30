@@ -36,7 +36,7 @@ The covariance is Gaussian. For the two-point blocks it is the full-sky, bin-ave
 
 The files `des_y3_real.dataset`, `des_y3_unblinded_final.txt`, `des_y3_cov_unblinded_final.txt`, `des_y3_lens.nz`, `des_y3_source.nz`, `3x2pt_baseline.mask`, `ones.mask`, `pca.txt`, and `baryons_logPkR.h5` are a copy of the DES Y3 3x2pt data set of the project des_y3: the unblinded data vector and covariance ($\xi_\pm$, $\gamma_t$, $w(\theta)$; redMaGiC lens sample with 5 bins, Metacalibration source sample with 4 bins, 20 angular bins between 2.5 and 250 arcmin; 900 entries), the 3x2pt baseline mask and an all-ones mask, the matching n(z), and the baryon PCA and simulation files.
 
-The descriptor `des_y3_real.dataset` points the galaxy-only likelihoods of this project (`cosmic_shear`, `combo_3x2pt`, `combo_2x2pt`) at these files. The cluster likelihoods and the unit tests do not use them. The cluster descriptor also names `pca.txt` and `baryons_logPkR.h5`, but the cluster likelihoods refuse baryon PCAs, and with their default options they read neither file.
+The descriptor `des_y3_real.dataset` points the galaxy-only likelihoods of this project (`cosmic_shear`, `combo_3x2pt`, `combo_2x2pt`) at these files. The cluster likelihoods do not use them; the examples `EXAMPLE_EVALUATE3.yaml` (cosmic shear) and `EXAMPLE_EVALUATE4.yaml` (3x2pt) and the unit tests of the galaxy-only likelihoods do. The cluster descriptor also names `pca.txt` and `baryons_logPkR.h5`, but the cluster likelihoods refuse baryon PCAs, and with their default options they read neither file.
 
 ## Git LFS
 

@@ -264,7 +264,7 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
     cache-consistency ladder with the MOR and selection sectors and a
     fresh-process comparison. 8 tests, 5.5 min.
   - Sampler examples (7323262): MCMC (CAMB and EMUL2), PolyChord,
-    minimize, profile, Nautilus for both combos; EXAMPLE_EMUL2_EVALUATE3/4
+    minimize, profile, Nautilus for both combos; EXAMPLE_EMUL2_BENCHMARK1/2
     are the 1000-evaluation perf benchmarks; scripts/make_example_files.py
     regenerates all of them. EMUL2 vs CAMB at equal mnu: delta chi2 1.6
     (counts 1.5% median).
