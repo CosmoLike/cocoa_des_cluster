@@ -193,6 +193,21 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
   cluster lensing 0.14 / 0.11; lighthouse (1 thread): 28.3 s / 26.6 s /
   23.8 s -> 83x / 89x / 225x faster. 4 -> 8 threads only 1.1-1.4x (the
   profile below: serial galaxy non-Limber w_gg, not the Python glue).
+  NOTE: those numbers were taken at load 15-20 and are ~2.7x too slow;
+  the fresh-machine table below supersedes them.
+- Timing, fresh machine (after a reboot, load 3-7; tests/validation/
+  time_cosmolike.py and time_lighthouse.py; cosmolike only, every
+  parameter jittered, hdi 1; seconds). Columns: lighthouse (1 thread) |
+  4 threads before -> after the tiled sums (d92b90d) | 8 threads before
+  -> after | lighthouse / 8 threads:
+    6x2pt + N        22.64 | 0.198 -> 0.152 | 0.138 -> 0.108 | 210x
+    4x2pt + N        21.46 | 0.174 -> 0.131 | 0.106 -> 0.084 | 255x
+    3x2pt             2.02 | 0.097 -> 0.098 | 0.074 -> 0.068 |  30x
+    cluster lensing  19.15 | 0.072 -> 0.047 | 0.045 -> 0.033 | 580x
+    w_cc              0.91 | 0.040 -> 0.024 | 0.028 -> 0.021 |  43x
+    w_cg              0.85 | 0.029 -> 0.023 | 0.023 -> 0.019 |  45x
+    N                 0.11 | 0.013 -> 0.013 | 0.013 -> 0.012 |   9x
+  CAMB: 0.63 s at 8 threads, 1.2 s at 4 (6-8x the cosmolike time).
 - HOD NaN (include_HOD_GX = 1, des_y3 Y3 / desy1xplanck MagLim; old and
   new code alike): halo.c's HOD a grid now spans the union of the table
   range and every lens bin's [amin_lens, amax_lens] at every refill (the
