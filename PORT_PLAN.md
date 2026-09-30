@@ -318,6 +318,9 @@ Backlog (Vivian, 2026-09-30):
   galaxy clustering, Limber part only. Reason: some projects use lens =
   source, so the lens sample is not narrow in redshift and a single
   angle-to-k conversion per bin is not a good scale cut.
+  With it: the C++ wrappers and bindings, and the projects' notebooks
+  that already show the scale-cut diagnostics for cosmic shear expanded
+  to show the galaxy-galaxy lensing and clustering ones.
 - NOT in this port: the covariance beyond Gaussian (super-sample,
   trispectrum) and the counts x 2pt block. They wait for the port of
   CosmoCov to Cocoa, the next big project.
