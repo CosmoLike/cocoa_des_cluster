@@ -249,8 +249,8 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
   waiting on barriers), and with -fomit-frame-pointer the sampler can
   drop the OpenMP-outlined frame, so threaded samples looked serial. The
   scaling is still weak on the fresh machine (6x2pt + N 0.152 -> 0.108 s,
-  1.4x); its cause is not yet measured (next: time each block at 1, 2,
-  4, 8 threads; classify samples by the OpenMP runtime frames).
+  1.4x); its cause is not measured, and no thread-scaling study is
+  planned: the order of magnitude of the run time is what was needed.
 - 2026-09-30 (morning), done:
   - cosmo2D.c: the five real-space Legendre sums grouped (4 x 4; xi+- 2
     pairs x 4 theta), a880d36; every frozen example of the six galaxy
