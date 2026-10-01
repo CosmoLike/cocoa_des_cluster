@@ -14,7 +14,7 @@ likelihood through cobaya in a subprocess (no evaluation).
   test_layout_*                    joint layout = compiled code (sizes,
                                    starts, pair maps) and = the likelihood mask
   test_symmetry                    the unsymmetrized assembly is symmetric
-  test_positive_definite_on_masks  in-memory matrix and data/des_cluster_y6.cov
+  test_positive_definite_on_masks  in-memory matrix and data/des_cluster_y6_cov.npy
   test_reduction_to_ref_covariance cluster-only blocks = ref_covariance.py
   test_bruteforce_*                single elements against direct l sums
   test_selection_modes             none / jacobian / signal relations

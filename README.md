@@ -61,7 +61,7 @@ From `Cocoa/Readme` instructions:
 >     export DES_CLUSTER_GIT_BRANCH="main" # no tagged release yet
 
 > [!NOTE]
-> The covariance `data/des_cluster_y6.cov` (124 MB) is stored with Git LFS. A clone without `git lfs pull` holds a small pointer file in its place, and the likelihoods cannot load it.
+> The covariance `data/des_cluster_y6_cov.npy` (32 MB) is stored with Git LFS. A clone without `git lfs pull` holds a small pointer file in its place, and the likelihoods cannot load it.
 
 > [!NOTE]
 > If users want to recompile cosmolike, there is no need to rerun the Cocoa general scripts. Instead, run the following three commands:
@@ -620,7 +620,7 @@ The files of `data/` that the cluster likelihoods read:
 | `des_cluster_y6.dataset` | the base dataset descriptor: file names, binning, cluster redshift and richness edges, survey area, and the lens bin paired with each cluster redshift bin in $w_{cg}$ |
 | `des_cluster_y6_4x2ptN.dataset`, `des_cluster_y6_6x2ptN.dataset` | the descriptors the likelihoods load: the base descriptor with the mask of each combination |
 | `des_cluster_y6.datavector` | the joint synthetic data vector (2812 entries; columns: index, value) |
-| `des_cluster_y6.cov` | the joint covariance (columns: i, j, value; upper triangle with the diagonal). Stored with Git LFS |
+| `des_cluster_y6_cov.npy` | the joint covariance: the upper triangle with the diagonal, row by row, as a binary float64 NumPy array (32 MB; cosmolike reads it directly, and `numpy.load` returns the packed triangle). Stored with Git LFS |
 | `des_cluster_y6_4x2ptN.mask`, `des_cluster_y6_6x2ptN.mask` | the scale-cut masks of the two combinations |
 | `des_y6_maglim.nz`, `des_y6_source.nz` | redshift distributions of the six MagLim lens bins and of the four source bins. The z column holds left bin edges (`photoz_zmid_convention: 0`) |
 | `des_y6_cluster.nz` | the selection kernels $\langle\phi_i\vert z\rangle$ of the three cluster redshift bins: the probability that a cluster at true redshift z lands in each $z_\lambda$ bin. It is a probability, not a normalized distribution, and it is sampled at z (no half-cell offset) |
@@ -640,7 +640,7 @@ The scripts are in `scripts/`. We assume users are in the Conda cocoa environmen
 | 2 | `make_cluster_zdist.py` | `des_y6_cluster.nz` | tabulates the selection kernels for a Gaussian cluster photo-z of width $0.006\,(1+z)$ on a uniform grid (`--edges`, `--sigma0`, `--sigma-per-bin`, `--tophat`) |
 | 3 | `make_y3_redmapper_counts.py` | `y3_redmapper_counts.txt` | tabulates the counts of the public DES Y3 redMaPPer catalog (`--h5` or `--npz`) |
 | 4 | `make_cluster_mask.py` | the two masks | applies the scale cuts above; the radii, the rule for the bin angle, and the choice of $\bar z$ are options |
-| 5 | `make_synthetic_data.py` | `des_cluster_y6.datavector`, `des_cluster_y6.cov` | computes the data vector with the compiled code and the covariance with the Python reference (`tests/reference/ref_covariance_full.py`), checks the layout, the positive definiteness of the covariance under each mask, and the signal-to-noise per block, and asserts $\chi^2 < 10^{-6}$ at the fiducial for both combinations |
+| 5 | `make_synthetic_data.py` | `des_cluster_y6.datavector`, `des_cluster_y6_cov.npy` | computes the data vector with the compiled code and the covariance with the Python reference (`tests/reference/ref_covariance_full.py`), checks the layout, the positive definiteness of the covariance under each mask, and the signal-to-noise per block, and asserts $\chi^2 < 10^{-6}$ at the fiducial for both combinations |
 | 6 | `make_example_files.py` | every example except the two evaluate examples | see below |
 
 For example, steps 4 and 5 are
@@ -701,7 +701,7 @@ pytest does not collect the three other folders under `tests/`; each is run on i
 - `tests/validation/knob_sweep.py` measures the accuracy settings one at a time with the small scales visible (the source of the `integration_accuracy` numbers above). It reuses the cache of `compare_reference.py`:
 
       OMP_NUM_THREADS=4 python ./projects/des_cluster/tests/validation/knob_sweep.py \
-        --cache-dir <compare_reference cache> --cov ./projects/des_cluster/data/des_cluster_y6.cov
+        --cache-dir <compare_reference cache> --cov ./projects/des_cluster/data/des_cluster_y6_cov.npy
 
 - `tests/lighthouse_reference/` holds data vectors and intermediate quantities computed with the original CosmoLike cluster code (the `lighthouse` repository), kept for comparison. Its [README](tests/lighthouse_reference/README.md) documents the configuration and lists where that code deviates from the model of the paper. The port follows the paper, so this comparison is a sanity check at the percent level: the counts agree to 2.4% and the cluster bias to 0.8% (the original code integrates with a relative tolerance of $10^{-2}$).
 

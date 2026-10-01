@@ -14,7 +14,7 @@ The data set is Y6-like in the following sense: the lens and source redshift dis
 | `des_cluster_y6.dataset` | the base dataset descriptor: file names, six lens and four source bins, 20 angular bins between 2.5 and 250 arcmin, three cluster redshift bins ($z_\lambda$ edges 0.2, 0.4, 0.55, 0.65), four richness bins ($\lambda$ edges 20, 30, 45, 60, 500), the survey area, and the lens bin paired with each cluster redshift bin in $w_{cg}$ (`cg_lens_bins`). The likelihood defaults and the examples name the two descriptors of the next row, not this file. Its `mask_file` key names the 6x2pt + N mask, so this file loaded on its own is the 6x2pt + N data set |
 | `des_cluster_y6_4x2ptN.dataset`, `des_cluster_y6_6x2ptN.dataset` | the descriptors that `combo_4x2pt_N` and `combo_6x2pt_N` load: the base descriptor (`DEFAULT(des_cluster_y6.dataset)`) with the mask of each combination |
 | `des_cluster_y6.datavector` | the joint synthetic data vector, shared by the two combinations (2812 entries; columns: index, value) |
-| `des_cluster_y6.cov` | the joint covariance of the 2812 entries, shared by the two combinations (columns: i, j, value; upper triangle with the diagonal, zeros included) |
+| `des_cluster_y6_cov.npy` | the joint covariance of the 2812 entries, shared by the two combinations: the upper triangle with the diagonal, row by row (`C[numpy.triu_indices(2812)]`, zeros included), as a binary little-endian float64 NumPy array of 3,955,078 entries (32 MB). cosmolike reads the file directly, and `read_covariance` in `../scripts/make_synthetic_data.py` unpacks it into the full matrix. Until 2026-10-01 the covariance was a text table (columns: i, j, value) of 124 MB holding the same numbers |
 | `des_cluster_y6_4x2ptN.mask`, `des_cluster_y6_6x2ptN.mask` | the scale-cut masks of the two combinations, one entry per data point (columns: index, 0 or 1). The 4x2pt + N mask keeps 889 entries and masks `ss` and `gs` entirely; the 6x2pt + N mask keeps 1429 |
 | `des_y6_maglim.nz`, `des_y6_source.nz` | redshift distributions of the six MagLim lens bins and of the four source bins. The z column holds left bin edges (`photoz_zmid_convention: 0`) |
 | `des_y6_cluster.nz` | the selection kernels $\langle\phi_i\vert z\rangle$ of the three cluster redshift bins: the probability that a cluster at true redshift z lands in each $z_\lambda$ bin. It is a probability, not a normalized distribution, and it is sampled at z (no half-cell offset) |
@@ -40,7 +40,7 @@ The descriptor `des_y3_real.dataset` points the galaxy-only likelihoods of this 
 
 ## Git LFS
 
-Three files of this folder are stored with Git LFS (the patterns are in `../.gitattributes`): `des_cluster_y6.cov`, `des_y3_cov_unblinded_final.txt`, and `baryons_logPkR.h5`. A clone without `git lfs pull` holds a pointer file in place of each.
+Three files of this folder are stored with Git LFS (the patterns are in `../.gitattributes`): `des_cluster_y6_cov.npy`, `des_y3_cov_unblinded_final.txt`, and `baryons_logPkR.h5`. A clone without `git lfs pull` holds a pointer file in place of each.
 
 ## Regenerating the files
 

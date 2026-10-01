@@ -34,9 +34,13 @@ global state per process):
     variance amplitude) are those of the data vector of (a), so the file
     follows the C counts after any halo-model change (--reference-counts:
     the reference's). Selection bias: ref_covariance_full "signal" mode.
-    Written to data/des_cluster_y6.cov (columns: i, j, cov; upper
-    triangle with the diagonal; the full 2812 x 2812 matrix, zeros
-    included; Git LFS via the *cov pattern of .gitattributes).
+    Written to data/des_cluster_y6_cov.npy: the upper triangle with the
+    diagonal, row by row (cov[np.triu_indices(2812)], zeros included), as
+    little-endian float64 in NumPy's .npy format, which cosmolike's
+    IPCluster::set_inv_cov reads directly. The doubles are stored
+    exactly, and the file is 32 MB instead of the 124 MB of the former
+    text table (i, j, cov), so a regeneration adds a quarter of the Git
+    LFS volume (.gitattributes: *_cov.npy).
 (c) CHECKS. Layout (sizes/starts of the compiled code vs the reference
     layout, T and B(theta) of the C code vs the reference), the C model
     vs the reference vector per block (delta^T C^-1 delta, uncut and
@@ -82,7 +86,7 @@ MASKS = {"4x2pt_N": "des_cluster_y6_4x2ptN.mask", "6x2pt_N": "des_cluster_y6_6x2
 COMBO_DATASETS = {"4x2pt_N": "des_cluster_y6_4x2ptN.dataset",
                   "6x2pt_N": "des_cluster_y6_6x2ptN.dataset"}
 DATAVECTOR_FILE = "des_cluster_y6.datavector"
-COV_FILE = "des_cluster_y6.cov"
+COV_FILE = "des_cluster_y6_cov.npy"
 BLOCKS = ("ss", "gs", "gg", "cg", "N", "cc", "cs")
 CHI2_TOL = 1e-6
 
@@ -466,18 +470,31 @@ def write_datavector(path, dv):
 
 
 def write_covariance(path, cov):
+    """The packed upper triangle (row by row, diagonal included) as a 1-D
+    little-endian float64 .npy array: the binary layout cosmolike's
+    IPCluster::set_inv_cov reads (read_npy_packed_upper_cov)."""
     iu = np.triu_indices(cov.shape[0])
-    with open(path, "w") as f:
-        np.savetxt(f, np.column_stack([iu[0], iu[1], cov[iu]]), fmt="%d %d %.15e")
+    np.save(path, np.ascontiguousarray(cov[iu], dtype="<f8"))
 
 
 def read_covariance(path, n):
-    try:
-        import pandas as pd
-        t = pd.read_csv(path, sep=" ", header=None).to_numpy()
-    except ImportError:
-        t = np.loadtxt(path)
+    """The full n x n covariance from the packed .npy file of
+    write_covariance, or from a text table (i, j, cov) of the former
+    format (parsed with numpy, which rounds every value correctly, as
+    the C reader does)."""
     cov = np.zeros((n, n))
+    with open(path, "rb") as f:
+        is_npy = f.read(6) == b"\x93NUMPY"
+    if is_npy:
+        packed = np.load(path)
+        iu = np.triu_indices(n)
+        if packed.shape != (iu[0].size,):
+            raise ValueError(f"{path}: {packed.shape} entries, the packed upper "
+                             f"triangle of {n} x {n} has {iu[0].size}")
+        cov[iu] = packed
+        cov.T[iu] = packed
+        return cov
+    t = np.loadtxt(path)
     i, j = t[:, 0].astype(int), t[:, 1].astype(int)
     cov[i, j] = t[:, 2]
     cov[j, i] = t[:, 2]
@@ -563,7 +580,7 @@ def main(argv=None):
     ap.add_argument("--skip-datavector", action="store_true",
                     help="reuse data/des_cluster_y6.datavector")
     ap.add_argument("--skip-covariance", action="store_true",
-                    help="do not rewrite data/des_cluster_y6.cov (the checks read the file)")
+                    help="do not rewrite data/des_cluster_y6_cov.npy (the checks read the file)")
     ap.add_argument("--skip-chi2", action="store_true")
     ap.add_argument("--reference-counts", action="store_true",
                     help="counts of the Python reference in the covariance (default: "

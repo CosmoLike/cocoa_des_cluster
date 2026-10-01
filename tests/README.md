@@ -72,8 +72,8 @@ reference, race, and accuracy tests runs in its own worker subprocess:
 cosmolike aborts a process that initializes two configurations with
 different data-set dimensions, and the cluster and the galaxy-only
 examples use two data sets (2812 and 900 entries). The two
-covariances of the frozen data (`frozen/data/des_cluster_y6.cov`,
-124 MB, and `frozen/data/des_y3_cov_unblinded_final.txt`, 19 MB) are
+covariances of the frozen data (`frozen/data/des_cluster_y6_cov.npy`,
+32 MB, and `frozen/data/des_y3_cov_unblinded_final.txt`, 19 MB) are
 stored with Git LFS: a clone without `git lfs pull` holds a pointer
 file in place of each, and every test then stops at the manifest
 check, naming the file.
