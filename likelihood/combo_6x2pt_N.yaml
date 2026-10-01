@@ -4,6 +4,10 @@ data_file: des_cluster_y6_6x2ptN.dataset
 # donor project desy1xplanck broke down; not re-measured here).
 accuracyboost: 1.0
 internal_accuracyboost: 1.0 # C-FAST-PT convolution grid / output grid
+# refinements on top of accuracyboost (which multiplies them too):
+# the non-Limber FFTLog chi grid, and the z nodes of the P(k) tables
+nonlimber_accuracyboost: 1.0
+pk_z_refinement: 1
 # integer 0, 1 or 2. 1 for the Y6 inputs: the knob sweep (tests/validation/
 # knob_sweep.py) gives delta chi2 1.65 at 0 vs high accuracy (galaxy gammat
 # 0.92, w_gg 0.47: the MagLim lens n(z) tails reach z = 2.99) and 0.048 at 1
