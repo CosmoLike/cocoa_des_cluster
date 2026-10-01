@@ -98,8 +98,10 @@ DCHI2_FLOOR = 1.0e-6
 # it measures and assertion 4 is skipped; record the printed value
 # here (with the date and platform) to arm it.
 # measured on the frozen state of tests/frozen: arm64 macOS (Apple M2),
-# clang, default build, OMP_NUM_THREADS = 4, 2026-09-30
-DCHI2_MEASURED = 7.148978
+# clang, default build, OMP_NUM_THREADS = 4, 2026-10-01, after the data and
+# covariance were regenerated with the cb halo field (the 2026-09-30 value,
+# 7.148978, belonged to the covariance before)
+DCHI2_MEASURED = 7.123750
 DCHI2_RTOL = 0.05
 
 
