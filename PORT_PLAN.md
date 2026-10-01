@@ -304,16 +304,39 @@ Done (cosmolike_core bugfix, des_cluster bugfix):
     table on the dense grid (core 6a105e2 and every wrapper); FAST-PT
     internal boost set before the accuracy boost in every wrapper.
 
+Owner's decisions and direction (Vivian, 2026-10-01):
+- Priorities from here: correctness, consistency and checks against the
+  physics. A performance change only when it makes a significant
+  difference (no micro-optimization). Then a didactic Fable review, then
+  cocoa_cosmolike development is stabilized; the CosmoCov port is the
+  one exception.
+- Kept as is: the H0 > 0 abort of set_cosmological_parameters (every
+  prior keeps H0 > 0; it fires only on an upstream bug such as a failed
+  CAMB call), and the "user must fix" README note on the TATT parameters
+  sampled under NLA in the galaxy likelihoods.
+- Not a bug: des_y3's likelihood default DES_Y3.dataset (that project
+  holds both DES Y1 and Y3); no change.
+- Done: like.lmin/lmax and the FAST-PT k_min/k_max became like.lrange[]
+  and krange[] (core cdf9164, bitwise); the joint covariance is stored as
+  a packed float64 .npy, 32 MB instead of 124 MB (core c50fd26 reads it;
+  bitwise inverse covariance and chi2).
+
 Open:
-- Cluster optimization left: the P1h table (~12% of the cosmolike thread
-  time) could tabulate only the Limber k range (~1/3 fewer ln k nodes, not
-  bitwise); cc/cg exact tables on N_ell_internal instead of N_ell (a knob
-  test, ~3%); C_cc and C_cg read P_NL at the Limber nodes on identical
-  grids every step (sharing it: ~4-5%).
+- Cluster optimization left, dropped 2026-10-01 under the priority above
+  (3-12% each, partly not bitwise): the P1h table could tabulate only the
+  Limber k range; cc/cg exact tables on N_ell_internal instead of N_ell;
+  C_cc and C_cg read P_NL at the Limber nodes on identical grids every
+  step (sharing it: ~4-5%).
 - Non-Limber w_cc / w_cg: design study done (test/studies/
   nonlimber_cluster_study_2026-09-30.md). Most of the reference code's
-  low-z shift is RSD, which the port lacks: owner decisions pending (w_cg
-  non-Limber or Limber, cluster RSD on or off, and eight smaller ones).
+  low-z shift is RSD, which the port lacks. Owner's decisions
+  (2026-10-01): D1 w_cg non-Limber, as the reference code and the Y1
+  paper run it (the README states it as a deviation from the Y6 paper's
+  sentence); D2 RSD on in the cluster spectra, as a runtime switch
+  entering both the FFTLog rows and the Limber terms exactly as gg does
+  (consistent with the galaxies; RSD in the FFTLog rows alone would make
+  the spectrum jump at the switch to Limber). D3-D10 (study section 10)
+  pending; the study's recommendations stand until decided.
 - Neutrinos in the mass function (study: test/studies/
   neutrino_cb_study_2026-09-30.md). Done as edits, NOT built or run:
   one global switch like.halo_model[4], yaml key halo_matter_field

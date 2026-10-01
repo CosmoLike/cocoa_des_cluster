@@ -85,7 +85,7 @@ FROZEN_DATA_RELPATH = "./projects/des_cluster/tests/frozen/data"
 #   y3_redmapper_counts.txt  the observed DES-Y3 counts, an input of
 #                            the covariance script, not of the model
 # A new file in ../data is frozen unless it is added here. The two
-# covariances (des_cluster_y6.cov, des_y3_cov_unblinded_final.txt) are
+# covariances (des_cluster_y6_cov.npy, des_y3_cov_unblinded_final.txt) are
 # stored with Git LFS; ../.gitattributes matches them by file name, so
 # their frozen copies are LFS files too.
 DATA_IGNORE = (

@@ -4,7 +4,8 @@
 # this file (DEFAULT) and set the mask_file of their combination.
 # data_file, cov_file: the joint data vector (2812 entries; the model at the
 # fiducial point of Table I, without noise) and its analytic Gaussian
-# covariance, both written by scripts/make_synthetic_data.py.
+# covariance, both written by scripts/make_synthetic_data.py. The covariance
+# is binary: the packed upper triangle as a float64 .npy array.
 # mask_file: scripts/make_cluster_mask.py writes one scale-cut mask per
 #   combination: des_cluster_y6_4x2ptN.mask (CL+GC) and
 #   des_cluster_y6_6x2ptN.mask (CL+3x2pt). The key below names the CL+3x2pt
@@ -14,7 +15,7 @@
 # survey_area_deg2: 4143 = Y3 cluster footprint (arXiv 2503.13632); the local
 # lighthouse Y6 configuration (dataY6.yaml) uses 4125.3.
 data_file = des_cluster_y6.datavector
-cov_file = des_cluster_y6.cov
+cov_file = des_cluster_y6_cov.npy
 mask_file = des_cluster_y6_6x2ptN.mask
 nz_lens_file = des_y6_maglim.nz
 nz_source_file = des_y6_source.nz

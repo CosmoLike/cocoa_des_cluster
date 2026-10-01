@@ -17,7 +17,7 @@ setting with delta chi2 < 0.2 (Vivian's whole-code budget).
 
 Usage (cocoa environment active, from Cocoa/):
     OMP_NUM_THREADS=4 python projects/des_cluster/tests/validation/knob_sweep.py \\
-        --cache-dir <compare_reference cache> --cov projects/des_cluster/data/des_cluster_y6.cov
+        --cache-dir <compare_reference cache> --cov projects/des_cluster/data/des_cluster_y6_cov.npy
 """
 
 import argparse
@@ -111,6 +111,12 @@ def row_pd_mask(cr, C, prod, cfg, layout):
 
 def read_cov(path, n):
     cov = np.zeros((n, n))
+    if path.endswith(".npy"):
+        # the packed upper triangle, row by row (scripts/make_synthetic_data.py)
+        iu = np.triu_indices(n)
+        cov[iu] = np.load(path)
+        cov.T[iu] = cov[iu]
+        return cov
     data = np.loadtxt(path)
     i, j, v = data[:, 0].astype(int), data[:, 1].astype(int), data[:, 2]
     cov[i, j] = v
@@ -121,7 +127,7 @@ def read_cov(path, n):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache-dir", required=True)
-    ap.add_argument("--cov", required=True, help="joint covariance (i j cov)")
+    ap.add_argument("--cov", required=True, help="joint covariance (.npy packed upper triangle, or text i j cov)")
     ap.add_argument("--mask", default=None, help="production mask (default: dataset 6x2ptN)")
     ap.add_argument("--threads", type=int, default=int(os.environ.get("OMP_NUM_THREADS", 4)))
     ap.add_argument("--child", nargs=5, default=None, help=argparse.SUPPRESS)
