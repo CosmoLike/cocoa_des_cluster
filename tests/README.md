@@ -130,7 +130,7 @@ The test files and the configurations they cover:
 | - | `test_nonlimber_ggl.py` | 3x2pt; IA modeling: NLA | Limber vs non-Limber galaxy-galaxy lensing (`adopt_limber_gs`): the flag reaches the code and moves $\gamma_t$ alone |
 | - | `test_nonlimber_gg.py` | 3x2pt; IA modeling: NLA | Limber vs non-Limber galaxy clustering (`adopt_limber_gg`): the flag reaches the code and moves $w(\theta)$ alone |
 | - | `test_photoz_conventions.py` | cosmic shear; IA modeling: NLA | the n(z) interpolation and z-column conventions: each flag reaches the code and the n(z) caches rebuild |
-| - | `test_neutrino_cb.py` | 4x2pt + N on the Python reference's CAMB run (no cobaya) | the cold dark matter + baryon halo field (`halo_matter_field`): unread inputs under the default, the mnu -> 0 limit, sigma^2(M) against the Python reference, direction and size of the counts and bias change, cache keys, no silent fallback |
+| - | `test_neutrino_cb.py` | 4x2pt + N on the Python reference's CAMB run (no cobaya) | evolving cb variance: the massless limit, both fields against independent quadrature at four scale factors, counts and bias, cache invalidation, thread determinism, and the missing-spectrum guard |
 | A1-A6 | `test_accuracy.py` | 4x2pt + N, 6x2pt + N, cosmic shear, 2x2pt, 3x2pt with NLA; 3x2pt with TATT | advisory: $\Delta\chi^2$ of the default numerical settings against high-accuracy settings (no pass/fail) |
 
 ### The sector-ladder cache check (`test_cache_consistency.py`) <a name="cache_ladder"></a>
@@ -299,37 +299,23 @@ cache that fails to rebuild on the way back would fail loudly).
 
 ### The cold dark matter + baryon halo field (`test_neutrino_cb.py`) <a name="neutrino_cb"></a>
 
-Massive neutrinos free-stream out of halos, so the halos form from
-the cold dark matter + baryon ("cb") field. The likelihood key
-`halo_matter_field: 1` makes cosmolike take $\sigma^2(M)$ from the
-linear cb power spectrum (CAMB's `delta_nonu`) and the mean density
-of the Lagrangian radius and of $dn/d\ln M$ from
-$\rho_{cb} = \rho_{crit}(\Omega_m - \Omega_\nu)$; the default 0 keeps
-the total matter. The test feeds cosmolike the CAMB run of the Python
-reference (`tests/reference/ref_cosmology.py`, three degenerate
-massive neutrinos) through `ci.set_cosmology`, as the likelihood
-would, with the init chain of `tests/validation/compare_reference.py`
-and an all-ones mask, and checks, in one process of its own:
+All halo statistics use the cold dark matter + baryon (cb) field. The
+variance integrates its linear spectrum at each scale factor, and the
+Lagrangian radius and mass function use $\rho_{cb}$. The test supplies
+CAMB tables from the independent Python reference (three degenerate
+massive neutrinos) through the same interface as the likelihood. It checks:
 
-1. under the default, the data vector with $\Omega_\nu h^2$ and a cb
-   table handed over equals the one without them, bit for bit;
-2. the cb field with $\Omega_\nu h^2 = 0$ and a cb table equal to the
-   linear matter spectrum reproduces the total-matter field bit for
-   bit (the mnu -> 0 limit);
-3. $\sigma^2(M)$ of both fields against the Python reference
-   (`ref_halo.HaloModel`, `hmf_matter` "cb" and "tot") at five masses
-   from $10^{13}$ to $10^{15}\,M_\odot/h$ and at
-   $\Omega_\nu h^2 = 0.00083$ (the fiducial) and 0.00644 (the top of
-   the prior), to $10^{-4}$;
-4. at the fiducial the cb counts are higher and the cb cluster bias
-   lower than the total-matter ones, inside wide bands around the
-   closed-form estimate, and cosmic shear, galaxy-galaxy lensing and
-   galaxy clustering do not move;
-5. a new $\Omega_\nu h^2$ alone, or a new cb table alone, refills
-   $\sigma^2(M)$, and the switch 1 -> 0 -> 1 returns the first data
-   vector bit for bit;
-6. the cb field without a cb table stops the process with a message
-   naming the table (a child process: the C code calls exit).
+1. Changing only cb inputs leaves the diagnostic total-matter variance unchanged.
+2. With zero neutrino density and identical spectra, both variance fields agree exactly at a = 1, 0.8, 0.55 and 0.3.
+3. Both fields agree with independent Simpson quadrature at five masses from $10^{13}$ to $10^{15} M_\odot/h$, those four scale factors, and $\Omega_\nu h^2$ = 0.00083 and 0.00644, to $10^{-4}$.
+4. The cb counts increase and cluster bias decreases relative to a synthetic total-matter halo input. Non-halo galaxy and shear blocks stay unchanged. The comparison feeds total power and zero neutrino density to the halo inputs; there is no production field switch.
+5. Changing the neutrino density or cb spectrum invalidates the variance cache. Restoring the original inputs restores the full data vector bit for bit.
+6. The variance is identical at one and eight threads, including after changing the thread count in one process.
+7. Asking for cb variance without its spectrum stops with a message naming the missing input (tested in a child process).
+
+The independent reference now integrates $P_{cb}(k,z)$ at each redshift
+and uses the resulting mass-dependent cb growth for concentration. Its
+non-halo growth convention remains the external DES convention.
 
 ### Accuracy checks (`test_accuracy.py`, A1-A6) <a name="accuracy_checks"></a>
 

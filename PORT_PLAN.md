@@ -337,31 +337,16 @@ Open:
   (consistent with the galaxies; RSD in the FFTLog rows alone would make
   the spectrum jump at the switch to Limber). D3-D10 (study section 10)
   pending; the study's recommendations stand until decided.
-- Neutrinos in the mass function (study: test/studies/
-  neutrino_cb_study_2026-09-30.md). Done as edits, NOT built or run:
-  one global switch like.halo_model[4], yaml key halo_matter_field
-  (0 = total matter, the default everywhere; 1 = cold dark matter +
-  baryons: sigma(M) from the linear P_cb, rho_cb in R(M) and in the
-  rho/M of dn/dM; r_Delta, M/rho_m, lensing kernels and the 2-halo
-  b(nu_cb) x total nonlinear P stay total matter; p_mm/p_my/p_yy abort
-  under 1; sigma_cb(z) = sigma_cb(0) D_total(z) as in the DES code).
-  Core 3ef74b1 (Omega_nu, the P_cb table and setter, the switch),
-  6f84ee8 (the consumers), bb70a7a (get_camb_cosmology 10-tuple); in
-  every project the set_cosmology keywords omegan2 and lnP_linear_cb,
-  init_halo_matter_field, the likelihood (CAMB omnuh2 always, delta_nonu
-  under 1; emulator path: omegan2 from mnu, P_cb = P_lin/(1 - f_nu)^2)
-  and the yaml key; here also the notebook wrappers, compare_reference
-  (--halo-matter-field, --omnuh2), make_synthetic_data (hmf_matter follows
-  the key) and tests/test_neutrino_cb.py. Verification pending: the
-  neutrino_impl session's overnight.sh (switch-off data vectors bitwise
-  in the seven projects, test_example1/2 of each, the mnu -> 0 limit,
-  the Python reference with hmf_matter cb at Omega_nu h^2 = 0.00083 and
-  0.00644, delta chi2 of cb vs total and of the emulator-path
-  approximation). Owner's decisions (2026-09-30): combo_4x2pt_N and
-  combo_6x2pt_N default to 1 (the synthetic data and covariance are
-  regenerated with it and tests/frozen of examples 1-2 refrozen, in the
-  overnight run; the EMUL2 expected chi2 and README numbers are redone
-  after it); the CAMB yamls keep one massive neutrino state.
+- Neutrino halo update (2026-10-03): the owner retired the global
+  field switch. All halo statistics now use sigma_cb(M,a), its evolving
+  mass slope, and rho_cb. The shared FFTLog table also exposes total
+  matter for diagnostics. Concentration uses sigma_cb(M,a)/sigma_cb(M,1)
+  in its D^1.15 factor. M200m radii, lensing weights and nonlinear matter
+  spectra retain total matter. CAMB always provides delta_nonu; EMUL2
+  retains its approximate P_cb = P_lin/(1-f_nu)^2. The independent
+  Python halo reference integrates the evolving spectrum directly.
+  The seven-project verification and reference updates are recorded in
+  cosmolike-dev/references/sigma_fftlog_implementation.md.
 - Shared core: zmean() (lens mean redshift: w_gg pivot, evolving bias,
   point-mass lens redshift, HOD) is cached on Ntable.random and the n(z)
   only, so it keeps the value of the lens photo-z shifts at the last

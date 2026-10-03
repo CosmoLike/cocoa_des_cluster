@@ -96,7 +96,7 @@ def test_sigma2_table_and_slope(ref):
             k = np.exp(lnk)
             x = k * R
             W = 3 * (np.sin(x) - x * np.cos(x)) / x**3
-            return k**3 * cosmo.P_lin(np.array([k]), np.array([0.0]))[0] * W * W / (2 * np.pi**2)
+            return k**3 * cosmo.P_lin(np.array([k]), np.array([0.0]), kind="cb")[0] * W * W / (2 * np.pi**2)
         s2 = sum(quad(f, a, b, limit=400, epsrel=1e-10)[0]
                  for a, b in zip(np.linspace(np.log(1e-6), np.log(1e4), 41)[:-1],
                                  np.linspace(np.log(1e-6), np.log(1e4), 41)[1:]))

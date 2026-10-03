@@ -93,7 +93,7 @@ DEFAULT_SETTINGS = dict(
     lnM_min=np.log(1e12), lnM_max=np.log(1e16),
     mass_panel_width=0.25, mass_order=8,
     kernel_mode=0,               # 0 volume-only (default), 1 abundance-weighted
-    hmf_matter="tot",            # "tot" (halo.c) or "cb" (lighthouse / Y1 PRL)
+    hmf_matter="cb",             # production cb; "tot" only for diagnostics
     hmf_alpha_mode=0,            # Tinker alpha: 0 = 0.368 at every z (DES / lighthouse;
                                  # cluster.hmf_alpha_mode default), 1 = halo.c's alpha(z)
     ntheta=20, tmin_arcmin=2.5, tmax_arcmin=250.0, lmax=75000,
@@ -376,7 +376,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", default="reference_cluster_fiducial.npz")
     ap.add_argument("--kernel-mode", type=int, default=0, choices=(0, 1))
-    ap.add_argument("--hmf-matter", default="tot", choices=("tot", "cb"))
+    ap.add_argument("--hmf-matter", default="cb", choices=("tot", "cb"))
     ap.add_argument("--hmf-alpha-mode", type=int, default=0, choices=(0, 1),
                     help="Tinker alpha: 0 = 0.368 (DES), 1 = halo.c's alpha(z)")
     ap.add_argument("--cov", action="store_true", help="also compute the Gaussian covariance")

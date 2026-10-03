@@ -18,10 +18,11 @@ the same inputs and compared number by number):
     omnuh2.
   * rho_crit = 7.4775e21 (M_sun/h)/(c/H0)^3 (cosmolike structs.c), i.e.
     2.77520e11 (M_sun/h)/(Mpc/h)^3 (CODATA gives 2.77537e11; 6e-5 apart).
-  * The growth factor is the cocoa one
-    (_cosmolike_prototype_base.py): D(z) = sqrt(P_lin(k0, z)/P_lin(k0, 0))
+  * The non-halo growth factor retains the external DES reference
+    convention: D(z) = sqrt(P_lin(k0, z)/P_lin(k0, 0))
     with k0 = 0.0005 1/Mpc on the total-matter linear spectrum. It is
-    scale independent by construction; halo.c rescales sigma(M) with it.
+    scale independent by construction and used for non-halo terms. Halo
+    statistics integrate P_cb(k,z) at each redshift directly.
   * n(z) files are read as in redshift_spline.c: the z column holds the
     LEFT edges of the histogram cells (Z_LOW convention), the values sit
     at the cell centres, each bin is normalized by the rectangle sum
@@ -39,7 +40,7 @@ from scipy.interpolate import CubicSpline, RectBivariateSpline
 C_KMS = 299792.458                  # speed of light in km/s
 COVERH0 = 2997.92458                # c/H0 in Mpc/h
 RHO_CRIT = 7.4775e21 / COVERH0**3   # cosmolike rho_crit in (M_sun/h)/(Mpc/h)^3
-K0_GROWTH_INV_MPC = 0.0005          # k (1/Mpc) of the cocoa growth convention
+K0_GROWTH_INV_MPC = 0.0005          # k (1/Mpc) of the external DES convention
 
 
 def default_pk_redshifts(z_max=4.0):
@@ -154,7 +155,7 @@ class Cosmology:
         self._slope_hi = {key: (tab[:, -1] - tab[:, -2]) / (self.lnk_pk[-1] - self.lnk_pk[-2])
                           for key, tab in self._tabs.items()}
 
-        # growth (cocoa convention)
+        # Non-halo growth (external DES reference convention).
         k0 = K0_GROWTH_INV_MPC / h
         self._lnP0_k0 = float(self.lnP(np.array([k0]), np.array([0.0]), "lin")[0])
         self._k0 = k0

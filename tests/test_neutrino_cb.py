@@ -1,62 +1,25 @@
-"""Unit tests: the cold dark matter + baryon halo field (halo_matter_field).
+"""Neutrino-aware halos: cb variance at each redshift, counts and bias.
 
-Massive neutrinos free-stream out of halos, so halos form from the cold
-dark matter + baryon ("cb") field, not from the total matter. With the
-likelihood key halo_matter_field = 1 (ci.init_halo_matter_field(1))
-cosmolike's halo model takes
+Massive neutrinos free-stream out of halos. The production halo model
+therefore uses the cold dark matter plus baryon spectrum P_cb(k,z), with
+rho_cb = rho_crit (Omega_m - Omega_nu) in the smoothing radius and mass
+function. Integrating the spectrum at each z retains its scale-dependent
+growth; multiplying a present-day variance by one D(z) would lose it.
 
-  sigma^2(M)   from the linear P_cb (CAMB's delta_nonu), with the
-               Lagrangian radius R = (3 M/(4 pi rho_cb))^(1/3),
-  dn/dlnM      = (rho_cb/M) nu f(nu) dln nu/dln M,
+Compare both diagnostic variance fields with an independent Simpson
+integral; test the massless limit, input-cache invalidation, the physical
+count/bias response, thread determinism and the missing-cb guard.
+The total-matter comparison supplies P_cb=P_m and Omega_nu=0 to the halo
+inputs while keeping the background fixed; there is no halo-field switch.
 
-with rho_cb = rho_crit (Omega_m - Omega_nu), Omega_nu = omega_nu h^2/h^2
-(set_cosmology's omegan2) and P_cb the table set_cosmology receives as
-lnP_linear_cb. Everything else (r_Delta, the matter window M/rho_m, the
-lensing kernels, the 2-halo spectrum) stays total matter. The default
-halo_matter_field = 0 is the total-matter model, bit for bit the code
-before the switch existed.
+The test uses the reference's CAMB tables (three degenerate neutrinos)
+through the same set_cosmology interface as the likelihood. It runs in
+its own process because other cluster tests initialize different dataset
+dimensions. The missing-spectrum check needs a second child process:
+the C guard deliberately terminates that process with an error message.
 
-The checks, on the cluster combination 4x2pt + N:
-
-  1. switch off: the data vector with Omega_nu h^2 and a P_cb table
-     handed over equals, bit for bit, the one without them (nothing
-     reads either under halo_matter_field = 0);
-  2. the mnu -> 0 limit: halo_matter_field = 1 with Omega_nu h^2 = 0 and
-     a P_cb table equal to P_lin reproduces halo_matter_field = 0 bit for
-     bit (the cb path is the total-matter path with two inputs swapped);
-  3. sigma^2(M) under halo_matter_field = 1 against the independent
-     Python reference (tests/reference/ref_halo.py, HaloModel with
-     hmf_matter = "cb") at five masses and two neutrino densities, the
-     DES Y6 fiducial Omega_nu h^2 = 0.00083 and the top of its prior,
-     0.00644; halo_matter_field = 0 against hmf_matter = "tot" as the
-     control;
-  4. direction and size at the fiducial: the cb counts are higher and
-     the cb cluster bias lower than the total-matter ones, inside the
-     bands the closed-form estimate gives, while cosmic shear,
-     galaxy-galaxy lensing and galaxy clustering do not move at all;
-  5. the cache keys: a new Omega_nu h^2 alone, or a new P_cb table
-     alone, refills sigma^2(M); flipping the switch 1 -> 0 -> 1
-     returns the first values bit for bit;
-  6. no silent fallback: halo_matter_field = 1 without a P_cb table
-     stops the process with a message naming the missing table (checked
-     in a child process, since the C code calls exit).
-
-The cosmology is the Python reference's CAMB run (tests/reference/
-ref_cosmology.py: three degenerate massive neutrinos, P_lin, P_NL and
-P_cb from delta_tot and delta_nonu) on the likelihood's (z, k) grids,
-handed to cosmolike through ci.set_cosmology exactly as the likelihood
-does (tests/validation/compare_reference.py: load_config, init_c,
-cosmology_inputs, set_cosmology_c). No cobaya model is built.
-
-Every check runs in a python process of its own
-(cocoa_test_utils.own_process): under pytest the collecting process
-also holds the cluster ladder's models, and cosmolike aborts a process
-that initializes two data sets of different dimensions.
-
-To run (from the Cocoa/ folder, cocoa environment active,
-start_cocoa.sh sourced):
-
-    python -m pytest ./projects/des_cluster/tests/test_neutrino_cb.py
+Run from Cocoa/ after activating its environment and start_cocoa.sh:
+    python -m pytest projects/des_cluster/tests/test_neutrino_cb.py
 """
 
 import os
@@ -88,8 +51,7 @@ OMNUH2_TOP = 0.00644
 # the lowest richness bin (~1e14) to the heaviest halos, with 1e13 below.
 SIGMA2_MASSES = (1.0e13, 3.0e13, 1.0e14, 3.0e14, 1.0e15)
 
-# Tolerance of check 3. The C table integrates the lobe sums to 6e-6 of
-# sigma^2 and reads it linearly in ln M between nodes 0.025 apart; the
+# Tolerance includes the C table interpolation in ln M and scale factor; the
 # reference integrates a 20001-node Simpson rule and a cubic spline in
 # ln M. Both read the same CAMB table of P(k).
 SIGMA2_RTOL = 1.0e-4
@@ -108,7 +70,7 @@ GALAXY_BLOCKS = ("ss", "gs", "gg")
 BLOCKS = ("ss", "gs", "gg", "cg", "N", "cc", "cs")
 
 # The message of the C abort of check 6 (cosmo3D.c, sigma2).
-ABORT_MESSAGE = "needs the linear P_cb table"
+ABORT_MESSAGE = "cb variance needs P_cb"
 
 # Flag of the child process of check 6.
 ABORT_CHILD_FLAG = "--abort-child"
@@ -128,8 +90,8 @@ def build_state(omnuh2_values):
 
     Returns:
       (ci, cfg, tables, cosmologies, workdir): the compiled interface,
-      the compare_reference configuration (halo_matter_field 0 on both
-      sides), {omnuh2: the set_cosmology arrays of compare_reference.
+      the compare_reference configuration (cb halos on both sides),
+      {omnuh2: the set_cosmology arrays of compare_reference.
       cosmology_inputs on the likelihood grids}, {omnuh2: the reference
       Cosmology}, and the scratch directory of the dummy data files.
     """
@@ -138,7 +100,7 @@ def build_state(omnuh2_values):
     from reference_cluster import FIDUCIAL, COSMO_KEYS
     from ref_cosmology import Cosmology
 
-    cfg = cr.load_config(halo_matter_field=0)
+    cfg = cr.load_config()
     workdir = tempfile.mkdtemp(prefix="des_cluster_neutrino_cb_")
     ci, info = cr.init_c(cfg, workdir, threads=4)
     ones = np.ones(info["ndata"], dtype=int)
@@ -196,7 +158,7 @@ def evaluate(ci):
     dv = np.array(ci.compute_data_vector_cluster_masked())
     sigma2 = []
     for mass in SIGMA2_MASSES:
-        sigma2.append(ci.sigma2(M=mass))
+        sigma2.append(ci.sigma2(M=mass, field=1))
     counts = np.array(ci.N_cluster_tomo()).T
     bias = []
     for richness_bin in range(counts.shape[1]):
@@ -218,18 +180,11 @@ def block_slices(ci):
 
 
 def abort_child():
-    """Check 6, child side: halo_matter_field = 1 with no P_cb table.
-
-    Runs the init chain and one CAMB cosmology, hands the cosmology over
-    WITHOUT a P_cb table, switches to the cb field and reads sigma^2.
-    The C code must stop the process (exit code 1) naming the table; a
-    return from ci.sigma2 is a silent fallback and exits with 0.
-    """
+    """The cb reader must stop with a clear error when P_cb is absent."""
     ci, cfg, tables, cosmologies, workdir = build_state((OMNUH2_FIDUCIAL,))
     R = tables[OMNUH2_FIDUCIAL]
     set_cosmology(ci, R, omegan2=float(R["cin_omnuh2"]), lnPL_cb=[])
-    ci.init_halo_matter_field(halo_matter_field=1)
-    value = ci.sigma2(M=1.0e14)
+    value = ci.sigma2(M=1.0e14, field=1)
     print(f"sigma2 returned {value} without a P_cb table", flush=True)
     sys.exit(0)
 
@@ -253,33 +208,20 @@ class TestNeutrinoCB(unittest.TestCase):
         omegan2 = float(R["cin_omnuh2"])
         lnPL_cb = R["cin_lnPL_cb"]
 
-        # --- 1. switch off: the neutrino inputs are not read ---
-        ci.init_halo_matter_field(halo_matter_field=0)
+        # --- 1. total variance is independent of the cb inputs ---
         set_cosmology(ci, R, omegan2=0.0, lnPL_cb=[])
-        plain = evaluate(ci)
+        plain = np.array([ci.sigma2(M=mass, field=0) for mass in SIGMA2_MASSES])
         set_cosmology(ci, R, omegan2=omegan2, lnPL_cb=lnPL_cb)
-        with_inputs = evaluate(ci)
-        print("\n  1. switch off: data vector with / without Omega_nu h^2 "
-              "and P_cb bitwise equal: "
-              f"{np.array_equal(plain['dv'], with_inputs['dv'])}", flush=True)
-        self.assertTrue(np.array_equal(plain["dv"], with_inputs["dv"]),
-                        "halo_matter_field = 0: the data vector moved when "
-                        "Omega_nu h^2 and a P_cb table were handed over")
+        with_inputs = np.array([ci.sigma2(M=mass, field=0) for mass in SIGMA2_MASSES])
+        np.testing.assert_array_equal(plain, with_inputs)
 
-        # --- 2. the mnu -> 0 limit ---
-        ci.init_halo_matter_field(halo_matter_field=1)
+        # --- 2. the massless limit, including evolution ---
         set_cosmology(ci, R, omegan2=0.0, lnPL_cb=R["cin_lnPL"].copy())
-        limit = evaluate(ci)
-        same_dv = np.array_equal(limit["dv"], plain["dv"])
-        same_sigma2 = np.array_equal(limit["sigma2"], plain["sigma2"])
-        print(f"  2. mnu -> 0 limit: data vector bitwise {same_dv}, "
-              f"sigma^2 bitwise {same_sigma2}", flush=True)
-        self.assertTrue(same_sigma2,
-                        "cb field with Omega_nu = 0 and P_cb = P_lin: sigma^2 "
-                        "differs from the total-matter field")
-        self.assertTrue(same_dv,
-                        "cb field with Omega_nu = 0 and P_cb = P_lin: the data "
-                        "vector differs from the total-matter field")
+        total = evaluate(ci)
+        for a in (1.0, 0.8, 0.55, 0.3):
+            for mass in SIGMA2_MASSES:
+                self.assertEqual(ci.sigma2(M=mass, a=a, field=0),
+                                 ci.sigma2(M=mass, a=a, field=1))
 
         # --- 3. sigma^2(M) against the Python reference ---
         print("  3. sigma^2(M): C / reference - 1", flush=True)
@@ -287,29 +229,26 @@ class TestNeutrinoCB(unittest.TestCase):
         for omnuh2 in (OMNUH2_FIDUCIAL, OMNUH2_TOP):
             Rn = tables[omnuh2]
             for field, hmf_matter in ((1, "cb"), (0, "tot")):
-                ci.init_halo_matter_field(halo_matter_field=field)
                 set_cosmology(ci, Rn, omegan2=float(Rn["cin_omnuh2"]),
                               lnPL_cb=Rn["cin_lnPL_cb"])
                 reference = HaloModel(cosmologies[omnuh2], hmf_matter=hmf_matter)
-                ratios = []
-                for mass in SIGMA2_MASSES:
-                    sigma_ref = reference.sig.sigma(np.log(mass))
-                    ratios.append(ci.sigma2(M=mass)/sigma_ref**2 - 1.0)
-                ratios = np.array(ratios)
-                worst = max(worst, float(np.max(np.abs(ratios))))
-                print(f"     Omega_nu h^2 = {omnuh2}, {hmf_matter:3s}: "
-                      + " ".join(f"{r:+.2e}" for r in ratios), flush=True)
-                self.assertLess(
-                    float(np.max(np.abs(ratios))), SIGMA2_RTOL,
-                    f"sigma^2(M) at Omega_nu h^2 = {omnuh2}, field "
-                    f"{hmf_matter}: C and the Python reference differ by "
-                    f"more than {SIGMA2_RTOL}")
+                for a in (1.0, 0.8, 0.55, 0.3):
+                    ratios = []
+                    for mass in SIGMA2_MASSES:
+                        sigma_ref = reference.sig.sigma(np.log(mass), z=1.0/a-1.0)
+                        ratios.append(ci.sigma2(M=mass, a=a, field=field)/sigma_ref**2-1.0)
+                    ratios = np.array(ratios)
+                    worst = max(worst, float(np.max(np.abs(ratios))))
+                    print(f"     Omega_nu h^2 = {omnuh2}, {hmf_matter}, a={a}: "
+                          + " ".join(f"{r:+.2e}" for r in ratios), flush=True)
+                    self.assertLess(float(np.max(np.abs(ratios))), SIGMA2_RTOL)
 
         # --- 4. direction and size at the fiducial ---
-        ci.init_halo_matter_field(halo_matter_field=0)
-        set_cosmology(ci, R, omegan2=omegan2, lnPL_cb=lnPL_cb)
+        # A diagnostic total-field surrogate uses P_cb=P_m and Omega_nu=0
+        # in the halo inputs. The background and non-halo spectra are fixed.
+        set_cosmology(ci, R, omegan2=0.0, lnPL_cb=R["cin_lnPL"])
         total = evaluate(ci)
-        ci.init_halo_matter_field(halo_matter_field=1)
+        set_cosmology(ci, R, omegan2=omegan2, lnPL_cb=lnPL_cb)
         cb = evaluate(ci)
         counts_ratio = cb["N"]/total["N"]
         bias_ratio = cb["bias"]/total["bias"]
@@ -331,25 +270,27 @@ class TestNeutrinoCB(unittest.TestCase):
         # a new P_cb table alone
         set_cosmology(ci, R, omegan2=omegan2, lnPL_cb=lnPL_cb + 0.01)
         moved_table = evaluate(ci)
-        # the switch 1 -> 0 -> 1 at the fiducial inputs
+        # Return to the fiducial after both independent input changes.
         set_cosmology(ci, R, omegan2=omegan2, lnPL_cb=lnPL_cb)
-        ci.init_halo_matter_field(halo_matter_field=0)
-        evaluate(ci)
-        ci.init_halo_matter_field(halo_matter_field=1)
         back = evaluate(ci)
         print("  5. cache: Omega_nu h^2 alone moves sigma^2 "
               f"{not np.array_equal(moved_omnuh2['sigma2'], cb['sigma2'])}; "
               "P_cb alone moves sigma^2 "
               f"{not np.array_equal(moved_table['sigma2'], cb['sigma2'])}; "
-              f"1 -> 0 -> 1 bitwise {np.array_equal(back['dv'], cb['dv'])}",
+              f"input roundtrip bitwise {np.array_equal(back['dv'], cb['dv'])}",
               flush=True)
         self.assertFalse(np.array_equal(moved_omnuh2["sigma2"], cb["sigma2"]),
                          "a new Omega_nu h^2 left sigma^2 unchanged (stale cache)")
         self.assertFalse(np.array_equal(moved_table["sigma2"], cb["sigma2"]),
                          "a new P_cb table left sigma^2 unchanged (stale cache)")
         self.assertTrue(np.array_equal(back["dv"], cb["dv"]),
-                        "switch 1 -> 0 -> 1 did not return the data vector bit "
+                        "input roundtrip did not return the data vector bit "
                         "for bit")
+
+        # Changing thread count rebuilds work buffers, not the answer.
+        for threads in (1, 8, 4):
+            ci.set_omp_threads(threads)
+            np.testing.assert_array_equal(evaluate(ci)["sigma2"], cb["sigma2"])
 
         # --- 6. no silent fallback ---
         environment = dict(os.environ)
@@ -362,7 +303,7 @@ class TestNeutrinoCB(unittest.TestCase):
         print(f"  6. cb field without a P_cb table: exit code "
               f"{completed.returncode}", flush=True)
         self.assertNotEqual(completed.returncode, 0,
-                            "sigma^2 returned under halo_matter_field = 1 "
+                            "cb sigma^2 returned "
                             "without a P_cb table (silent fallback)")
         self.assertIn(ABORT_MESSAGE, output,
                       "the abort did not name the missing P_cb table")
