@@ -7,7 +7,7 @@ Run from Cocoa/ in the cocoa environment (start_cocoa.sh sourced):
 
     python projects/des_cluster/tests/validation/compare_reference.py \
         [--cache-dir DIR] [--recompute-reference] [--threads 4] \
-        [--hmf-alpha-mode {0,1}] [--halo-matter-field {0,1}] \
+        [--hmf-alpha-mode {0,1}] \
         [--omnuh2 X] [--skip-production] [--skip-diagnostics] \
         [--skip-determinism] [--skip-lighthouse] [--json OUT.json]
 
@@ -26,12 +26,9 @@ What it does
      - Tinker amplitude mode (hmf_alpha_mode) = cluster_hmf_alpha_mode of
        the yaml (0 = alpha 0.368, DES; 1 = halo.c's alpha(z)), or the
        --hmf-alpha-mode override; the C side gets the same mode,
-     - halo field = halo_matter_field of the yaml, or the
-       --halo-matter-field override: 0 = total matter (hmf_matter "tot"),
-       1 = cold dark matter + baryons (hmf_matter "cb": sigma(M) from the
-       linear P_cb at z = 0 and rho_cb in R(M) and dn/dM); the C side
-       gets the same switch, Omega_nu h^2 and the reference's linear P_cb
-       table (CAMB delta_nonu),
+     - halo field = cb, with sigma_cb(M,z) integrated at each redshift.
+       The C side gets Omega_nu h^2 and the reference linear P_cb
+       table (CAMB delta_nonu), with rho_cb in R(M) and dn/dM.
      - --omnuh2 moves Omega_nu h^2 of the reference point (Table I:
        0.00083; the Y6 prior reaches 0.00644).
    It exports every quantity compared below, its Gaussian covariance
@@ -50,11 +47,13 @@ What it does
                  (z_interp_2D, log10k_interp_2D, 140 x 1500 nodes at
                  accuracyboost 1), the reference a cubic spline in z: the
                  whole-pipeline number (inputs included).
-     diagnostic  = matched, with the source n(z) of the reference's
-                 lensing efficiency cut at the file's last edge (z = 3.0),
-                 as the core's g_tomo does (redshift_spline.c integrates
-                 from a = 1/(1 + zmax_all), ignoring positive photo-z
-                 shifts): isolates the cluster code in C_cs.
+     diagnostic  = matched, but deliberately truncating the reference's
+                 source n(z) at the unshifted file edge. This reproduces
+                 a historical assumption corrected in core 84c54c9.
+                 Differences in this diagnostic are expected: the current
+                 core includes the photo-z-shifted tail.
+     nuisance    = matched at nonzero NLA and shear calibration, retaining
+                 the full shifted source support on both sides.
 2. C PIPELINE through cosmolike_des_cluster_interface WITHOUT cobaya: the
    init chain of likelihood/_cosmolike_prototype_base.py (probe 4x2pt_N),
    then ci.set_cosmology with the tables of step 1 and the nuisance
@@ -119,7 +118,7 @@ CHI2_BUDGET = 0.2
 MIN_CORR_EIG = 1e-4
 DENSE_K_FACTOR = 4                    # matched variant: log10 k nodes x the likelihood's
 VARIANTS = ("matched", "production", "diagnostic", "nuisance")
-# the "nuisance" variant: the diagnostic settings at a point with NLA and
+# the "nuisance" variant: the matched settings at a point with NLA and
 # shear calibration switched on (both vanish at the Table I fiducial)
 NUISANCE_POINT = dict(IA_A1=0.7, IA_eta1=-1.2, shear_m=[0.012, -0.021, 0.015, -0.006])
 REFERENCE_EXPORT_VERSION = 2          # bump when build_reference changes (cache key)
@@ -140,10 +139,9 @@ def load_yaml(path):
         return yaml.load(f, Loader=Loader)
 
 
-def load_config(hmf_alpha_mode=None, halo_matter_field=None, omnuh2=None):
+def load_config(hmf_alpha_mode=None, omnuh2=None):
     """The dataset and the likelihood keys; hmf_alpha_mode (0/1) overrides
-    the yaml's cluster_hmf_alpha_mode and halo_matter_field (0/1) the
-    yaml's halo_matter_field on both sides; omnuh2 (None = Table I)
+    the yaml's cluster_hmf_alpha_mode on both sides; omnuh2 (None = Table I)
     moves Omega_nu h^2 of the reference point."""
     from getdist import IniFile
     y = load_yaml(YAML)
@@ -168,7 +166,7 @@ def load_config(hmf_alpha_mode=None, halo_matter_field=None, omnuh2=None):
     )
     keys = ("accuracyboost", "internal_accuracyboost", "integration_accuracy",
             "photoz_interpolation_type", "photoz_zmid_convention", "adopt_limber_gs",
-            "adopt_limber_gg", "include_HOD_GX", "include_halo_IA", "halo_matter_field",
+            "adopt_limber_gg", "include_HOD_GX", "include_halo_IA",
             "lmax", "IA_redshift_evolution",
             "IA_model", "IA_code", "bias_model", "cluster_kernel_mode", "cluster_selection_model",
             "cluster_ytransform", "cluster_include_ia", "cluster_magnification",
@@ -176,8 +174,6 @@ def load_config(hmf_alpha_mode=None, halo_matter_field=None, omnuh2=None):
     lik = {k: y[k] for k in keys}
     if hmf_alpha_mode is not None:
         lik["cluster_hmf_alpha_mode"] = int(hmf_alpha_mode)
-    if halo_matter_field is not None:
-        lik["halo_matter_field"] = int(halo_matter_field)
     # the reference point's changes to Table I (reference_cluster.FIDUCIAL)
     point = {}
     if omnuh2 is not None:
@@ -202,10 +198,13 @@ def reference_settings(cfg, variant="matched"):
         ntheta=ds["n_theta"], tmin_arcmin=ds["theta_min_arcmin"],
         tmax_arcmin=ds["theta_max_arcmin"], lens_bins=ds["cg_lens_bins"],
         kernel_mode=int(lk["cluster_kernel_mode"]), C_c=float(lk["cluster_magnification"]),
-        hmf_matter=("cb" if int(lk["halo_matter_field"]) == 1 else "tot"),
+        hmf_matter="cb",
         hmf_alpha_mode=int(lk["cluster_hmf_alpha_mode"]),
         pk_nl_z_order=(3 if variant == "production" else 1))
-    if variant in ("diagnostic", "nuisance"):
+    # Keep the old truncation as an explicitly historical diagnostic.
+    # Applying it to the nuisance check would compare different models:
+    # g_tomo now integrates the full photo-z-shifted source support.
+    if variant == "diagnostic":
         s["source_g_zmax"] = source_file_zmax(ds["nz_source_file"])
     return s
 
@@ -403,7 +402,6 @@ def init_c(cfg, workdir, threads, nz_cluster_file=None):
     ci.init_adopt_limber_gg(adopt_limber_gg=int(lk["adopt_limber_gg"]))
     ci.init_include_HOD_GX(include_HOD_GX=int(lk["include_HOD_GX"]))
     ci.init_include_halo_IA(include_halo_IA=int(lk["include_halo_IA"]))
-    ci.init_halo_matter_field(halo_matter_field=int(lk["halo_matter_field"]))
     ci.init_ntable_lmax(lmax=int(lk["lmax"]))
     ci.init_accuracy_boost(accuracy_boost=float(lk["accuracyboost"]),
                            integration_accuracy=int(lk["integration_accuracy"]))
@@ -439,11 +437,14 @@ def init_c(cfg, workdir, threads, nz_cluster_file=None):
 def set_cosmology_c(ci, R, lnP_shift=0.0):
     """ci.set_cosmology with the reference tables (interface units):
     Omega_nu h^2 and the linear P_cb go along always, as the likelihood
-    sends them; the C side reads them under halo_matter_field = 1 only.
-    (The lighthouse inputs carry neither: mnu = 0, total matter.)"""
-    lnPL_cb = []
+    sends them. The lighthouse has exactly zero neutrino density,
+    where its total spectrum is also the cb spectrum."""
     if "cin_lnPL_cb" in R:
         lnPL_cb = R["cin_lnPL_cb"] + lnP_shift
+    else:
+        if float(R.get("cin_omnuh2", 0.0)) != 0.0:
+            raise ValueError("The reference needs P_cb for massive neutrinos")
+        lnPL_cb = R["cin_lnPL"] + lnP_shift
     ci.set_cosmology(omegam=float(R["cin_omegam"]), omegab=float(R["cin_omegab"]),
                      H0=float(R["cin_H0"]), log10k_2D=R["cin_log10k_2D"], z_2D=R["cin_z_2D"],
                      lnP_linear=R["cin_lnPL"] + lnP_shift, lnP_nonlinear=R["cin_lnPNL"] + lnP_shift,
@@ -838,13 +839,11 @@ def emit_dv(cfg, R, workdir, threads, out):
 
 
 def mode_args(args):
-    """The --hmf-alpha-mode, --halo-matter-field and --omnuh2 overrides,
+    """The --hmf-alpha-mode and --omnuh2 overrides,
     passed on to the child processes."""
     out = []
     if args.hmf_alpha_mode is not None:
         out += ["--hmf-alpha-mode", str(args.hmf_alpha_mode)]
-    if args.halo_matter_field is not None:
-        out += ["--halo-matter-field", str(args.halo_matter_field)]
     if args.omnuh2 is not None:
         out += ["--omnuh2", repr(args.omnuh2)]
     return out
@@ -1047,9 +1046,6 @@ def main(argv=None):
     ap.add_argument("--hmf-alpha-mode", type=int, default=None, choices=(0, 1),
                     help="Tinker amplitude on both sides (default: the yaml's "
                          "cluster_hmf_alpha_mode): 0 = 0.368 (DES), 1 = halo.c's alpha(z)")
-    ap.add_argument("--halo-matter-field", type=int, default=None, choices=(0, 1),
-                    help="halo field on both sides (default: the yaml's halo_matter_field): "
-                         "0 = total matter, 1 = cold dark matter + baryons")
     ap.add_argument("--omnuh2", type=float, default=None,
                     help="Omega_nu h^2 of the reference point (default: Table I, 0.00083)")
     ap.add_argument("--skip-production", action="store_true")
@@ -1061,7 +1057,7 @@ def main(argv=None):
     ap.add_argument("--lighthouse-child", default=None, help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
     os.makedirs(args.cache_dir, exist_ok=True)
-    cfg = load_config(args.hmf_alpha_mode, args.halo_matter_field, args.omnuh2)
+    cfg = load_config(hmf_alpha_mode=args.hmf_alpha_mode, omnuh2=args.omnuh2)
     workdir = os.path.join(args.cache_dir, "work_" + str(os.getpid()))
 
     try:
@@ -1084,15 +1080,13 @@ def run_validation(args, cfg, R, path, workdir):
     print(f"[validation] Tinker amplitude: hmf_alpha_mode = "
           f"{int(cfg['likelihood']['cluster_hmf_alpha_mode'])} on both sides "
           f"(0 = alpha 0.368, 1 = halo.c's alpha(z))")
-    print(f"[validation] halo field: halo_matter_field = "
-          f"{int(cfg['likelihood']['halo_matter_field'])} on both sides "
-          f"(0 = total matter, 1 = cold dark matter + baryons)")
+    print("[validation] halo field: cold dark matter + baryons on both sides")
     print(f"[validation] CAMB: mnu = {float(R['cin_mnu']):.5f} eV (3 degenerate), Omega_nu h^2 = "
           f"{float(R['cin_omnuh2']):.5f}; Omega_m = {float(R['cin_omegam'])} (total), "
           f"Omega_b = {float(R['cin_omegab'])}, H0 = {float(R['cin_H0'])}; the C side gets "
           f"these tables and Omega_m, Omega_b, H0, Omega_nu h^2 and the linear P_cb")
     out = dict(hmf_alpha_mode=int(cfg["likelihood"]["cluster_hmf_alpha_mode"]),
-               halo_matter_field=int(cfg["likelihood"]["halo_matter_field"]),
+               halo_field="cb",
                omnuh2=float(R["cin_omnuh2"]))
     t0 = time.time()
     ci, info = init_c(cfg, workdir, args.threads)
@@ -1110,8 +1104,8 @@ def run_validation(args, cfg, R, path, workdir):
         Rd, _ = load_reference(args, cfg, "diagnostic")
         _, cov_m = reference_in_c_layout(C, R, cfg)
         rows_d, chi_d = compare_all(C, Rd, cfg, full=False, blocks=("cs",), cov_full=cov_m)
-        print_table(rows_d, "DIAGNOSTIC: matched inputs, reference W_kappa with the source n(z) "
-                            "cut at z = 3.0 as the core's g_tomo")
+        print_table(rows_d, "HISTORICAL DIAGNOSTIC (differences expected): reference W_kappa "
+                            "truncated at the unshifted source edge; current C keeps the shifted tail")
         out["diagnostic"] = dict(rows=rows_d, chi2=chi_d)
 
         Rn, _ = load_reference(args, cfg, "nuisance")
@@ -1121,7 +1115,7 @@ def run_validation(args, cfg, R, path, workdir):
         Cn = c_evaluate(ci, cfg, R, info, workdir, full=False)
         rows_n, chi_n = compare_all(Cn, Rn, cfg, full=False, blocks=("cs",), cov_full=cov_m,
                                     shear_m=NUISANCE_POINT["shear_m"])
-        print_table(rows_n, "DIAGNOSTIC + NLA and shear calibration on (A1 = 0.7, eta1 = -1.2, "
+        print_table(rows_n, "MATCHED INPUTS + NLA and shear calibration on (A1 = 0.7, eta1 = -1.2, "
                             "m = 0.012, -0.021, 0.015, -0.006)")
         out["nuisance"] = dict(rows=rows_n, chi2=chi_n)
         set_nuisance_c(ci, cfg, dict(FIDUCIAL))
@@ -1137,13 +1131,7 @@ def run_validation(args, cfg, R, path, workdir):
     if not args.skip_determinism:
         out["determinism"] = run_determinism(args)
     if not args.skip_lighthouse:
-        if int(cfg["likelihood"]["halo_matter_field"]) == 1:
-            # the lighthouse inputs are a mnu = 0 total-matter cosmology
-            # with no P_cb table: the cross-check exists for field 0 only
-            print("\n[lighthouse] skipped: halo_matter_field = 1 (the lighthouse "
-                  "cosmology has mnu = 0 and no P_cb table)")
-        else:
-            out["lighthouse"] = run_lighthouse(args)
+        out["lighthouse"] = run_lighthouse(args)
     if args.json:
         with open(args.json, "w") as f:
             json.dump(out, f, indent=1, default=float)

@@ -28,7 +28,7 @@ global state per process):
     selection factor on the cs, cc, cg rows, counts Poisson + sample
     variance). Settings aligned to the dataset and the likelihood yaml
     (n(z) files, <phi_i|z> table, binning, area, lmax, kernel mode, C_c,
-    halo field halo_matter_field; CAMB with the likelihood's neutrino
+    cold-matter halo prescription; CAMB with the likelihood's neutrino
     configuration). The counts N_iA
     of the covariance (Poisson, cluster shot noise Omega_s/N_iA, sample-
     variance amplitude) are those of the data vector of (a), so the file
@@ -183,11 +183,9 @@ def reference_settings(ds, lik):
         ntheta=ds["n_theta"], tmin_arcmin=ds["theta_min_arcmin"],
         tmax_arcmin=ds["theta_max_arcmin"], lens_bins=list(range(ds["lens_ntomo"])),
         kernel_mode=int(lik["cluster_kernel_mode"]), C_c=float(lik["cluster_magnification"]),
-        # the halo field of the likelihood yaml: 0 = total matter, 1 = cold
-        # dark matter + baryons (sigma(M) from the reference's P_cb, rho_cb
-        # in R(M) and dn/dM); the data vector of step (a) follows the same
-        # key through the likelihood
-        hmf_matter=("cb" if int(lik["halo_matter_field"]) == 1 else "tot"),
+        # Halos always use P_cb(k,z) and rho_cb, as in the likelihood.
+        # The reference integrates the variance independently at each z.
+        hmf_matter="cb",
         hmf_alpha_mode=int(lik["cluster_hmf_alpha_mode"]))
 
 
