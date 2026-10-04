@@ -46,6 +46,7 @@ shell is Bash and the current folder is `cocoa/Cocoa`.
 | Selection probabilities | Check that membership occurs once per shared halo and that a partition of categories recovers the unselected integral. |
 | Mass-moment units and threading | Check distinct length dimensions, signed profiles, odd/even grids, bitwise 1/2/4/8-thread results, ownership and input guards. |
 | Non-SSC count–matter terms | Compare closed radial integrals and exact Poisson-count expectations, including the two-halo factor of two and cancellation of survey volume. |
+| Cluster-lensing localization | Check exact angular polynomials, every joint cross block, known last-bin null modes and bitwise 1/2/4/8-thread propagation. |
 
 The [shared component tests](../../../lsst_y1/tests/covariance/README.md)
 contain independent algebra and projection references. This project check
@@ -65,6 +66,9 @@ input profiles and weights. It does not choose the mass function,
 selection response or angular normalization of a full cluster forecast.
 `test_counts_matter_cross.py` checks the non-SSC count–matter cross block;
 it does not cover discrete cluster partners or a full joint generator.
+`test_transform_cluster.py` checks the propagation of the mean model's
+angular localization through a supplied covariance. It retains the known
+zero final angular bin and does not replace the physical scale selection.
 
 The [data-vector tests](../data_vector/README.md) check likelihood signals
 and stored reference values separately. No stored covariance or reference
