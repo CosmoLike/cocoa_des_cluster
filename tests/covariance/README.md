@@ -42,6 +42,9 @@ shell is Bash and the current folder is `cocoa/Cocoa`.
 | Cluster spectrum units | Change length units while preserving all angular spectra. |
 | Cluster spectrum threading | Check bitwise repeatability at one, two, four and eight threads. |
 | Cluster spectrum boundaries | Check owned outputs and rejection of malformed shapes, domains and richness indices. |
+| Selected mass moments | Compare one-, two- and three-profile integrals with closed polynomials and independent NumPy sums. |
+| Selection probabilities | Check that membership occurs once per shared halo and that a partition of categories recovers the unselected integral. |
+| Mass-moment units and threading | Check distinct length dimensions, signed profiles, odd/even grids, bitwise 1/2/4/8-thread results, ownership and input guards. |
 
 The [shared component tests](../../../lsst_y1/tests/covariance/README.md)
 contain independent algebra and projection references. This project check
@@ -57,6 +60,9 @@ count–spectrum contribution requires its own physical calculation.
 `test_spectra_cluster.py` checks the all-pairs Limber projection. Its
 mean-spectrum model and finite input tables do not certify a full
 cluster covariance or its survey accuracy.
+`test_moments_cluster.py` checks selected mass integrals with explicit
+input profiles and weights. It does not choose the mass function,
+selection response or angular normalization of a full cluster forecast.
 
 The [data-vector tests](../data_vector/README.md) check likelihood signals
 and stored reference values separately. No stored covariance or reference
