@@ -113,7 +113,7 @@ def test_samples_against_scalar_readers(initialized, mode, nmass):
     ci.covariance_cluster_halo_samples(**sample_inputs(nmass=3))
     np.testing.assert_array_equal(actual['weight'], saved)
     moments = ci.covariance_cluster_moments(**actual)
-    np.testing.assert_allclose(moments['density'][0], np.sum(expected_weight, axis=2),
+    np.testing.assert_allclose(moments['density'], np.sum(expected_weight, axis=2),
                                rtol=3.e-15)
 
 
@@ -128,10 +128,10 @@ def test_selected_profile_response_uses_projected_catalog_mean(initialized):
     values['k'] = np.ascontiguousarray(modes[None, :]/distance[:, None])
     sampled = ci.covariance_cluster_halo_samples(**values)
     moments = ci.covariance_cluster_moments(**sampled)
-    density = moments['density'][0, :, 0]
-    biased_density = moments['density'][1, :, 0]
-    own = moments['single'][0, :, 0]
-    biased_own = moments['single'][1, :, 0]
+    density = moments['density'][:, 0]
+    biased_density = moments['biased_density'][:, 0]
+    own = moments['J01'][:, 0]
+    biased_own = moments['J11'][:, 0]
     dchi = np.array([0.06, 0.03])
     source_window = np.array([0.4, 0.7])
     number_per_sr = np.sum(dchi*distance**2*density)

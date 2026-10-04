@@ -38,7 +38,7 @@ def inputs():
         'transfer': np.array([[1., 1., 1.], [0.5, 0.9, 0.99]]),
         'linear_power': np.repeat(np.array([[0.03, 0.02, 0.01]]), 8, axis=0),
         'i11': np.full(shape=(8, nk), fill_value=0.7),
-        'moments': {'single': single, 'pair': pair},
+        'moments': {'J11': single[1], 'J02': pair[0]},
     }
 
 
@@ -75,10 +75,10 @@ def test_length_units_cancel():
     converted['dchi'] = values['dchi']*factor
     converted['pair_window'] = values['pair_window']/factor**2
     converted['linear_power'] = values['linear_power']*factor**3
-    pair = values['moments']['pair'].copy()
-    pair[0] *= factor**3
-    pair[1:] *= factor**6
-    converted['moments'] = {'single': values['moments']['single'], 'pair': pair}
+    converted['moments'] = {
+        'J11': values['moments']['J11'],
+        'J02': values['moments']['J02']*factor**3,
+    }
     changed = count_matter_cross(**converted)
     for key in changed:
         np.testing.assert_allclose(changed[key], baseline[key], rtol=2.e-14)
@@ -144,8 +144,8 @@ def test_bad_projection_inputs():
         ('linear_power', -np.ones(shape=(8, 3))),
         ('transfer', np.ones(shape=(2, 2))),
         ('pair_window', np.full(shape=(2, 8), fill_value=np.nan)),
-        ('moments', {'single': np.ones(shape=(2, 8, 2, 3)),
-                     'pair': np.ones(shape=(3, 8, 2, 5))}),
+        ('moments', {'J11': np.ones(shape=(8, 2, 3)),
+                     'J02': np.ones(shape=(8, 2, 5))}),
     ):
         malformed = dict(values)
         malformed[key] = bad

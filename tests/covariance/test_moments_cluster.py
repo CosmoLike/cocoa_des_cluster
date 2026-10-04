@@ -33,7 +33,15 @@ def reference(weight, bias, profile):
         np.einsum('asm,apm,apm->asp', weight, product, profile[:, first]),
         np.einsum('asm,apm,apm->asp', weight, product, profile[:, second]),
     ))
-    return {'density': density, 'single': single, 'pair': pair}
+    return {
+        'density': density[0],
+        'biased_density': density[1],
+        'J01': single[0],
+        'J11': single[1],
+        'J02': pair[0],
+        'J03_KKQ': pair[1],
+        'J03_KQQ': pair[2],
+    }
 
 
 def test_closed_polynomial_integrals_and_selection_partition():
@@ -64,9 +72,13 @@ def test_closed_polynomial_integrals_and_selection_partition():
         (15.0/4.0)*fraction[:, None]*product*amplitude[second],
     ))[:, None, :, :]
     for key, expected in (
-        ('density', expected_density),
-        ('single', expected_single),
-        ('pair', expected_pair),
+        ('density', expected_density[0]),
+        ('biased_density', expected_density[1]),
+        ('J01', expected_single[0]),
+        ('J11', expected_single[1]),
+        ('J02', expected_pair[0]),
+        ('J03_KKQ', expected_pair[1]),
+        ('J03_KQQ', expected_pair[2]),
     ):
         np.testing.assert_allclose(actual[key], expected, rtol=2.e-14)
 
@@ -77,7 +89,7 @@ def test_closed_polynomial_integrals_and_selection_partition():
     union_result = ci.covariance_cluster_moments(**united)
     for key in actual:
         np.testing.assert_allclose(
-            actual[key].sum(axis=2, keepdims=True), union_result[key],
+            actual[key].sum(axis=1, keepdims=True), union_result[key],
             rtol=2.e-14,
         )
 
@@ -114,18 +126,20 @@ def test_signed_profiles_threads_units_and_ownership(nk, nmass):
     converted['weight'] = values['weight']/factor**3
     converted['profile'] = values['profile']*factor**3
     changed = ci.covariance_cluster_moments(**converted)
-    np.testing.assert_allclose(changed['density']*factor**3,
-                               baseline['density'], rtol=2.e-14)
-    np.testing.assert_allclose(changed['single'], baseline['single'],
-                               rtol=2.e-14, atol=1.e-14)
-    for role, power in enumerate((3, 6, 6)):
-        np.testing.assert_allclose(changed['pair'][role]/factor**power,
-                                   baseline['pair'][role], rtol=2.e-14,
-                                   atol=1.e-14)
-    saved = baseline['pair'].copy()
+    for key in ('density', 'biased_density'):
+        np.testing.assert_allclose(changed[key]*factor**3, baseline[key],
+                                   rtol=2.e-14)
+    for key in ('J01', 'J11'):
+        np.testing.assert_allclose(changed[key], baseline[key],
+                                   rtol=2.e-14, atol=1.e-14)
+    for key, power in (('J02', 3), ('J03_KKQ', 6), ('J03_KQQ', 6)):
+        np.testing.assert_allclose(changed[key]/factor**power, baseline[key],
+                                   rtol=2.e-14, atol=1.e-14)
+    saved = baseline['J02'].copy()
     values['profile'] *= 2.0
     ci.covariance_cluster_moments(**values)
-    np.testing.assert_array_equal(baseline['pair'], saved)
+    np.testing.assert_array_equal(baseline['J02'], saved)
+
 
 
 def test_empty_selection_and_input_guards():
@@ -151,3 +165,36 @@ def test_empty_selection_and_input_guards():
         malformed[key] = bad
         with pytest.raises(ValueError):
             ci.covariance_cluster_moments(**malformed)
+
+
+@pytest.mark.parametrize('layout', ['fortran', 'sliced', 'readonly'])
+def test_named_armadillo_moments_preserve_notebook_inputs(layout):
+    """Named matrices/cubes retain physical axes under notebook conversions."""
+    rng = np.random.default_rng(seed=762)
+    values = {
+        'weight': rng.uniform(0.1, 0.4, size=(2, 3, 5)),
+        'bias': rng.uniform(0.5, 2.0, size=(2, 5)),
+        'profile': rng.normal(size=(2, 4, 5)),
+    }
+    expected = reference(**values)
+    for key, array in values.items():
+        if layout == 'fortran':
+            values[key] = np.array(array, order='F', copy=True)
+        elif layout == 'sliced':
+            shape = tuple(2*size for size in array.shape)
+            parent = np.zeros(shape=shape)
+            selection = tuple(slice(None, None, 2) for size in array.shape)
+            view = parent[selection]
+            view[...] = array
+            values[key] = view
+        else:
+            array.setflags(write=False)
+    saved = {}
+    for key, array in values.items():
+        saved[key] = array.copy()
+    actual = ci.covariance_cluster_moments(**values)
+    for key, result in actual.items():
+        np.testing.assert_allclose(result, expected[key], rtol=2.e-14)
+        assert result.ndim <= 3
+    for key, array in values.items():
+        np.testing.assert_array_equal(array, saved[key])
