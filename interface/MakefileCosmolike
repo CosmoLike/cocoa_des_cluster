@@ -186,6 +186,7 @@ CSOURCES += \
 		${ROOTDIR}/external_modules/code/cosmolike/covariances/ssc_cov.c \
 		${ROOTDIR}/external_modules/code/cosmolike/covariances/operators_cov.c \
 		${ROOTDIR}/external_modules/code/cosmolike/covariances/mask_cov.c \
+		${ROOTDIR}/external_modules/code/cosmolike/covariances/counts_cluster_cov.c \
 		${ROOTDIR}/external_modules/code/cosmolike/pt_cfastpt.c \
 		${ROOTDIR}/external_modules/code/cosmolike/structs_cluster.c \
 		${ROOTDIR}/external_modules/code/cosmolike/redshift_spline_cluster.c \
@@ -216,6 +217,7 @@ OBJECTC += \
 		./ssc_cov.o \
 		./operators_cov.o \
 		./mask_cov.o \
+		./counts_cluster_cov.o \
 		./pt_cfastpt.o \
 		./structs_cluster.o \
 		./redshift_spline_cluster.o \
@@ -227,6 +229,7 @@ CPPSOURCES += \
 		${ROOTDIR}/external_modules/code/cosmolike/covariances/generic_interface_cov.cpp \
 		${ROOTDIR}/external_modules/code/cosmolike/covariances/python_components_cov.cpp \
 		${ROOTDIR}/external_modules/code/cosmolike/covariances/covariance_wrapper_cov.cpp \
+		${ROOTDIR}/external_modules/code/cosmolike/covariances/generic_interface_cluster_cov.cpp \
 		${ROOTDIR}/external_modules/code/cosmolike/generic_interface.cpp \
 		${ROOTDIR}/external_modules/code/cosmolike/cosmo2D_wrapper.cpp \
 		${ROOTDIR}/external_modules/code/cosmolike/cosmo2D_scuts_wrapper.cpp \
@@ -239,6 +242,7 @@ OBJECTCPP += \
 		./generic_interface_cov.o \
 		./python_components_cov.o \
 		./covariance_wrapper_cov.o \
+		./generic_interface_cluster_cov.o \
 		./generic_interface.o \
 		./cosmo2D_wrapper.o \
 		./cosmo2D_scuts_wrapper.o \
