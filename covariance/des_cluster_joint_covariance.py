@@ -15,16 +15,19 @@ import des_cluster_covariance as galaxy_survey
 from cosmolike_notebook_utils.covariance.forecast_cluster import compute_forecast
 
 
-def configuration(accuracy_boost=1, ytransform=True):
+def configuration(accuracy_boost=None, ytransform=True, **accuracy_overrides):
     """Return DES physical choices and one resolved covariance accuracy boost.
 
     Arguments:
-        accuracy_boost = 1, 2, 4 or 8, shared by every covariance component.
+        accuracy_boost = None uses the YAML; 1, 2, 4 or 8 refines tables/cutoffs.
+        accuracy_overrides = internal refinement controls from default.yaml.
         ytransform = whether to localize cluster lensing as the DES mean does.
     Returns:
-        Settings mapping. Boost 1 is a pilot, not a certified inference setting.
+        Settings mapping with the project YAML baseline and explicit model limits.
     """
-    settings = galaxy_survey.configuration(accuracy_boost=accuracy_boost)
+    settings = galaxy_survey.configuration(
+        accuracy_boost=accuracy_boost, **accuracy_overrides,
+    )
     settings.update({
         'cluster_file': 'data/des_y6_cluster.nz',
         'cluster_richness_edges': np.array([20., 30., 45., 60., 500.]),
