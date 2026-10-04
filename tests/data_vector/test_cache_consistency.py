@@ -81,7 +81,7 @@ cobaya's memoization.
 To run (from the Cocoa/ folder, cocoa environment active,
 start_cocoa.sh sourced):
 
-    python -m pytest ./projects/des_cluster/tests/test_cache_consistency.py
+    python -m pytest ./projects/des_cluster/tests/data_vector/test_cache_consistency.py
 """
 
 import os
@@ -94,7 +94,7 @@ import re
 import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import cocoa_test_utils as u
 
 # The blocks of the joint data vector, in the order of the compiled
