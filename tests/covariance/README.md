@@ -45,6 +45,7 @@ shell is Bash and the current folder is `cocoa/Cocoa`.
 | Selected mass moments | Compare one-, two- and three-profile integrals with closed polynomials and independent NumPy sums. |
 | Selection probabilities | Check that membership occurs once per shared halo and that a partition of categories recovers the unselected integral. |
 | Mass-moment units and threading | Check distinct length dimensions, signed profiles, odd/even grids, bitwise 1/2/4/8-thread results, ownership and input guards. |
+| Non-SSC count–matter terms | Compare closed radial integrals and exact Poisson-count expectations, including the two-halo factor of two and cancellation of survey volume. |
 
 The [shared component tests](../../../lsst_y1/tests/covariance/README.md)
 contain independent algebra and projection references. This project check
@@ -55,14 +56,15 @@ not establish full-matrix positivity or parameter-error convergence.
 
 `test_counts.py` checks the supplied-abundance component. It does not
 validate a cluster mass–richness relation or generate the complete
-cluster $`6\times2\mathrm{pt}+N`$ covariance. In particular, the non-SSC
-count–spectrum contribution requires its own physical calculation.
+cluster $`6\times2\mathrm{pt}+N`$ covariance.
 `test_spectra_cluster.py` checks the all-pairs Limber projection. Its
 mean-spectrum model and finite input tables do not certify a full
 cluster covariance or its survey accuracy.
 `test_moments_cluster.py` checks selected mass integrals with explicit
 input profiles and weights. It does not choose the mass function,
 selection response or angular normalization of a full cluster forecast.
+`test_counts_matter_cross.py` checks the non-SSC count–matter cross block;
+it does not cover discrete cluster partners or a full joint generator.
 
 The [data-vector tests](../data_vector/README.md) check likelihood signals
 and stored reference values separately. No stored covariance or reference
