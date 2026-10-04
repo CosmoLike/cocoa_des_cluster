@@ -4,7 +4,8 @@ These checks exercise this project's galaxy/shear forecast adapter and
 compiled covariance bindings. They use the project's redshift files and
 catalog inputs, with small numerical grids and three measured rows.
 Separate count-response tests use analytic shell integrals and do not
-require a selected halo-population model.
+require a selected halo-population model. Cluster spectrum tests project
+supplied windows and profiles, independently of the survey model tables.
 
 We assume Cocoa is installed, users have run `conda activate cocoa`, the
 shell is Bash and the current folder is `cocoa/Cocoa`.
@@ -35,6 +36,12 @@ shell is Bash and the current folder is `cocoa/Cocoa`.
 | Counts–two-point SSC | Check the cancellation of radial distance factors and shared-mode positivity. |
 | Units and transforms | Change the length unit and transform the two-point observable while preserving the covariance. |
 | Count component boundaries | Check odd array lengths, one/eight-thread repeatability, owned outputs and rejected invalid inputs. |
+| Cluster one-halo projection | Verify that the own-halo profile contributes only to cluster lensing, without an extra halo bias. |
+| Cluster biased-power projection | Compare all cluster–galaxy and cluster–cluster pairs with closed radial integrals. |
+| Cluster spectrum contraction | Compare supplied tables with independent NumPy sums, including odd node and pair counts. |
+| Cluster spectrum units | Change length units while preserving all angular spectra. |
+| Cluster spectrum threading | Check bitwise repeatability at one, two, four and eight threads. |
+| Cluster spectrum boundaries | Check owned outputs and rejection of malformed shapes, domains and richness indices. |
 
 The [shared component tests](../../../lsst_y1/tests/covariance/README.md)
 contain independent algebra and projection references. This project check
@@ -47,6 +54,9 @@ not establish full-matrix positivity or parameter-error convergence.
 validate a cluster mass–richness relation or generate the complete
 cluster $`6\times2\mathrm{pt}+N`$ covariance. In particular, the non-SSC
 count–spectrum contribution requires its own physical calculation.
+`test_spectra_cluster.py` checks the all-pairs Limber projection. Its
+mean-spectrum model and finite input tables do not certify a full
+cluster covariance or its survey accuracy.
 
 The [data-vector tests](../data_vector/README.md) check likelihood signals
 and stored reference values separately. No stored covariance or reference

@@ -187,6 +187,7 @@ CSOURCES += \
 		${ROOTDIR}/external_modules/code/cosmolike/covariances/operators_cov.c \
 		${ROOTDIR}/external_modules/code/cosmolike/covariances/mask_cov.c \
 		${ROOTDIR}/external_modules/code/cosmolike/covariances/counts_cluster_cov.c \
+		${ROOTDIR}/external_modules/code/cosmolike/covariances/spectra_cluster_cov.c \
 		${ROOTDIR}/external_modules/code/cosmolike/pt_cfastpt.c \
 		${ROOTDIR}/external_modules/code/cosmolike/structs_cluster.c \
 		${ROOTDIR}/external_modules/code/cosmolike/redshift_spline_cluster.c \
@@ -218,6 +219,7 @@ OBJECTC += \
 		./operators_cov.o \
 		./mask_cov.o \
 		./counts_cluster_cov.o \
+		./spectra_cluster_cov.o \
 		./pt_cfastpt.o \
 		./structs_cluster.o \
 		./redshift_spline_cluster.o \
