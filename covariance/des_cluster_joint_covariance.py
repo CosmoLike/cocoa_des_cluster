@@ -96,16 +96,19 @@ def initialize(interface, settings):
     return tables
 
 
-def compute(interface, settings, progress=None):
+def compute(interface, settings, progress=None, backend=None):
     """Compute the shared angular forecast in the full DES 2812-entry order.
 
     Arguments:
         interface = project initialized with these settings.
         settings = configuration() output; progress = optional stage/time callback.
+        backend = None for notebook wrappers, interface.covariance for CLI.
     Returns:
         Separate G/SSC/cNG/total matrices, layout, mean signals and model limits.
         Apply valid_indices before a positivity check when Y is enabled:
         its 48 known final-bin null modes remain in the full returned layout.
         Physical scale cuts and inference convergence are separate steps.
     """
-    return compute_forecast(interface=interface, settings=settings, progress=progress)
+    return compute_forecast(
+        interface=interface, settings=settings, progress=progress, backend=backend,
+    )

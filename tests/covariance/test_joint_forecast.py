@@ -38,6 +38,11 @@ def test_joint_forecast_threads_localization_and_archive(tmp_path):
     for threads in (1, 8):
         ci.set_omp_threads(n=threads)
         result = survey.compute(interface=ci, settings=settings)
+        production = survey.compute(
+            interface=ci, settings=settings, backend=ci.covariance,
+        )
+        for name in ('gaussian', 'ssc', 'cng', 'total', 'joint_signal', 'mean_counts'):
+            np.testing.assert_array_equal(production[name], result[name])
         assert result['total'].shape == (712, 712)
         assert result['rows'].shape == (140, 3)
         assert len(result['count_positions']) == 12
@@ -66,6 +71,11 @@ def test_joint_forecast_threads_localization_and_archive(tmp_path):
     # components, including count-lensing crosses and the mean vector.
     settings['cluster_ytransform'] = True
     localized = survey.compute(interface=ci, settings=settings)
+    production = survey.compute(
+        interface=ci, settings=settings, backend=ci.covariance,
+    )
+    for name in ('gaussian', 'ssc', 'cng', 'total', 'joint_signal'):
+        np.testing.assert_array_equal(production[name], localized[name])
     positions = result['cluster_lensing_positions']
     operator = ci.get_cluster_ytransform_matrix()
     for name in ('gaussian', 'ssc', 'cng'):
