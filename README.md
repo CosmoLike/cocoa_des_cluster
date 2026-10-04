@@ -758,12 +758,24 @@ The port is complete for the model described above: the two likelihoods run, the
 # Computing covariances <a name="computing_covariances"></a>
 
 [EXAMPLE_EVALUATE_COVARIANCE.ipynb](EXAMPLE_EVALUATE_COVARIANCE.ipynb)
-computes real-space and Fourier-space galaxy/shear covariances, with
-separate Gaussian, super-sample and connected components. It compares
-accuracy boosts, checks eigenvalues and plots the changes.
-Its final section adds the angular cluster $`6\times2\mathrm{pt}+N`$
-forecast in the project's 2,812-entry ordering, including all count SSC
-cross blocks and the Y transformation of cluster lensing.
+computes a covariance with this project's 6×2pt + counts measurement layout.
+It keeps G, SSC and cNG separately, applies the supplied likelihood mask,
+and plots the computed and supplied totals together.
+
+| Measurement choice | Notebook example |
+| --- | --- |
+| Dataset | [data/des_cluster_y6_6x2ptN.dataset](data/des_cluster_y6_6x2ptN.dataset) |
+| Primary space | Real-space 6×2pt + N, with $`\Sigma = Y\gamma_t`$ cluster lensing |
+| Lens bins | 6 |
+| Source bins | 4 |
+| Bins per two-point observable | 20, 2.5–250 arcmin |
+| Generated entries before cuts | 2,812 |
+| Entries after the dataset mask | 1,429 |
+
+The primary example has 2,812 entries: 2,800 two-point measurements and 12
+counts from three cluster redshift bins and four richness bins. It follows the
+likelihood order ss, gs, gg, cg, N, cc, cs. Cluster lensing is transformed to $`\Sigma = Y\gamma_t`$ on both covariance axes. The 6×2pt + N mask removes the 48 defined Y null
+rows as well as physical scale cuts.
 
 We assume Cocoa and this project are installed, users have run
 `conda activate cocoa`, the shell is Bash, and the current folder is
@@ -775,7 +787,7 @@ We assume Cocoa and this project are installed, users have run
 
 **Step :two:**: compile the project interface.
 
-    unset IGNORE_COSMOLIKE_des_cluster_CODE
+    unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
     source ./projects/des_cluster/scripts/compile_des_cluster.sh
 
 **Step :three:**: start Jupyter.
@@ -785,31 +797,29 @@ We assume Cocoa and this project are installed, users have run
 **Step :four:**: open the printed URL and select
 `projects/des_cluster/EXAMPLE_EVALUATE_COVARIANCE.ipynb`.
 
-**Step :five:**: inspect the survey settings, choose `boosts`, then select
-**Kernel → Restart Kernel and Run All Cells**.
+**Step :five:**: inspect the survey inputs and keep `boosts = [1]` for the
+first calculation, then select **Kernel → Restart Kernel and Run All Cells**.
+Set `boosts = [1, 2]` to add the accuracy comparison.
 
-The galaxy/shear section writes `covariance/forecast_real.npz`,
-`covariance/forecast_fourier.npz` and `covariance/forecast_camb.npz`.
-The cluster section separately writes `covariance/forecast_cluster.npz`
-and `covariance/forecast_cluster_camb.npz`, including model limits and
-the count and angular row positions. Set `cluster_boosts` to compare
-resolutions for that forecast; see the [step-by-step cluster guide](covariance/README.md#joint).
-The [covariance guide](covariance/README.md) explains the settings, output
-arrays, physical approximations and separate covariance test command.
-
-> [!NOTE]
-> This is a massless-neutrino, Limber forecast with linear galaxy bias,
-> zero IA, magnification and RSD, and a spherical-cap footprint.
-> The notebook uses eight OpenMP threads and one BLAS thread.
-> `accuracy_boost` refines interpolation tables and multipole cutoffs.
-> `integration_accuracy` independently selects precomputed GSL quadrature
-> rules from the baseline in [`covariance/default.yaml`](covariance/default.yaml).
-> Increasing either control does not certify
-> parameter-error convergence or replace the likelihood's supplied matrix.
+The notebook writes `covariance/forecast_cluster.npz`,
+`covariance/forecast_camb.npz` and
+`covariance/forecast_likelihood_selection.npz`. The last archive retains
+both cut totals and the original data-vector indices.
+The optional final cell computes a galaxy/shear-only Fourier companion.
+The [covariance guide](covariance/README.md) describes the physical inputs,
+component plots, accuracy controls and covariance-only tests.
 
 > [!NOTE]
-> The cluster forecast uses linearly biased matter cNG and SSC-only
-> count cross correlations. Selected-cluster one-halo cNG corrections and
-> non-SSC count–spectrum terms are omitted. The final Y bin of each cluster
-> lensing row is exactly zero; check positivity on `valid_indices`, then
-> apply the intended physical scale cuts. No negative mode is repaired.
+> The generated matrix is an analogous forecast, not a reproduction of the
+> supplied likelihood covariance. It uses massless neutrinos, Limber,
+> linear bias, zero IA/magnification/RSD and a spherical-cap footprint.
+> Numerical defaults still need convergence validation. The notebook uses
+> eight OpenMP threads and one BLAS thread. `accuracy_boost` refines
+> tables and cutoffs; `integration_accuracy` separately selects precomputed
+> GSL rules from [covariance/default.yaml](covariance/default.yaml).
+
+The cluster calculation also uses biased-matter cNG and SSC-only count–spectrum
+crosses. Selected-cluster one-halo cNG and non-SSC count–spectrum terms remain
+absent. The supplied synthetic matrix uses Gaussian two-point covariance and
+Poisson plus sample-variance counts, with zero count–spectrum crosses.
+Differences from it therefore include deliberate model differences.
