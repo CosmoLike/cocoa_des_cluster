@@ -47,6 +47,7 @@ shell is Bash and the current folder is `cocoa/Cocoa`.
 | Mass-moment units and threading | Check distinct length dimensions, signed profiles, odd/even grids, bitwise 1/2/4/8-thread results, ownership and input guards. |
 | Non-SSC count–matter terms | Compare closed radial integrals and exact Poisson-count expectations, including the two-halo factor of two and cancellation of survey volume. |
 | Cluster-lensing localization | Check exact angular polynomials, every joint cross block, known last-bin null modes and bitwise 1/2/4/8-thread propagation. |
+| Physical halo samples | Compare the covariance mass samples with scalar halo readers and the fixed-amplitude Tinker formula, including both HMF modes and the redshift-fit boundary. |
 
 The [shared component tests](../../../lsst_y1/tests/covariance/README.md)
 contain independent algebra and projection references. This project check
@@ -69,6 +70,10 @@ it does not cover discrete cluster partners or a full joint generator.
 `test_transform_cluster.py` checks the propagation of the mean model's
 angular localization through a supplied covariance. It retains the known
 zero final angular bin and does not replace the physical scale selection.
+`test_halo_samples_cluster.py` checks covariance-owned sampling of the
+initialized halo and richness model. It shares the physical halo readers
+with production and therefore tests sampling and normalization, rather
+than independently calibrating those fits.
 
 The [data-vector tests](../data_vector/README.md) check likelihood signals
 and stored reference values separately. No stored covariance or reference
