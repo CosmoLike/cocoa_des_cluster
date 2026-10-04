@@ -1,3 +1,23 @@
+# Table of contents <a name="table_of_contents"></a>
+
+1. [The des_cluster project](#des_cluster_overview)
+2. [Running Cosmolike projects (Basic instructions)](#des_cluster_running_cosmolike_projects)
+3. [Running Hybrid Cosmolike-ML emulators](#des_cluster_examples_emul2)
+4. [The notebooks and the notebook wrappers](#des_cluster_notebook)
+5. [The plotting functions](#des_cluster_plots)
+6. [The notebook wrappers](#des_cluster_wrappers)
+7. [Likelihood options and nuisance parameters](#des_cluster_likelihood)
+8. [Cluster options](#des_cluster_options)
+9. [Nuisance parameters](#des_cluster_params)
+10. [Synthetic data](#des_cluster_data)
+11. [Files](#des_cluster_data_files)
+12. [Regenerating the data](#des_cluster_data_scripts)
+13. [Unit tests and validation tools](#des_cluster_unit_tests)
+14. [Validation tools](#des_cluster_validation)
+15. [Timing](#des_cluster_timing)
+16. [Status and known limitations](#des_cluster_status)
+17. [Computing covariances](#computing_covariances)
+
 # The des_cluster project <a name="des_cluster_overview"></a>
 
 This project runs the DES Y6-style joint analysis of galaxy clusters, galaxy clustering, and weak lensing of [arXiv:2503.13631](https://arxiv.org/abs/2503.13631) in Cocoa. The cluster code is a port of the original CosmoLike cluster code ([arXiv:2008.10757](https://arxiv.org/abs/2008.10757)) into Cocoa's `cosmolike_core`, where it lives in the files ending in `_cluster`. The file [PORT_PLAN.md](PORT_PLAN.md) records the model, the design decisions, the validation, and the status of the port.
@@ -166,23 +186,6 @@ The examples numbered `1` run 4x2pt + N, and the examples numbered `2` run 6x2pt
   `EXAMPLE_MCMC1.yaml` and `EXAMPLE_MCMC2.yaml` sample $\Lambda$CDM, as in the paper, with the neutrino mass free (`w` and `w0pwa` are fixed at -1; to sample $w_0$-$w_a$, give them a prior as in the evaluate examples). No proposal covariance is shipped for the cluster combinations, so the first run learns it.
 
 The outputs are written to `projects/des_cluster/chains/`.
-
-# Table of contents <a name="table_of_contents"></a>
-
-1. [Running Hybrid Cosmolike-ML emulators](#des_cluster_examples_emul2)
-2. [The notebooks and the notebook wrappers](#des_cluster_notebook)
-    1. [The plotting functions](#des_cluster_plots)
-    2. [The notebook wrappers](#des_cluster_wrappers)
-3. [Likelihood options and nuisance parameters](#des_cluster_likelihood)
-    1. [Cluster options](#des_cluster_options)
-    2. [Nuisance parameters](#des_cluster_params)
-4. [Synthetic data](#des_cluster_data)
-    1. [Files](#des_cluster_data_files)
-    2. [Regenerating the data](#des_cluster_data_scripts)
-5. [Unit tests and validation tools](#des_cluster_unit_tests)
-    1. [Validation tools](#des_cluster_validation)
-    2. [Timing](#des_cluster_timing)
-6. [Status and known limitations](#des_cluster_status)
 
 # Running Hybrid Cosmolike-ML emulators <a name="des_cluster_examples_emul2"></a>
 
@@ -685,7 +688,7 @@ the script `start_cocoa.sh`
 
 **Step :two:**: run the tests of this project
 
-    python -m pytest ./projects/des_cluster/tests
+    python -m pytest ./projects/des_cluster/tests/data_vector
 
 ## Validation tools <a name="des_cluster_validation"></a>
 
@@ -746,3 +749,49 @@ The port is complete for the model described above: the two likelihoods run, the
 - **Angular binning in the compiled interface.** cosmolike caches the bin-averaged Legendre kernels by the number of angular bins and the table key, not by the angular range, so a call to `init_binning` with a new range and the same number of bins returns the values of the old range. The notebook wrappers avoid this by drawing a new table key on every call.
 - **No response functions for the cluster blocks.** The data-vector plotting functions of `cosmolike_notebook_utils` have a cluster version (`plot_datavectors_cluster.py`); the response helpers (`plot_response.py`) do not.
 - **No tagged release.** Cocoa pins this project to the branch `main`.
+
+# Computing covariances <a name="computing_covariances"></a>
+
+[EXAMPLE_EVALUATE_COVARIANCE.ipynb](EXAMPLE_EVALUATE_COVARIANCE.ipynb)
+computes real-space and Fourier-space galaxy/shear covariances, with
+separate Gaussian, super-sample and connected components. It compares
+accuracy boosts, checks eigenvalues and plots the changes.
+
+We assume Cocoa and this project are installed, users have run
+`conda activate cocoa`, the shell is Bash, and the current folder is
+`cocoa/Cocoa`.
+
+**Step :one:**: activate Cocoa's private Python environment.
+
+    source start_cocoa.sh
+
+**Step :two:**: compile the project interface.
+
+    unset IGNORE_COSMOLIKE_des_cluster_CODE
+    source ./projects/des_cluster/scripts/compile_des_cluster.sh
+
+**Step :three:**: start Jupyter.
+
+    jupyter notebook --no-browser --port=8888
+
+**Step :four:**: open the printed URL and select
+`projects/des_cluster/EXAMPLE_EVALUATE_COVARIANCE.ipynb`.
+
+**Step :five:**: inspect the survey settings, choose `boosts`, then select
+**Kernel → Restart Kernel and Run All Cells**.
+
+The final cell writes `covariance/forecast_real.npz`,
+`covariance/forecast_fourier.npz` and `covariance/forecast_camb.npz`.
+The [covariance guide](covariance/README.md) explains the settings, output
+arrays, physical approximations and separate covariance test command.
+
+> [!NOTE]
+> This is a massless-neutrino, Limber forecast with linear galaxy bias,
+> zero IA, magnification and RSD, and a spherical-cap footprint.
+> The notebook uses eight OpenMP threads and one BLAS thread.
+> A larger `accuracy_boost` refines integrations; it does not certify
+> parameter-error convergence or replace the likelihood's supplied matrix.
+
+> [!NOTE]
+> Cluster counts and cluster two-point blocks are not computed.
+> The notebook covers the galaxy–shear block only.
