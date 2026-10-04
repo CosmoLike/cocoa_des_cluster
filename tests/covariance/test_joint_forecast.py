@@ -28,7 +28,7 @@ def test_joint_forecast_threads_localization_and_archive(tmp_path):
         'theta_edges_arcmin': np.geomspace(2.5, 250.0, 6),
         'ell_max': 128,
         'mask_ell_max': 128,
-        'ng_ell_nodes': 4,
+        'ng_ell': np.geomspace(2.5, 128.5, 4)-0.5,
         'angle_nquad': 64,
         'halo_mass_nquad': 64,
         'nwindow': 1025,
@@ -95,6 +95,7 @@ def test_joint_forecast_threads_localization_and_archive(tmp_path):
             if isinstance(values, np.ndarray):
                 np.testing.assert_array_equal(archive[key], values)
         saved_settings = json.loads(str(archive['settings_json']))
+        np.testing.assert_array_equal(saved_settings['ng_ell'], settings['ng_ell'])
         assert saved_settings['count_cross_model'] == 'SSC only'
         missing = saved_settings['omitted_terms']
         assert 'non-SSC count-spectrum cross covariance' in missing
