@@ -243,6 +243,15 @@ validated replacement for the likelihood covariance. For the physical
 decomposition, see [Krause & Eifler, Appendix A](https://arxiv.org/abs/1601.05779)
 and [Schaan, Takada & Spergel, Eq. 35](https://arxiv.org/abs/1406.3330).
 
+The DES Y6 model also uses non-Limber spectra in its covariance to retain
+correlations between different redshift bins. The example's Limber-only
+calculation therefore does not yet reproduce that DES prescription. See
+[the DES Y6 modeling paper, Appendix F](https://arxiv.org/html/2503.13631v1).
+The omitted selected-cluster and non-SSC count terms describe extensions
+of the general halo model; their listing does not mean DES included each
+one. DES selection-bias modeling is also distinct from the response of a
+selection probability to a long-wavelength environmental fluctuation.
+
 **Step :four:**: check the localized matrix on `valid_indices`.
 
 ```python
