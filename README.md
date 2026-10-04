@@ -777,6 +777,14 @@ counts from three cluster redshift bins and four richness bins. It follows the
 likelihood order ss, gs, gg, cg, N, cc, cs. Cluster lensing is transformed to $`\Sigma = Y\gamma_t`$ on both covariance axes. The 6×2pt + N mask removes the 48 defined Y null
 rows as well as physical scale cuts.
 
+The default [installation options](../../set_installation_options.sh) set
+`IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE=1`. This leaves covariance-generation
+kernels and notebook bindings out of the compiled interface. Likelihoods still
+read and invert their supplied covariance matrices. The steps below enable
+covariance generation for this build; comment out that export in
+`set_installation_options.sh` to keep it enabled in later sessions.
+Recompile after changing the option, then restart any running notebook kernel.
+
 We assume Cocoa and this project are installed, users have run
 `conda activate cocoa`, the shell is Bash, and the current folder is
 `cocoa/Cocoa`.
@@ -785,9 +793,10 @@ We assume Cocoa and this project are installed, users have run
 
     source start_cocoa.sh
 
-**Step :two:**: compile the project interface.
+**Step :two:**: enable covariance generation and compile the project interface.
 
     unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
+    unset IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE
     source ./projects/des_cluster/scripts/compile_des_cluster.sh
 
 **Step :three:**: start Jupyter.
@@ -823,3 +832,16 @@ crosses. Selected-cluster one-halo cNG and non-SSC count–spectrum terms remain
 absent. The supplied synthetic matrix uses Gaussian two-point covariance and
 Poisson plus sample-variance counts, with zero count–spectrum crosses.
 Differences from it therefore include deliberate model differences.
+
+To return to a data-vector-only build, use the following steps from
+`cocoa/Cocoa` with `conda activate cocoa` and Bash.
+
+**Step :one:**: activate Cocoa.
+
+    source start_cocoa.sh
+
+**Step :two:**: omit covariance generation and rebuild the interface.
+
+    unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
+    export IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE=1
+    source ./projects/des_cluster/scripts/compile_des_cluster.sh

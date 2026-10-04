@@ -15,6 +15,12 @@ project = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project/'interface'))
 sys.path.insert(0, str(project.parents[1]/'external_modules/code/cosmolike_core'))
 import cosmolike_des_cluster_interface as ci
+
+# The analytic catalog binds C functions at class definition time, before
+# session fixtures run. A data-vector-only build omits those functions.
+if not ci.has_covariance:
+    pytest.skip("Covariance generation is disabled", allow_module_level=True)
+
 from cosmolike_notebook_utils.covariance.survey_cluster import (
     all_pairs_spectra,
     observable_layout,
