@@ -49,6 +49,7 @@ shell is Bash and the current folder is `cocoa/Cocoa`.
 | Cluster-lensing localization | Check exact angular polynomials, every joint cross block, known last-bin null modes and bitwise 1/2/4/8-thread propagation. |
 | Physical halo samples | Compare the covariance mass samples with scalar halo readers and the fixed-amplitude Tinker formula, including both HMF modes and the redshift-fit boundary. |
 | Joint survey preparation | Check the DES count insertion, richness ordering, absolute versus normalized windows and every field spectrum across memory-block boundaries. |
+| Joint forecast | Check all six two-point families and counts, one/eight-thread repeatability, Y propagation, defined null modes, positivity and saved model limits. |
 
 The [shared component tests](../../../lsst_y1/tests/covariance/README.md)
 contain independent algebra and projection references. This project check
@@ -79,6 +80,9 @@ than independently calibrating those fits.
 analytic catalog inputs and independent NumPy projection. The smaller
 layout check verifies that excluding a measured galaxy–shear row does not
 change the internal field identities.
+`test_joint_forecast.py` assembles all joint blocks with five angular bins
+and small integration grids. It checks the stated biased-tracer/SSC-count
+approximation, not the omitted discrete-halo terms or DES accuracy.
 
 The [data-vector tests](../data_vector/README.md) check likelihood signals
 and stored reference values separately. No stored covariance or reference

@@ -738,7 +738,12 @@ On the same machine, CAMB takes 0.63 s at 8 threads and 1.2 s at 4 threads, 6 to
 
 The port is complete for the model described above: the two likelihoods run, the compiled code is validated against an independent Python reference, and the unit tests cover both combinations. [PORT_PLAN.md](PORT_PLAN.md) (section 7) holds the detailed status. The items below are open.
 
-- **The data are synthetic.** The data vector is a noiseless model at the fiducial point, and the covariance is analytic Gaussian: it has no block between the counts and the two-point functions, no super-sample covariance, and no trispectrum term. The terms beyond Gaussian and the block between the counts and the two-point functions are deferred to the planned port of CosmoCov to Cocoa.
+- **The data are synthetic.** The supplied data vector is a noiseless
+  fiducial model, and its covariance is analytic Gaussian: it has no
+  count–two-point cross block, SSC or trispectrum term. The separate
+  [covariance notebook](#computing_covariances) computes a joint forecast
+  with SSC and a biased-tracer cNG approximation. It does not replace the
+  supplied likelihood covariance or include every discrete-halo term.
 - **$w_{cc}$ and $w_{cg}$ are Limber only.** The original CosmoLike code computes both without the Limber approximation. At the largest angular bin (225 arcmin), for the first cluster redshift bin and the lowest richness bin, the Limber result differs from the non-Limber one by about -13% for $w_{cc}$ and -16% for $w_{cg}$ ([tests/lighthouse_reference/README.md](tests/lighthouse_reference/README.md)). The keys `cluster_adopt_limber_cc` and `cluster_adopt_limber_cg` exist, but 1 is the only implemented value. Non-Limber $w_{cc}$ and $w_{cg}$ are the first physics item of the backlog.
 - **Cluster lensing has NLA intrinsic alignment only.** There is no TATT in the cluster lensing code, and the examples run NLA in every block.
 - **Neutrinos in the halo mass function.** The cluster combinations use the cold dark matter + baryon prescription described in [Cluster options](#des_cluster_options) with one massive neutrino state in CAMB, while DES ran three degenerate ones; the two differ by up to 2.6% in the counts at the same $\Omega_\nu h^2$. One state is the convention of the Cosmolike projects. On the emulator path, whose matter power spectrum emulator has no neutrino input, the likelihood approximates the cb spectrum as $P_{lin}/(1 - f_\nu)^2$.
@@ -756,6 +761,9 @@ The port is complete for the model described above: the two likelihoods run, the
 computes real-space and Fourier-space galaxy/shear covariances, with
 separate Gaussian, super-sample and connected components. It compares
 accuracy boosts, checks eigenvalues and plots the changes.
+Its final section adds the angular cluster $`6\times2\mathrm{pt}+N`$
+forecast in the project's 2,812-entry ordering, including all count SSC
+cross blocks and the Y transformation of cluster lensing.
 
 We assume Cocoa and this project are installed, users have run
 `conda activate cocoa`, the shell is Bash, and the current folder is
@@ -780,8 +788,12 @@ We assume Cocoa and this project are installed, users have run
 **Step :five:**: inspect the survey settings, choose `boosts`, then select
 **Kernel → Restart Kernel and Run All Cells**.
 
-The final cell writes `covariance/forecast_real.npz`,
+The galaxy/shear section writes `covariance/forecast_real.npz`,
 `covariance/forecast_fourier.npz` and `covariance/forecast_camb.npz`.
+The cluster section separately writes `covariance/forecast_cluster.npz`
+and `covariance/forecast_cluster_camb.npz`, including model limits and
+the count and angular row positions. Set `cluster_boosts` to compare
+resolutions for that forecast; see the [step-by-step cluster guide](covariance/README.md#joint).
 The [covariance guide](covariance/README.md) explains the settings, output
 arrays, physical approximations and separate covariance test command.
 
@@ -793,5 +805,8 @@ arrays, physical approximations and separate covariance test command.
 > parameter-error convergence or replace the likelihood's supplied matrix.
 
 > [!NOTE]
-> Cluster counts and cluster two-point blocks are not computed.
-> The notebook covers the galaxy–shear block only.
+> The cluster forecast uses linearly biased matter cNG and SSC-only
+> count cross correlations. Selected-cluster one-halo cNG corrections and
+> non-SSC count–spectrum terms are omitted. The final Y bin of each cluster
+> lensing row is exactly zero; check positivity on `valid_indices`, then
+> apply the intended physical scale cuts. No negative mode is repaired.

@@ -6,7 +6,8 @@
 4. [Reading the figures](#figures)
 5. [Running the tests](#tests)
 6. [Files](#files)
-7. [Appendix](#appendix)
+7. [Cluster 6x2pt + counts](#joint)
+8. [Appendix](#appendix)
    1. [FAQ: Which survey does the example use?](#survey)
    2. [FAQ: What does the calculation include?](#gaussian)
    3. [FAQ: How can users check convergence?](#convergence)
@@ -22,11 +23,14 @@ galaxy–galaxy lensing and galaxy clustering, using 6 lens and 4
 source bins. The Fourier example contains E-mode shear, galaxy–shear
 and galaxy-density bandpowers.
 
-Cluster counts and cluster two-point blocks are not computed. This is a galaxy/shear example.
+The final section computes the angular cluster $`6\times2\mathrm{pt}+N`$
+forecast, including all 12 counts and 2,800 two-point entries, under the
+[cluster approximation described below](#joint).
 
-The notebook runs CAMB once, computes both spaces at several accuracy
-boosts, reports positivity and refinement diagnostics, plots the physical
-components, and saves NumPy archives. It does not load the likelihood's
+The galaxy/shear section runs CAMB once for both spaces and several
+accuracy boosts. The cluster section has its own recorded initialization.
+Both report positivity and refinement diagnostics, plot the physical
+components, and save NumPy archives. Neither loads the likelihood's
 supplied covariance.
 
 > [!NOTE]
@@ -70,6 +74,8 @@ The final cell saves these files in `projects/des_cluster/covariance/`:
 | `forecast_real.npz` | Angular G, SSC, cNG, total, row map, means and resolved settings. |
 | `forecast_fourier.npz` | Fourier G, SSC, cNG, total, row map, means and resolved settings. |
 | `forecast_camb.npz` | CAMB tables used for the calculation. |
+| `forecast_cluster.npz` | Joint angular components, count means, row positions, Y null-mode selection and explicit model limits. |
+| `forecast_cluster_camb.npz` | CAMB tables used for the separate cluster initialization. |
 
 Rerunning the final cell replaces these computed output files.
 
@@ -191,9 +197,76 @@ The [data-vector test guide](../tests/data_vector/README.md) explains them.
 | --- | --- |
 | [EXAMPLE_EVALUATE_COVARIANCE.ipynb](../EXAMPLE_EVALUATE_COVARIANCE.ipynb) | Run, refine and plot real/Fourier G, SSC and cNG matrices. |
 | [des_cluster_covariance.py](des_cluster_covariance.py) | Specify survey inputs, initialize this project's interface and call the shared calculation. |
+| [des_cluster_joint_covariance.py](des_cluster_joint_covariance.py) | Add the cluster selections, richness relation, joint row ordering and Y convention. |
 | [Shared covariance package](../../../external_modules/code/cosmolike_core/cosmolike_notebook_utils/covariance/README.md) | Reuse integration preparation, Gaussian assembly, halo inputs, accuracy settings and diagnostics. |
 | [Shared plotting script](../../../external_modules/code/cosmolike_core/cosmolike_notebook_utils/plot_covariances.py) | Plot covariance arrays from any project. |
 | [Covariance C files](../../../external_modules/code/cosmolike_core/cosmolike/covariances/README.md) | Read the physics and each compiled component's role. |
+
+# Cluster 6x2pt + counts <a name="joint"></a>
+
+We assume the environment and interface are prepared using the
+[notebook instructions](#running), and the notebook kernel is active.
+
+**Step :one:**: reach the notebook section **Cluster 6x2pt + counts** and
+inspect its physical choices. It uses `des_y6_cluster.nz`, three observed
+redshift bins, and richness edges 20, 30, 45, 60 and 500. The lognormal
+mass–richness relation is fixed to the values in the adapter. Its
+environmental selection correction is zero; this is a forecast assumption.
+
+**Step :two:**: choose the accuracy comparison with one control.
+
+```python
+cluster_boosts = [1, 2]
+cluster_settings = joint_survey.configuration(
+    accuracy_boost=cluster_boosts[0], ytransform=True,
+)
+```
+
+The same boost refines the common matter calculation and selected-halo
+response integration. Increasing it does not add missing physical terms.
+
+**Step :three:**: run the calculation and inspect the printed model limits.
+The matrix order is shear–shear, galaxy–shear, galaxy clustering,
+cluster–galaxy, counts, cluster clustering, cluster lensing. Richness is
+the fastest cluster-category index. All internal cross-redshift spectra
+remain in Gaussian pairings, including pairs absent from measured rows.
+
+The Gaussian component includes count Poisson noise. SSC uses common
+long-mode shells for all counts and two-point functions, including the
+fixed-profile abundance response of the selected cluster's own halo.
+Density contrasts are normalized by observed catalog means; absolute
+counts are not. The connected two-point term approximates clusters as
+linearly biased tracers of the matter trispectrum. **Non-SSC count–spectrum
+cross terms and selected-cluster one-halo cNG corrections are omitted.**
+This is a complete matrix within these stated approximations, not a
+validated replacement for the likelihood covariance. For the physical
+decomposition, see [Krause & Eifler, Appendix A](https://arxiv.org/abs/1601.05779)
+and [Schaan, Takada & Spergel, Eq. 35](https://arxiv.org/abs/1406.3330).
+
+**Step :four:**: check the localized matrix on `valid_indices`.
+
+```python
+keep = joint["valid_indices"]
+matrix = joint["total"][np.ix_(keep, keep)]
+diagnostic = cov.covariance_modes(matrix=matrix)
+print(diagnostic["positive_definite"])
+```
+
+The project uses $`Y(R)=\Sigma(R)-\Sigma(R_{\max})`$ for cluster lensing.
+The mean changes by an angular matrix $`A`$, and every covariance component
+changes as $`ACA^{\mathsf T}`$, including count–lensing cross blocks.
+The last angular value of each of the 48 cluster-lensing rows is exactly
+zero. `valid_indices` removes those defined null rows only. It does not
+apply physical scale cuts or discard numerically negative modes. See
+[Park, Rozo & Krause](https://arxiv.org/abs/2004.07504) and
+[the DES covariance conventions, Sec. II.4](https://arxiv.org/abs/2503.13631).
+
+**Step :five:**: compare boosts and inspect the correlation/component plots.
+The notebook saves the highest tested boost with all row positions,
+settings and omitted physics in `forecast_cluster.npz`. Its CAMB tables
+are saved separately. These files remain separate from the likelihood's
+supplied covariance. Fisher convergence and the effect of omitted terms
+must be assessed before inference.
 
 # Appendix <a name="appendix"></a>
 
@@ -210,13 +283,10 @@ The quadrature shape dispersion 0.384666 is divided by $`\sqrt{2}`$
 to obtain the per-component input.
 These galaxy and shear blocks are part of the joint analysis described by
 [DES, arXiv:2503.13631](https://arxiv.org/abs/2503.13631).
-Cluster counts, cluster correlations and cluster lensing need additional
-selection and halo response terms. They are not computed by this notebook;
-it is not a $`6\times2\mathrm{pt}+N`$ covariance.
-
-This notebook computes the galaxy–shear block with six lens and four
-source bins. The angular bins follow the joint dataset. It does not yet
-include cluster counts, cluster clustering or cluster lensing.
+The final angular section adds cluster counts, cluster clustering,
+cluster–galaxy correlations and cluster lensing with the assumptions
+listed in the [joint forecast guide](#joint). The Fourier example remains
+the galaxy/shear block. The angular bins follow the joint dataset.
 
 | Survey input | Example choice |
 | --- | --- |
@@ -227,6 +297,7 @@ include cluster counts, cluster clustering or cluster lensing.
 | Integer Fourier bands | 15 bands, multipoles 30–4000 |
 | Real-space vector | 1,000 entries |
 | Fourier vector | 600 entries |
+| Joint angular vector | 2,812 entries before removing 48 defined Y null rows |
 | Neutrino mass | Zero |
 | Intrinsic alignment | Zero |
 | Photo-z shifts | Zero |
