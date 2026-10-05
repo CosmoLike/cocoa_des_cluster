@@ -15,7 +15,8 @@ import des_cluster_covariance as galaxy_survey
 from cosmolike_notebook_utils.covariance.forecast_cluster import compute_forecast
 
 
-def configuration(accuracy_boost=None, ytransform=True, **accuracy_overrides):
+def configuration(accuracy_boost=None, ytransform=True, gaussian=None,
+                  **accuracy_overrides):
     """Return DES physical choices and one resolved covariance accuracy boost.
 
     Arguments:
@@ -25,9 +26,16 @@ def configuration(accuracy_boost=None, ytransform=True, **accuracy_overrides):
     Returns:
         Settings mapping with the project YAML baseline and explicit model limits.
     """
+    if gaussian is None:
+        gaussian = {"nonlimber": False, "ia": "none"}
     settings = galaxy_survey.configuration(
-        accuracy_boost=accuracy_boost, **accuracy_overrides,
+        accuracy_boost=accuracy_boost, gaussian=gaussian, **accuracy_overrides,
     )
+    model = settings["gaussian"]
+    if model["nonlimber"] or model["ia"] != "none":
+        raise ValueError("joint selected-cluster covariance still requires "
+                         "gaussian.nonlimber=false and gaussian.ia=none; "
+                         "use the galaxy/shear adapter for Gaussian NL/IA")
     settings.update({
         'cluster_file': 'data/des_y6_cluster.nz',
         'cluster_richness_edges': np.array([20., 30., 45., 60., 500.]),

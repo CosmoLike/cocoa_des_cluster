@@ -18,6 +18,18 @@
 16. [Status and known limitations](#des_cluster_status)
 17. [Computing covariances](#computing_covariances)
 
+
+> [!Warning]
+> CosmoLike supports the optimized strict-IEEE default build and
+> `COSMOLIKE_DEBUG_MODE`. The compiler mode `COSMOLIKE_AGGRESSIVE_MODE`
+> is retired because its fast-math configuration produced incorrect
+> covariance inverses. Unset that variable before compiling.
+> Do not enable `-ffast-math`, `-Ofast`, `-funsafe-math-optimizations`,
+> `-fassociative-math`, `-ffinite-math-only`, `-freciprocal-math`,
+> `-fno-signed-zeros`, or `-fno-trapping-math` in CosmoLike builds.
+> This does not change Cocoa's separate `--aggressive` download option.
+
+
 # The des_cluster project <a name="des_cluster_overview"></a>
 
 This project runs the DES Y6-style joint analysis of galaxy clusters, galaxy clustering, and weak lensing of [arXiv:2503.13631](https://arxiv.org/abs/2503.13631) in Cocoa. The cluster code is a port of the original CosmoLike cluster code ([arXiv:2008.10757](https://arxiv.org/abs/2008.10757)) into Cocoa's `cosmolike_core`, where it lives in the files ending in `_cluster`. The file [PORT_PLAN.md](PORT_PLAN.md) records the model, the design decisions, the validation, and the status of the port.
@@ -820,10 +832,10 @@ component plots, accuracy controls and covariance-only tests.
 
 > [!NOTE]
 > The generated matrix is an analogous forecast, not a reproduction of the
-> supplied likelihood covariance. It uses massless neutrinos, Limber,
-> linear bias, zero IA/magnification/RSD and a spherical-cap footprint.
-> Numerical defaults still need convergence validation. The notebook uses
-> eight OpenMP threads and one BLAS thread. `accuracy_boost` refines
+> supplied likelihood covariance. Gaussian spectra can include non-Limber
+> gg/gs and NLA/TATT; SSC/cNG retain zero-IA Limber physics. The forecast
+> uses massless neutrinos and a spherical-cap footprint.
+> `accuracy_boost` refines
 > tables and cutoffs; `integration_accuracy` separately selects precomputed
 > GSL rules from [covariance/default.yaml](covariance/default.yaml).
 
@@ -854,6 +866,7 @@ From Bash in `cocoa/Cocoa`, with `conda activate cocoa`:
 
 **Step :three:**: inspect the YAML cosmology and compute the matrix components.
 
+    export OMP_NUM_THREADS=8
     python ./projects/des_cluster/covariance/compute_covariance.py \
         ./projects/des_cluster/EXAMPLE_EVALUATE_COVARIANCE.yaml
 
@@ -872,15 +885,17 @@ explicitly in `sampler.evaluate.override`. No MCMC or random prior draw runs.
 In its `covariance` block, `accuracy_boost: 2` refines the project's
 `default.yaml` baseline. `integration_accuracy: 1` changes the quadrature
 level independently. Internal accuracy controls can also be set there.
-Use `threads` for the OpenMP team and `space` for the measurement space.
+Use `space` for the measurement space. Set the OpenMP team with
+`OMP_NUM_THREADS` in the shell; no thread count belongs in the YAML.
 
 `theory.camb.extra_args` supports `AccuracyBoost`, `kmax`, `k_per_logint`,
 `lens_potential_accuracy` and `halofit_version`. CAMB's boost controls
 CAMB; the covariance boost controls its own tables and cutoffs.
 
 Paths in the YAML are relative to the working directory, `cocoa/Cocoa`.
-`output` names the `.npz` archive. `--output` and `--threads` can override
-those two choices for an HPC job; `--help` lists the command options.
+`output` names the `.npz` archive; `--output` can override it for an HPC
+job. Set `OMP_NUM_THREADS` in that job’s environment. `--help` lists the
+command options.
 
 To return to a data-vector-only build, use the following steps from
 `cocoa/Cocoa` with `conda activate cocoa` and Bash.
@@ -894,3 +909,10 @@ To return to a data-vector-only build, use the following steps from
     unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
     export IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE=1
     source ./projects/des_cluster/scripts/compile_des_cluster.sh
+
+Gaussian non-Limber and NLA/TATT options are documented in the
+[covariance guide](covariance/README.md#choosing-the-gaussian-spectra).
+The YAML keeps these Gaussian choices separate from SSC/cNG. OpenMP
+threads come exclusively from `OMP_NUM_THREADS`, not from a YAML key.
+The joint selected-cluster forecast remains Limber and zero IA;
+these new Gaussian options apply to its separate galaxy/shear adapter.

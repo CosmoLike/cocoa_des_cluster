@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+import pytest
 
 project = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project/'interface'))
@@ -19,6 +20,14 @@ import cosmolike_des_cluster_interface as ci
 import des_cluster_joint_covariance as survey
 from cosmolike_notebook_utils.covariance.forecast_cluster import save_forecast
 from cosmolike_notebook_utils.covariance.transform_cluster import localize_covariance
+
+
+def test_joint_model_rejects_partial_gaussian_extensions():
+    """Galaxy-only physics must not silently label a joint cluster forecast."""
+    for gaussian in ({"nonlimber": True, "ia": "none"},
+                     {"nonlimber": False, "ia": "NLA", "A1": 0.6}):
+        with pytest.raises(ValueError, match="joint selected-cluster"):
+            survey.configuration(gaussian=gaussian)
 
 
 def test_joint_forecast_threads_localization_and_archive(tmp_path):

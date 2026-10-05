@@ -35,9 +35,13 @@ sampler:
 
 covariance:
   space: real
-  threads: 8
   # Internal refinements inherit covariance/default.yaml for this survey.
   accuracy_boost: 1
   integration_accuracy: 0
+  # Gaussian spectra only; SSC/cNG keep their existing model.
+  gaussian:
+    nonlimber: false
+    ia: none
+    # The joint selected-cluster model still requires Limber and zero IA.
 
 output: ./projects/des_cluster/covariance/production_covariance.npz
