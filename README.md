@@ -41,8 +41,8 @@
 > overhead. Both routes call the same C kernels.
 >
 > In a matched **LSST Y1 covariance** test on an M2 Pro with eight threads,
-> the CLI averaged **68.34 s** (three runs); one wrapper run took **177.74 s**.
-> The CLI was **2.60× faster**, with bitwise-identical covariance components.
+> the CLI averaged **50.23 s** (three runs); one wrapper run took **173.38 s**.
+> The CLI was **3.45× faster**, with bitwise-identical covariance components.
 > See [the production covariance CLI](#computing_covariances).
 
 This project runs the DES Y6-style joint analysis of galaxy clusters, galaxy clustering, and weak lensing of [arXiv:2503.13631](https://arxiv.org/abs/2503.13631) in Cocoa. The cluster code is a port of the original CosmoLike cluster code ([arXiv:2008.10757](https://arxiv.org/abs/2008.10757)) into Cocoa's `cosmolike_core`, where it lives in the files ending in `_cluster`. The file [PORT_PLAN.md](PORT_PLAN.md) records the model, the design decisions, the validation, and the status of the port.
@@ -251,7 +251,13 @@ Now, users must follow all the steps below.
         export OMP_PLACES=cores; export OMP_DYNAMIC=FALSE; \
         export OPENBLAS_NUM_THREADS=1; export MKL_NUM_THREADS=1
 
- **Step :three:** Run `cobaya-run` on the first emulator example, following the commands below. As before, the examples numbered `1` run 4x2pt + N and the examples numbered `2` run 6x2pt + N.
+ **Step :three:**: Remove GPU (idea is to run emulators on the CPU!)
+
+  - Linux
+
+        export CUDA_VISIBLE_DEVICES=""
+
+ **Step :four:** Run `cobaya-run` on the first emulator example, following the commands below. As before, the examples numbered `1` run 4x2pt + N and the examples numbered `2` run 6x2pt + N.
 
 - **One model evaluation**:
 
