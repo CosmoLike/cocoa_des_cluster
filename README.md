@@ -32,6 +32,19 @@
 
 # The des_cluster project <a name="des_cluster_overview"></a>
 
+> [!WARNING]
+> **CLI for production; notebook wrappers for exploration.**
+>
+> Run production and HPC calculations from YAML through the optimized
+> `_interface` bindings. Notebook `_wrapper` APIs expose intermediate
+> quantities for exploration; copying and rearranging their arrays adds
+> overhead. Both routes call the same C kernels.
+>
+> In a matched **LSST Y1 covariance** test on an M2 Pro with eight threads,
+> the CLI averaged **68.34 s** (three runs); one wrapper run took **177.74 s**.
+> The CLI was **2.60× faster**, with bitwise-identical covariance components.
+> See [the production covariance CLI](#computing_covariances).
+
 This project runs the DES Y6-style joint analysis of galaxy clusters, galaxy clustering, and weak lensing of [arXiv:2503.13631](https://arxiv.org/abs/2503.13631) in Cocoa. The cluster code is a port of the original CosmoLike cluster code ([arXiv:2008.10757](https://arxiv.org/abs/2008.10757)) into Cocoa's `cosmolike_core`, where it lives in the files ending in `_cluster`. The file [PORT_PLAN.md](PORT_PLAN.md) records the model, the design decisions, the validation, and the status of the port.
 
 The project provides two likelihoods:
