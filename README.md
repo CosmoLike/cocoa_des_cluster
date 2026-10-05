@@ -251,7 +251,13 @@ Now, users must follow all the steps below.
         export OMP_PLACES=cores; export OMP_DYNAMIC=FALSE; \
         export OPENBLAS_NUM_THREADS=1; export MKL_NUM_THREADS=1
 
- **Step :three:** Run `cobaya-run` on the first emulator example, following the commands below. As before, the examples numbered `1` run 4x2pt + N and the examples numbered `2` run 6x2pt + N.
+ **Step :three:**: Remove GPU (idea is to run emulators on the CPU!)
+
+  - Linux
+
+        export CUDA_VISIBLE_DEVICES=""
+
+ **Step :four:** Run `cobaya-run` on the first emulator example, following the commands below. As before, the examples numbered `1` run 4x2pt + N and the examples numbered `2` run 6x2pt + N.
 
 - **One model evaluation**:
 
