@@ -1,4 +1,49 @@
+# Table of contents <a name="table_of_contents"></a>
+
+1. [The des_cluster project](#des_cluster_overview)
+2. [Running Cosmolike projects (Basic instructions)](#des_cluster_running_cosmolike_projects)
+3. [Running Hybrid Cosmolike-ML emulators](#des_cluster_examples_emul2)
+4. [The notebooks and the notebook wrappers](#des_cluster_notebook)
+5. [The plotting functions](#des_cluster_plots)
+6. [The notebook wrappers](#des_cluster_wrappers)
+7. [Likelihood options and nuisance parameters](#des_cluster_likelihood)
+8. [Cluster options](#des_cluster_options)
+9. [Nuisance parameters](#des_cluster_params)
+10. [Synthetic data](#des_cluster_data)
+11. [Files](#des_cluster_data_files)
+12. [Regenerating the data](#des_cluster_data_scripts)
+13. [Unit tests and validation tools](#des_cluster_unit_tests)
+14. [Validation tools](#des_cluster_validation)
+15. [Timing](#des_cluster_timing)
+16. [Status and known limitations](#des_cluster_status)
+17. [Computing covariances](#computing_covariances)
+
+
+> [!Warning]
+> CosmoLike supports the optimized strict-IEEE default build and
+> `COSMOLIKE_DEBUG_MODE`. The compiler mode `COSMOLIKE_AGGRESSIVE_MODE`
+> is retired because its fast-math configuration produced incorrect
+> covariance inverses. Unset that variable before compiling.
+> Do not enable `-ffast-math`, `-Ofast`, `-funsafe-math-optimizations`,
+> `-fassociative-math`, `-ffinite-math-only`, `-freciprocal-math`,
+> `-fno-signed-zeros`, or `-fno-trapping-math` in CosmoLike builds.
+> This does not change Cocoa's separate `--aggressive` download option.
+
+
 # The des_cluster project <a name="des_cluster_overview"></a>
+
+> [!WARNING]
+> **CLI for production; notebook wrappers for exploration.**
+>
+> Run production and HPC calculations from YAML through the optimized
+> `_interface` bindings. Notebook `_wrapper` APIs expose intermediate
+> quantities for exploration; copying and rearranging their arrays adds
+> overhead. Both routes call the same C kernels.
+>
+> In a matched **LSST Y1 covariance** test on an M2 Pro with eight threads,
+> the CLI averaged **68.34 s** (three runs); one wrapper run took **177.74 s**.
+> The CLI was **2.60× faster**, with bitwise-identical covariance components.
+> See [the production covariance CLI](#computing_covariances).
 
 This project runs the DES Y6-style joint analysis of galaxy clusters, galaxy clustering, and weak lensing of [arXiv:2503.13631](https://arxiv.org/abs/2503.13631) in Cocoa. The cluster code is a port of the original CosmoLike cluster code ([arXiv:2008.10757](https://arxiv.org/abs/2008.10757)) into Cocoa's `cosmolike_core`, where it lives in the files ending in `_cluster`. The file [PORT_PLAN.md](PORT_PLAN.md) records the model, the design decisions, the validation, and the status of the port.
 
@@ -166,23 +211,6 @@ The examples numbered `1` run 4x2pt + N, and the examples numbered `2` run 6x2pt
   `EXAMPLE_MCMC1.yaml` and `EXAMPLE_MCMC2.yaml` sample $\Lambda$CDM, as in the paper, with the neutrino mass free (`w` and `w0pwa` are fixed at -1; to sample $w_0$-$w_a$, give them a prior as in the evaluate examples). No proposal covariance is shipped for the cluster combinations, so the first run learns it.
 
 The outputs are written to `projects/des_cluster/chains/`.
-
-# Table of contents <a name="table_of_contents"></a>
-
-1. [Running Hybrid Cosmolike-ML emulators](#des_cluster_examples_emul2)
-2. [The notebooks and the notebook wrappers](#des_cluster_notebook)
-    1. [The plotting functions](#des_cluster_plots)
-    2. [The notebook wrappers](#des_cluster_wrappers)
-3. [Likelihood options and nuisance parameters](#des_cluster_likelihood)
-    1. [Cluster options](#des_cluster_options)
-    2. [Nuisance parameters](#des_cluster_params)
-4. [Synthetic data](#des_cluster_data)
-    1. [Files](#des_cluster_data_files)
-    2. [Regenerating the data](#des_cluster_data_scripts)
-5. [Unit tests and validation tools](#des_cluster_unit_tests)
-    1. [Validation tools](#des_cluster_validation)
-    2. [Timing](#des_cluster_timing)
-6. [Status and known limitations](#des_cluster_status)
 
 # Running Hybrid Cosmolike-ML emulators <a name="des_cluster_examples_emul2"></a>
 
@@ -685,7 +713,7 @@ the script `start_cocoa.sh`
 
 **Step :two:**: run the tests of this project
 
-    python -m pytest ./projects/des_cluster/tests
+    python -m pytest ./projects/des_cluster/tests/data_vector
 
 ## Validation tools <a name="des_cluster_validation"></a>
 
@@ -735,7 +763,12 @@ On the same machine, CAMB takes 0.63 s at 8 threads and 1.2 s at 4 threads, 6 to
 
 The port is complete for the model described above: the two likelihoods run, the compiled code is validated against an independent Python reference, and the unit tests cover both combinations. [PORT_PLAN.md](PORT_PLAN.md) (section 7) holds the detailed status. The items below are open.
 
-- **The data are synthetic.** The data vector is a noiseless model at the fiducial point, and the covariance is analytic Gaussian: it has no block between the counts and the two-point functions, no super-sample covariance, and no trispectrum term. The terms beyond Gaussian and the block between the counts and the two-point functions are deferred to the planned port of CosmoCov to Cocoa.
+- **The data are synthetic.** The supplied data vector is a noiseless
+  fiducial model, and its covariance is analytic Gaussian: it has no
+  count–two-point cross block, SSC or trispectrum term. The separate
+  [covariance notebook](#computing_covariances) computes a joint forecast
+  with SSC and a biased-tracer cNG approximation. It does not replace the
+  supplied likelihood covariance or include every discrete-halo term.
 - **$w_{cc}$ and $w_{cg}$ are Limber only.** The original CosmoLike code computes both without the Limber approximation. At the largest angular bin (225 arcmin), for the first cluster redshift bin and the lowest richness bin, the Limber result differs from the non-Limber one by about -13% for $w_{cc}$ and -16% for $w_{cg}$ ([tests/lighthouse_reference/README.md](tests/lighthouse_reference/README.md)). The keys `cluster_adopt_limber_cc` and `cluster_adopt_limber_cg` exist, but 1 is the only implemented value. Non-Limber $w_{cc}$ and $w_{cg}$ are the first physics item of the backlog.
 - **Cluster lensing has NLA intrinsic alignment only.** There is no TATT in the cluster lensing code, and the examples run NLA in every block.
 - **Neutrinos in the halo mass function.** The cluster combinations use the cold dark matter + baryon prescription described in [Cluster options](#des_cluster_options) with one massive neutrino state in CAMB, while DES ran three degenerate ones; the two differ by up to 2.6% in the counts at the same $\Omega_\nu h^2$. One state is the convention of the Cosmolike projects. On the emulator path, whose matter power spectrum emulator has no neutrino input, the likelihood approximates the cb spectrum as $P_{lin}/(1 - f_\nu)^2$.
@@ -746,3 +779,153 @@ The port is complete for the model described above: the two likelihoods run, the
 - **Angular binning in the compiled interface.** cosmolike caches the bin-averaged Legendre kernels by the number of angular bins and the table key, not by the angular range, so a call to `init_binning` with a new range and the same number of bins returns the values of the old range. The notebook wrappers avoid this by drawing a new table key on every call.
 - **No response functions for the cluster blocks.** The data-vector plotting functions of `cosmolike_notebook_utils` have a cluster version (`plot_datavectors_cluster.py`); the response helpers (`plot_response.py`) do not.
 - **No tagged release.** Cocoa pins this project to the branch `main`.
+
+# Computing covariances <a name="computing_covariances"></a>
+
+[EXAMPLE_EVALUATE_COVARIANCE.ipynb](EXAMPLE_EVALUATE_COVARIANCE.ipynb)
+computes a covariance with this project's 6×2pt + counts measurement layout.
+It keeps G, SSC and cNG separately, applies the supplied likelihood mask,
+and plots the computed and supplied totals together.
+
+| Measurement choice | Notebook example |
+| --- | --- |
+| Dataset | [data/des_cluster_y6_6x2ptN.dataset](data/des_cluster_y6_6x2ptN.dataset) |
+| Primary space | Real-space 6×2pt + N, with $`\Sigma = Y\gamma_t`$ cluster lensing |
+| Lens bins | 6 |
+| Source bins | 4 |
+| Bins per two-point observable | 20, 2.5–250 arcmin |
+| Generated entries before cuts | 2,812 |
+| Entries after the dataset mask | 1,429 |
+
+The primary example has 2,812 entries: 2,800 two-point measurements and 12
+counts from three cluster redshift bins and four richness bins. It follows the
+likelihood order ss, gs, gg, cg, N, cc, cs. Cluster lensing is transformed to $`\Sigma = Y\gamma_t`$ on both covariance axes. The 6×2pt + N mask removes the 48 defined Y null
+rows as well as physical scale cuts.
+
+The default [installation options](../../set_installation_options.sh) set
+`IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE=1`. This leaves covariance-generation
+kernels and notebook bindings out of the compiled interface. Likelihoods still
+read and invert their supplied covariance matrices. The steps below enable
+covariance generation for this build; comment out that export in
+`set_installation_options.sh` to keep it enabled in later sessions.
+Recompile after changing the option, then restart any running notebook kernel.
+
+We assume Cocoa and this project are installed, users have run
+`conda activate cocoa`, the shell is Bash, and the current folder is
+`cocoa/Cocoa`.
+
+**Step :one:**: activate Cocoa's private Python environment.
+
+    source start_cocoa.sh
+
+**Step :two:**: enable covariance generation and compile the project interface.
+
+    unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
+    unset IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE
+    source ./projects/des_cluster/scripts/compile_des_cluster.sh
+
+**Step :three:**: start Jupyter.
+
+    jupyter notebook --no-browser --port=8888
+
+**Step :four:**: open the printed URL and select
+`projects/des_cluster/EXAMPLE_EVALUATE_COVARIANCE.ipynb`.
+
+**Step :five:**: inspect the survey inputs and keep `boosts = [1]` for the
+first calculation, then select **Kernel → Restart Kernel and Run All Cells**.
+Set `boosts = [1, 2]` to add the accuracy comparison.
+
+The notebook writes `covariance/forecast_cluster.npz`,
+`covariance/forecast_camb.npz` and
+`covariance/forecast_likelihood_selection.npz`. The last archive retains
+both cut totals and the original data-vector indices.
+The optional final cell computes a galaxy/shear-only Fourier companion.
+The [covariance guide](covariance/README.md) describes the physical inputs,
+component plots, accuracy controls and covariance-only tests.
+
+> [!NOTE]
+> The generated matrix is an analogous forecast, not a reproduction of the
+> supplied likelihood covariance. Gaussian spectra can include non-Limber
+> gg/gs and NLA/TATT; SSC/cNG retain zero-IA Limber physics. The forecast
+> uses massless neutrinos and a spherical-cap footprint.
+> `accuracy_boost` refines
+> tables and cutoffs; `integration_accuracy` separately selects precomputed
+> GSL rules from [covariance/default.yaml](covariance/default.yaml).
+
+The cluster calculation also uses biased-matter cNG and SSC-only count–spectrum
+crosses. Selected-cluster one-halo cNG and non-SSC count–spectrum terms remain
+absent. The supplied synthetic matrix uses Gaussian two-point covariance and
+Poisson plus sample-variance counts, with zero count–spectrum crosses.
+Differences from it therefore include deliberate model differences.
+
+## Command-line calculation
+
+The Python runner computes the full angular 6×2pt+N covariance in real space,
+using the optimized production interface. It saves G, SSC, cNG and their
+sum without plotting or opening a notebook. Numerical kernels and survey
+settings are shared with the notebook calculation.
+
+From Bash in `cocoa/Cocoa`, with `conda activate cocoa`:
+
+**Step :one:**: activate Cocoa and enable covariance generation.
+
+    source start_cocoa.sh
+    unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
+    unset IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE
+
+**Step :two:**: compile the project interface.
+
+    source ./projects/des_cluster/scripts/compile_des_cluster.sh
+
+**Step :three:**: inspect the YAML cosmology and compute the matrix components.
+
+    export OMP_NUM_THREADS=8
+    python ./projects/des_cluster/covariance/compute_covariance.py \
+        ./projects/des_cluster/EXAMPLE_EVALUATE_COVARIANCE.yaml
+
+The `.npz` archive contains the full matrix before likelihood scale cuts,
+its components, measurement ordering, resolved settings and stage timings.
+Existing output files require `--overwrite`; likelihood inputs are separate.
+
+This runner uses the joint cluster adapter, including counts.
+Its supported measurement space is real space.
+
+The [evaluate YAML](EXAMPLE_EVALUATE_COVARIANCE.yaml) uses Cobaya's YAML reader, with familiar
+`theory`, `params`, `sampler: evaluate` and `output` blocks. Fixed parameter
+values specify one cosmology; a parameter with a prior must be supplied
+explicitly in `sampler.evaluate.override`. No MCMC or random prior draw runs.
+
+In its `covariance` block, `accuracy_boost: 2` refines the project's
+`default.yaml` baseline. `integration_accuracy: 1` changes the quadrature
+level independently. Internal accuracy controls can also be set there.
+Use `space` for the measurement space. Set the OpenMP team with
+`OMP_NUM_THREADS` in the shell; no thread count belongs in the YAML.
+
+`theory.camb.extra_args` supports `AccuracyBoost`, `kmax`, `k_per_logint`,
+`lens_potential_accuracy` and `halofit_version`. CAMB's boost controls
+CAMB; the covariance boost controls its own tables and cutoffs.
+
+Paths in the YAML are relative to the working directory, `cocoa/Cocoa`.
+`output` names the `.npz` archive; `--output` can override it for an HPC
+job. Set `OMP_NUM_THREADS` in that job’s environment. `--help` lists the
+command options.
+
+To return to a data-vector-only build, use the following steps from
+`cocoa/Cocoa` with `conda activate cocoa` and Bash.
+
+**Step :one:**: activate Cocoa.
+
+    source start_cocoa.sh
+
+**Step :two:**: omit covariance generation and rebuild the interface.
+
+    unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
+    export IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE=1
+    source ./projects/des_cluster/scripts/compile_des_cluster.sh
+
+Gaussian non-Limber and NLA/TATT options are documented in the
+[covariance guide](covariance/README.md#choosing-the-gaussian-spectra).
+The YAML keeps these Gaussian choices separate from SSC/cNG. OpenMP
+threads come exclusively from `OMP_NUM_THREADS`, not from a YAML key.
+The joint selected-cluster forecast remains Limber and zero IA;
+these new Gaussian options apply to its separate galaxy/shear adapter.

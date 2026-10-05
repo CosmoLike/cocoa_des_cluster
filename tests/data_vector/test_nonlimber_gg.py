@@ -1,48 +1,47 @@
-"""Unit test: non-Limber galaxy-galaxy lensing (adopt_limber_gs).
+"""Unit test: non-Limber galaxy clustering (adopt_limber_gg).
 
-The galaxy-galaxy lensing (ggl) spectrum C_l^gs enters the data vector
-through gamma_t(theta). The likelihood yaml key adopt_limber_gs
-chooses how it is computed:
+The galaxy clustering (gg) spectrum C_l^gg enters the data vector
+through w(theta). The likelihood yaml key adopt_limber_gg chooses how
+it is computed:
 
-  adopt_limber_gs: 1 (the default) - Limber approximation at every
-      multipole.
-  adopt_limber_gs: 0 - below l = 150 the exact projection, computed by
-      cosmolike's C_gs_tomo with the split of Fang, Krause, Eifler &
+  adopt_limber_gg: 0 - below l = 150 the exact projection, computed by
+      cosmolike's C_cl_tomo with the split of Fang, Krause, Eifler &
       MacCrann (arXiv:1911.11947): an FFTLog integral of the linear
       power spectrum plus, in Limber, what linear theory misses.
+  adopt_limber_gg: 1 - Limber approximation at every multipole.
 
-ggl defaults to Limber because its lensing kernel is broad (galaxy
-clustering has its own key, adopt_limber_gg; see
-test_nonlimber_gg.py). The Limber approximation fails at low l for
-the lens-source pairs whose kernels overlap in redshift (lens bin =
-source bin, or the source bin in front of the lens bin, where the
-signal is the intrinsic alignment of the sources times the lens
-density). This test measures what the Limber default costs. The
-gamma_t block of 6x2pt + N reads the same key, and no other test of
-this project flips it.
+This project's default is adopt_limber_gg: 0 (non-Limber), in the
+galaxy-only likelihoods and in the cluster combinations alike (the
+w_gg block of 4x2pt + N and 6x2pt + N reads the same key). The lens
+galaxy redshift distributions are narrow, so the Limber approximation
+fails at low l for the clustering auto spectra; this test measures
+by how much. No other test of this project flips the key.
 
 It evaluates the frozen 3x2pt fiducial (example4, NLA) three times IN
-ONE PROCESS: Limber, non-Limber, Limber again, and computes
+ONE PROCESS: the default, the other setting, the default again, and
+computes
 
     delta chi2 = delta^T C^-1 delta,
     delta = dv(non-Limber) - dv(Limber),
 
-with C^-1 the masked inverse covariance: the chi2 the Limber model
-would score against a data set generated with non-Limber ggl. It prints
-the total and the contribution of each lens-source pair (the pair's own
-block of delta, cross-covariance with other pairs ignored).
+with C^-1 the masked inverse covariance: the chi2 a Limber model would
+score against a data set generated with non-Limber clustering. It
+prints the total and the contribution of each lens bin (the bin's own
+block of delta, cross-covariance with other bins ignored).
 
 Assertions:
   1. delta chi2 is above a dead-flag floor: the flag reaches the C code
-     and the ggl cache notices the change (a stale cache gives zero);
-  2. only ggl entries change: cosmic shear and clustering are bitwise
-     equal between the two evaluations;
-  3. switching back to Limber reproduces the first data vector bitwise;
+     and the clustering cache notices the change (a stale cache gives
+     zero);
+  2. only clustering entries change: cosmic shear and galaxy-galaxy
+     lensing are bitwise equal between the two evaluations;
+  3. switching back to the default reproduces the first data vector
+     bitwise;
   4. delta chi2 matches the value measured for this project
      (DCHI2_MEASURED below) to 5%: a change in the non-Limber code, the
      kernels, or the covariance shows up here (skipped while no value
      is recorded);
-  5. the Limber evaluation reproduces the frozen reference chi2
+  5. the default evaluation reproduces the frozen reference chi2
      (checked last, so a stale snapshot cannot hide checks 1-4).
 
 The three evaluations run in a python process of their own
@@ -53,7 +52,7 @@ process that initializes two data sets of different dimensions.
 To run (from the Cocoa/ folder, cocoa environment active,
 start_cocoa.sh sourced):
 
-    python -m pytest ./projects/des_cluster/tests/test_nonlimber_ggl.py
+    python -m pytest ./projects/des_cluster/tests/data_vector/test_nonlimber_gg.py
 """
 
 import os
@@ -66,24 +65,29 @@ import sys
 import time
 import unittest
 
-# The tests folder is not a package; put it on the import path so the
-# shared harness resolves no matter where pytest was launched from.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# The harness stays in the parent tests/ folder. Add it explicitly so
+# direct execution and worker processes resolve this project's stored inputs.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import cocoa_test_utils as u
 
 EXAMPLE = "example4"
 REFERENCE_KEY = "example4_nla"
 
-# (report tag, adopt_limber_gs)
+# adopt_limber_gg of the likelihood yamls of this project
+DEFAULT = 0
+
+# (report tag, adopt_limber_gg): the default, the other setting, the
+# default again
+_NAME = {0: "non-Limber", 1: "Limber"}
 SETTINGS = (
-    ("Limber (default)", 1),
-    ("non-Limber", 0),
-    ("Limber again (round trip)", 1),
+    (f"{_NAME[DEFAULT]} (default)", DEFAULT),
+    (_NAME[1 - DEFAULT], 1 - DEFAULT),
+    (f"{_NAME[DEFAULT]} again (round trip)", DEFAULT),
 )
 
-# A stale ggl cache gives delta chi2 = 0 exactly; the floor is orders of
-# magnitude below the value the des_y3 project measures on its copy of
-# the DES-Y3 data set (0.011), so it only catches a dead flag.
+# A stale clustering cache gives delta chi2 = 0 exactly; the floor is
+# orders of magnitude below the value the des_y3 project measures on
+# its copy of the DES-Y3 data set (9.3), so it only catches a dead flag.
 DCHI2_FLOOR = 1.0e-6
 
 # delta chi2 of this project's example4, and the relative band
@@ -96,13 +100,13 @@ DCHI2_FLOOR = 1.0e-6
 # measured on the frozen state of tests/frozen: arm64 macOS (Apple M2),
 # clang, default build, OMP_NUM_THREADS = 4, 2026-10-01, after the data and
 # covariance were regenerated with the cb halo field (the 2026-09-30 value,
-# 0.010849, belonged to the covariance before)
-DCHI2_MEASURED = 0.012494
+# 7.148978, belonged to the covariance before)
+DCHI2_MEASURED = 7.123750
 DCHI2_RTOL = 0.05
 
 
-class TestNonLimberGGL(unittest.TestCase):
-    """Limber vs non-Limber ggl on the frozen fiducial."""
+class TestNonLimberGG(unittest.TestCase):
+    """Limber vs non-Limber galaxy clustering on the frozen fiducial."""
 
     @classmethod
     def setUpClass(cls):
@@ -113,7 +117,7 @@ class TestNonLimberGGL(unittest.TestCase):
     # the three models are built in process: see the module docstring
     # for why they must not share pytest's process
     @u.own_process(__file__)
-    def test_nonlimber_ggl(self):
+    def test_nonlimber_gg(self):
         import numpy as np
         import cosmolike_des_cluster_interface as ci
 
@@ -122,13 +126,12 @@ class TestNonLimberGGL(unittest.TestCase):
         icov = None
         sizes = None
         nlen = None
-        pairs = None
         for tag, flag in SETTINGS:
             print(f"  building model ({EXAMPLE}, NLA, {tag}) ...",
                   flush=True)
             info = u.load_frozen_info(EXAMPLE, tatt=False)
             name = u.EXAMPLES[EXAMPLE]["likelihood"]
-            info["likelihood"][name]["adopt_limber_gs"] = flag
+            info["likelihood"][name]["adopt_limber_gg"] = flag
             model = u.make_model(info)
             point = u.build_point(model, EXAMPLE, tatt=False)
             start = time.perf_counter()
@@ -145,70 +148,64 @@ class TestNonLimberGGL(unittest.TestCase):
                 like = model.likelihood[name]
                 sizes = ci.compute_data_vector_3x2pt_real_sizes()
                 nlen = int(like.ntheta)
-                # the ggl pairs in data-vector order: lens-major, the
-                # pairs listed in the yaml key ggl_exclude left out
-                excluded = {(int(zl), int(zs)) for zl, zs in
-                            (getattr(like, "ggl_exclude", None) or [])}
-                pairs = [(zl, zs) for zl in range(int(like.lens_ntomo))
-                                  for zs in range(int(like.source_ntomo))
-                                  if (zl, zs) not in excluded]
 
-        dv_limber = vectors[SETTINGS[0][0]]
-        dv_nonlimber = vectors[SETTINGS[1][0]]
-        delta = dv_nonlimber - dv_limber
+        tags = {flag: tag for tag, flag in SETTINGS[:2]}
+        dv_default = vectors[SETTINGS[0][0]]
+        delta = vectors[tags[0]] - vectors[tags[1]]
         dchi2 = float(delta @ icov @ delta)
 
-        # the ggl block follows the cosmic shear block: entries
-        # [ggl0, ggl1)
-        ggl0 = int(sizes[0])
-        ggl1 = ggl0 + int(sizes[1])
-        npairs = int(sizes[1]) // nlen
+        # the clustering block follows cosmic shear and galaxy-galaxy
+        # lensing: entries [gg0, gg1), one block of nlen entries per
+        # lens bin
+        gg0 = int(sizes[0]) + int(sizes[1])
+        gg1 = gg0 + int(sizes[2])
+        nbins = int(sizes[2]) // nlen
 
         # the ternary picks the note printed next to the value: the
         # recorded measurement, or the reminder that none exists yet
         measured = ("not recorded yet: set DCHI2_MEASURED to this value"
                     if DCHI2_MEASURED is None
-                    else f"measured {DCHI2_MEASURED:.6f}")
+                    else f"measured {DCHI2_MEASURED:.4f}")
         print(f"\n  delta chi2 report ({EXAMPLE}, NLA):")
-        print(f"    Limber:     chi2 = {chi2s[SETTINGS[0][0]]:.6f} "
+        print(f"    {SETTINGS[0][0]}: chi2 = {chi2s[SETTINGS[0][0]]:.6f} "
               f"(frozen reference {self.reference[REFERENCE_KEY]:.6f})")
-        print(f"    non-Limber: chi2 = {chi2s[SETTINGS[1][0]]:.6f}")
-        print(f"    delta^T C^-1 delta = {dchi2:.6f} ({measured})")
-        print("    per lens-source pair (the pair's block alone):")
+        print(f"    {SETTINGS[1][0]}: chi2 = {chi2s[SETTINGS[1][0]]:.6f}")
+        print(f"    delta^T C^-1 delta = {dchi2:.4f} ({measured})")
+        print("    per lens bin (the bin's block alone):")
         rows = []
-        for p in range(npairs):
+        for b in range(nbins):
             block = np.zeros_like(delta)
-            sl = slice(ggl0 + p*nlen, ggl0 + (p + 1)*nlen)
+            sl = slice(gg0 + b*nlen, gg0 + (b + 1)*nlen)
             block[sl] = delta[sl]
-            rows.append((float(block @ icov @ block), p))
-        for contribution, p in sorted(rows, reverse=True):
+            rows.append((float(block @ icov @ block), b))
+        for contribution, b in sorted(rows, reverse=True):
             if contribution < 1.0e-3*max(dchi2, DCHI2_FLOOR):
                 break
-            label = (f"(lens {pairs[p][0]}, source {pairs[p][1]})"
-                     if len(pairs) == npairs else f"pair {p}")
-            print(f"      {label:24s} {contribution:.6f}")
+            print(f"      lens bin {b:<14d} {contribution:.4f}")
 
         self.assertGreater(
             dchi2, DCHI2_FLOOR,
-            "non-Limber ggl did not change the data vector: the "
-            "adopt_limber_gs flag did not reach the C code, or the ggl "
-            "cache did not rebuild")
+            "non-Limber clustering did not change the data vector: the "
+            "adopt_limber_gg flag did not reach the C code, or the "
+            "clustering cache did not rebuild")
 
-        outside = np.concatenate((delta[:ggl0], delta[ggl1:]))
+        outside = np.concatenate((delta[:gg0], delta[gg1:]))
         self.assertTrue(
             np.all(outside == 0.0),
-            "entries outside the ggl block changed with adopt_limber_gs")
+            "entries outside the clustering block changed with "
+            "adopt_limber_gg")
 
         self.assertTrue(
-            np.array_equal(vectors[SETTINGS[-1][0]], dv_limber),
-            "returning to Limber did not reproduce the first data vector "
-            "bit for bit; the ggl cache did not rebuild cleanly")
+            np.array_equal(vectors[SETTINGS[-1][0]], dv_default),
+            "returning to the default did not reproduce the first data "
+            "vector bit for bit; the clustering cache did not rebuild "
+            "cleanly")
 
         if DCHI2_MEASURED is not None:
             self.assertLess(
                 abs(dchi2/DCHI2_MEASURED - 1.0), DCHI2_RTOL,
-                f"delta chi2 = {dchi2:.6f} differs from the measured "
-                f"{DCHI2_MEASURED:.6f} by more than {DCHI2_RTOL:.0%}")
+                f"delta chi2 = {dchi2:.4f} differs from the measured "
+                f"{DCHI2_MEASURED:.4f} by more than {DCHI2_RTOL:.0%}")
 
         # last, so that a stale frozen snapshot does not hide the four
         # checks above

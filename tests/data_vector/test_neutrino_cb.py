@@ -19,7 +19,7 @@ dimensions. The missing-spectrum check needs a second child process:
 the C guard deliberately terminates that process with an error message.
 
 Run from Cocoa/ after activating its environment and start_cocoa.sh:
-    python -m pytest projects/des_cluster/tests/test_neutrino_cb.py
+    python -m pytest projects/des_cluster/tests/data_vector/test_neutrino_cb.py
 """
 
 import os
@@ -35,7 +35,7 @@ import unittest
 
 # The tests folder is not a package; put it on the import path so the
 # shared harness resolves no matter where pytest was launched from.
-TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+TESTS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, TESTS_DIR)
 sys.path.insert(0, os.path.join(TESTS_DIR, "validation"))
 sys.path.insert(0, os.path.join(TESTS_DIR, "reference"))
