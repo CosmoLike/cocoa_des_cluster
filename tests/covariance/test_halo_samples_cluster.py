@@ -98,7 +98,11 @@ def test_samples_against_scalar_readers(initialized, mode, nmass):
         actual = ci.covariance_cluster_halo_samples(**values)
         for array in actual.values():
             assert np.all(np.isfinite(array))
-        np.testing.assert_allclose(actual['weight'], expected_weight, rtol=5.e-14)
+        # The independent formula squares nu before multiplying by gamma;
+        # the C reader multiplies left to right. In the exponential tail,
+        # rounding the exponent near -241 changes weights by 6e-14.
+        # Allow that arithmetic difference, retaining bitwise thread checks.
+        np.testing.assert_allclose(actual['weight'], expected_weight, rtol=1.e-13)
         np.testing.assert_array_equal(actual['bias'], expected_bias)
         np.testing.assert_allclose(actual['profile'], expected_profile, rtol=3.e-15)
         if baseline is None:
@@ -113,7 +117,9 @@ def test_samples_against_scalar_readers(initialized, mode, nmass):
     ci.covariance_cluster_halo_samples(**sample_inputs(nmass=3))
     np.testing.assert_array_equal(actual['weight'], saved)
     moments = ci.covariance_cluster_moments(**actual)
-    np.testing.assert_allclose(moments['density'], np.sum(expected_weight, axis=2),
+    # Test the integrator against the weights it actually received. The
+    # independent formula comparison above has its own rounding allowance.
+    np.testing.assert_allclose(moments['density'], np.sum(actual['weight'], axis=2),
                                rtol=3.e-15)
 
 

@@ -49,6 +49,11 @@ absent. The supplied synthetic matrix uses Gaussian two-point covariance and
 Poisson plus sample-variance counts, with zero count–spectrum crosses.
 Differences from it therefore include deliberate model differences.
 
+Matter-halo integrals use **10⁴ to 10¹⁷ solar masses/h**, with the
+shared `halo_mass_edges()` panels. The lower limit reduces the
+unresolved contribution to the one-profile halo moment I11, retaining
+its additive completion and the existing halo bias and multiplicity conventions.
+
 # Running the covariance notebook <a name="running"></a>
 
 The default build omits covariance generation. Unset
