@@ -2,11 +2,12 @@
 
 This folder holds reference numbers from the original lighthouse cluster
 code. They were computed with the prebuilt library of lighthouse's live
-build, loaded through `ctypes`. We use them to cross-check the C port of
+build, loaded through `ctypes`. They serve to cross-check the C port of
 the cluster observables (4x2pt + N) in cosmolike_core.
 
-Nothing under `lighthouse/` or `cosmolike_core/` was modified. The
-library is only loaded and called.
+The scripts modify nothing under `lighthouse/` or under `cosmolike_core/`
+(the `cluster_chto` checkout lighthouse builds against): they only load
+and call the library.
 
 ## 1. What ran
 
@@ -15,8 +16,8 @@ library is only loaded and called.
 | library | `lighthouse/lib/like_cluster_Buzzard_y3_2_fast_v37_IA_test4.so` (arm64; sha256 below) |
 | build flags | `-DCLASS_V29 -DIAC -DBuzzard -DFullsky -DDESY3 -DSELECTIONB` (Makefile target `like_cluster_fullsky_y3_IA_selectionB`) |
 | C sources in the build | `lighthouse/cpp/like_real_mpp.c`, which includes `init_des_real.c`, `cluster_util.c`, `clusters_DES_nonlimber.c`, `init_cluster.c`, and cosmolike_core `theory/{cosmo3D,halo,redshift_spline,cosmo2D_fourier,cosmo2D_real,cosmo2D_exact_fft,cosmo2D_fullsky_TATT,...}.c` |
-| dynamic libraries | resolved through the rpath `~/miniforge/envs/cocoa/lib` (gsl 28, fftw3, openblas, libc++, libomp). No `DYLD_LIBRARY_PATH` was needed. |
-| Python | conda env `cocoapy311` (numpy 1.26.3) |
+| dynamic libraries | resolved through the rpath stored in the library, a conda environment's `lib` folder (gsl 28, fftw3, openblas, libc++, libomp); no `DYLD_LIBRARY_PATH` is needed |
+| Python | a Python 3.11 environment with numpy (the outputs were made with numpy 1.26.3) |
 | runtime | about 30 s per data vector (single thread; the included sources have no OpenMP pragmas) |
 | determinism | Three separate processes gave bitwise-identical `theory_wrapper` vectors |
 
@@ -24,13 +25,15 @@ Full library sha256: `efea6cbcccb781354164363ad41fb95d89c87c14cf12f7cca1a58c08af
 
 The driver `lh.py` reimplements `init_all_nuisance_param()` from
 `lighthouse/python/cosmolike_libs_real_mpp_cluster.py` with the same
-call order. It skips that module's `emcee`, `mpp_blinding` and
-`schwimmbad` imports.
+call order. It skips that module's `emcee`, `emcee_wrapper`,
+`mpp_blinding` and `schwimmbad` imports.
 
 ## 2. How to reproduce
 
-Run this from this folder, in the `cocoapy311` env. Each variant must
-run in a fresh process, because the C code keeps static caches.
+`lh.py` loads the library from the lighthouse checkout named by its
+constant `LIGHTHOUSE`; set it first. Run the commands below from this
+folder, in a Python 3.11 environment with numpy. Each variant must run
+in a fresh process, because the C code keeps static caches.
 
     python run_reference.py main     # Ystatistics=1, data vectors + all intermediates
     python run_reference.py Yoff     # Ystatistics=0
@@ -71,7 +74,7 @@ The same values are also stored in `outputs/config.json` and in
 ### Nuisance parameters
 
 - Galaxy b1 per lens bin: [1.42, 1.66, 1.70, 1.62, 1.78, 1.75]. Source: `lighthouse/analysis/yamlfiles/dataY6.yaml`, which matches 2503.13631 Table I. The `des_y6_code_comparison/dataY6.yaml` file has different values (1.54, 1.81, …) and was not used.
-- Galaxy b2 = 0. This matters: `gbias.b2[0] != 0` turns on the cluster 1-loop terms.
+- Galaxy b2 = 0. This matters: `gbias.b2[0] != 0` turns on the cluster 1-loop terms of w_cc, and a nonzero b2 of its lens bin those of w_cg.
 - `nonlinear` = 0.
 - Cluster b2 is not set (`init_cluster_b2` is not called).
 - MOR = [ln λ0, A, σ_int, B] = [4.26, 0.943, 0.15, 0.207], with M_piv = 5e14 Msun/h hard-coded in `cluster_util.c:613`.
@@ -133,7 +136,7 @@ All intermediates were computed in the same process and at the same parameters a
 - `gamma_c_TpT_python`.
 - `Tfull_cs_block_check`.
 
-**Background.** The grid is z ∈ [1e-4, 3], 301 points.
+**Background.** The grid `bg_z` is z ∈ [1e-4, 3], 301 points.
 
 - `bg_chi`: χ in c/H0.
 - `bg_fK`.
@@ -161,9 +164,9 @@ All intermediates were computed in the same process and at the same parameters a
 **Mass-observable relation**
 
 - `mor_P_lambda_given_M_density[z, M, λ]` = dP/dλ_obs, a lognormal in λ with σ² = σ_int² + (e^{⟨lnλ⟩}−1)/e^{2⟨lnλ⟩}. It is evaluated on the grids `mor_lambda` (200 points, 5–500) and `mor_z` = [0.3, 0.475, 0.6].
-- `mor_P_bin_given_M_exact[λbin, z, M]` from `probability_observed_richness_given_mass`, and `mor_P_bin_given_M_tab` from the `_tab` version. **The model uses `_tab`.** See section 5.
+- `mor_P_bin_given_M_exact[λbin, z, M]` from `probability_observed_richness_given_mass`, and `mor_P_bin_given_M_tab` from the `_tab` version. **The model uses `_tab`.** See section 7, item 2.
 
-**Cluster abundance and bias.** The grid is `clz_z` (0.15–0.70, 111 points).
+**Cluster abundance and bias.** The grid is `clz_z` (0.15–0.70, 111 points). Here `_exact` is the direct integral at each z and `_tab` the 100-node a-table the model reads; both use the P(λ bin|M) table (section 7, item 2).
 
 - `n_A_exact` and `n_A_tab` in (H0/c)³; multiply by 2997.92458⁻³ to get (h/Mpc)³.
 - `b_A_tab`: `weighted_bias`, the table used by the model.
@@ -190,13 +193,14 @@ All intermediates were computed in the same process and at the same parameters a
 
 - `cc_pairs_nz_l1_l2`.
 - `C_cc_limber_{nl_exact,lin_exact,nl_tab}` from `C_clusterxclusterclustering_tomo` with linear = 0 or 1, and from `_tab`.
+- `cg_pairs_zc_zg`: the (cluster z bin, lens bin) pairs of w_cg.
 - `C_cg_limber_{nl_exact,lin_exact,nl_tab}[cgpair, λ, ℓ]`.
 - `C_cs_limber_{exact,tab}[pair, λ, ℓ]`, including the 1-halo term.
 - `_tab` agrees with `exact` to ≤ 0.3%. The data vector uses the `_tab` spectra.
 
 **1-halo and 2-halo 3D spectra**
 
-- `P_cm_1h_exact[λ, zc, k]`: P_cm^1h(k, z_centre) in (c/H0)³, on `p1h_k_hMpc`.
+- `P_cm_1h_exact[λ, zc, k]`: P_cm^1h(k, z_centre) in (c/H0)³, on `p1h_k_hMpc`, at the redshifts `p1h_z`.
 - `P_cc_2h_nl[λ, zc, k]` = b_A² P_NL.
 
 **Non-Limber (exact spectra used in the data vector)**
@@ -210,13 +214,19 @@ All intermediates were computed in the same process and at the same parameters a
 
 ### `outputs/nonlimber_rescaling_check.npz`
 
-Memoized ("bias-rescaled") non-Limber C_ℓ and w versus a fresh FFTLog computation, for several (λ1, λ2) combinations (section 5).
+Memoized ("bias-rescaled") non-Limber C_ℓ and w versus a fresh FFTLog computation, for several (λ1, λ2) combinations (section 7, item 13).
 
 ### Scripts and inputs
 
 - `lh.py`: ctypes bindings, configuration, init sequence, layout, and Legendre bin weights.
 - `run_reference.py`, `nonlimber_rescaling_check.py`.
 - `inputs/`: n(z) copies and the mask.
+
+Two validation scripts read this folder: `../validation/compare_reference.py`
+compares the port with `outputs/lighthouse_reference_main.npz` and
+`outputs/config.json` (its `--skip-lighthouse` flag turns that step off),
+and `../validation/time_lighthouse.py` times the original code through
+`lh.py`.
 
 ## 5. Key numbers (main configuration)
 
@@ -255,16 +265,16 @@ The values below come from the `weighted_bias` table. The exact values agree to 
 
 ### w values at θ = 2.84, 8.97, 28.4, 89.7, 225 arcmin
 
-- w_cc (z_c 0, λ 0 × 0): 1.2470, 0.42338, 0.17242, 0.044070, 0.0058898.
-- w_cg (z_c 0, λ 0): 0.47424, 0.16005, 0.065625, 0.017447, 0.0025697.
+- w_cc (z_c 0, λ 0 × 0): 1.2470, 0.42337, 0.17242, 0.044070, 0.0058898.
+- w_cg (z_c 0, λ 0): 0.47424, 0.16005, 0.065624, 0.017447, 0.0025697.
 
 ### gamma_c (z_c 0 × source 3, λ 0) at the same θ
 
-| version | values |
+| version | γ_c at θ = 2.84, 8.97, 28.4, 89.7, 225′ |
 |---|---|
 | raw | 2.3152e-2, 5.4961e-3, 1.0212e-3, 3.5005e-4, 1.3617e-4 |
 | T⁺T (data vector) | −4.3812e-3, 2.7602e-3, 6.7596e-4, 3.6331e-4, 8.6241e-5 |
-| T γ (after the final Y transform) | 1.5351e-2, 2.3594e-3, 9.4057e-4, 2.1922e-4, 0 |
+| T γ (after the final Y transform) | 1.5351e-2, 2.3594e-3, 9.4056e-4, 2.1922e-4, 0 |
 
 ### T⁺T distortion
 
@@ -286,13 +296,13 @@ It is a sign flip at the smallest θ. With Ystatistics=1 the χ² uses T (T⁺ b
 
 Values are Limber/non-Limber − 1.
 
-| probe | small θ | about 30′ | largest θ |
+| probe | Limber/non-Limber − 1 at 2.84′ | at 28.4′ | at 225′ |
 |---|---|---|---|
-| w_cc (z_c 0, λ 0×0) | +0.25% | +1.5% | −13% at 225′ |
+| w_cc (z_c 0, λ 0×0) | +0.25% | +1.4% | −13% |
 | w_cc (whole block) | | | range −69% … +4% |
 | w_cg (z_c 0, λ 0) | −0.04% | −0.3% | −16% |
 | w_cg (whole block) | | | range −77% … +1% |
-| w_gg (bins 0–2) | −0.1% … −0.4% | | −13%, −29%, −91% at 225′ |
+| w_gg (bins 0–2) | −0.1% … −0.4% | | −13%, −29%, −91% |
 
 At the C_ℓ level, the ratio non-Limber/Limber for w_cc (z_c 0, 0×0) is:
 
@@ -321,6 +331,8 @@ Driver:
     void write_datavector_wrapper(char*, input_cosmo_params_mpp, input_nuisance_params_mpp);
     void set_all_parameters(input_cosmo_params_mpp, input_nuisance_params_mpp);
     void apply_Ttransform_and_applymask(double*); double T_Ytransform(int i, int j, int N, double dlnθ);
+    double T_Ytransform_full(int i, int j); int ZC(int n); int ZSC(int n);
+    int get_N_ggl(void); int get_N_tomo_shear(void); double get_tomo_clustering_zmax(int j);
 
 Cluster model:
 
@@ -369,7 +381,11 @@ Units summary:
 
 ## 7. Deviations of this code from the Y6 paper model (2503.13631)
 
-The port should match the paper, not these quirks.
+The port follows the paper on these points, except the choices its
+project README documents: the volume-only cluster kernel by default
+(item 1's missing n_A weighting), all 12 cluster-lensing pairs kept and
+masked rather than removed (item 9), and Limber-only w_cc and w_cg
+(the opposite of item 12).
 
 ### Redshift kernels and counts
 
@@ -378,7 +394,7 @@ The port should match the paper, not these quirks.
    - n_A is +0.6% to +2.3% higher (larger for higher λ and z).
    - b_A is −0.3% to −0.7% lower.
 
-   This was computed from the saved arrays. An exact-P port should expect counts about 1–2% lower than lighthouse.
+   These ratios come from the stored arrays (section 4). An exact-P port should expect counts about 1–2% lower than lighthouse.
 3. **Unfilled table edges.** The z and log M fill loops accumulate `z += dz`, so the last z row (z = 1.5) and the last mass column (log10 M = 15.9) are never filled and stay at 0 (calloc). The same holds for the massfunc×P, c(M) and 1-halo mass tables. As a result, P falls linearly to 0 over 10^15.82–10^15.9. Because λ(M = 10^15.9) = 775 > 500, the effect is small here.
 4. **P = 0 for z < 0.2.** In `interpol2d`, x < ax returns 0. `weighted_bias_exact` then returns 1e-2 there. The `weighted_bias` and `n_lambda_obs_z_tab` tables span z ∈ [0.15, 0.70] on 100 a-nodes. So b_A(z) in the first a-cell above z = 0.2 (Δz ≈ 0.005) is interpolated between 0.01 and about 2.6; `b_A_tab` at z = 0.2 is 1.98 against 2.64 just above.
 5. **Mass integration range.** Mass integrals run only over M ∈ [1e12, 10^15.9] Msun/h.
@@ -426,14 +442,14 @@ The port should match the paper, not these quirks.
     - for w_cg, the memo uses `zmean(ni)`, the mean z of **lens** bin ni, called with the cluster bin index.
 
     `nonlimber_rescaling_check.py` gives, for memoized w over fresh w − 1:
-    - w_cc (z_c 0, 1×1): −2e-5 to +2.4%.
+    - w_cc (z_c 0, 1×1): −4e-5 to +2.4%.
     - w_cc (z_c 0, 3×3): +0.13% to +4.2%.
     - w_cg (z_c 0, λ 1): +0.01% to +1.0%.
     - w_cg (z_c 0, λ 3): +0.02% to +1.5%.
 
     In each case the largest value is at the largest θ.
 14. **Dormant magnification bug.** In `C_clusterxclusterclustering_mix_tab`, the second-λ magnification term lacks the `clusterMag` factor (+1 instead of −2). It is dormant in the data vector, because the fresh FFTLog is always done for λ1 = λ2 = 0. It would affect the fresh cross-λ values in the rescaling check (λ pairs (0,3) and (1,2)).
-15. **Probe coverage.** w_cc is computed only for the auto z bin and all λ pairs. w_cg is computed only for the (i, i) pairs.
+15. **Probe coverage (as in the paper).** w_cc is computed only for the auto z bin and all λ pairs. w_cg is computed only for the (i, i) pairs.
 
 ### Cosmology and numerics
 
@@ -446,17 +462,14 @@ The port should match the paper, not these quirks.
     - `zdistr_cluster` integrates to 1.001–1.003 on a 551-point trapezoid, which reflects the precision of the grid, not of the code.
 
     Expect about 1e-3 agreement at best against an accurate port, before the model differences listed above.
-19. **No cluster 1-loop.** This requires `nonlinear` = 0 and galaxy b2 = 0. A nonzero `gbias.b2[0]` would turn the cluster 1-loop terms on for both w_cc and w_cg.
+19. **No cluster 1-loop.** This requires `nonlinear` = 0 and galaxy b2 = 0. A nonzero `gbias.b2[0]` would turn the cluster 1-loop terms on for w_cc; w_cg uses the b2 of its lens bin.
 
 ## 8. Obstacles and notes
 
-- **Missing map file.** `lighthouse_live_path.md` did not exist in the scratchpad. The live path was re-derived from the sources:
-  - Makefile target `like_cluster_fullsky_y3_IA_selectionB`;
-  - `like_real_mpp.c` includes `clusters_DES_nonlimber.c` because DESY3 is defined.
-- **Python driver not used.** The lighthouse Python driver imports `emcee`, `mpp_blinding`, `emcee_wrapper` and `schwimmbad`. It was not used; `lh.py` replicates its init sequence.
-- **No A_s in Halofit.** The A_s path in the Halofit runmode is unavailable, since only the σ8 normalization exists. σ8 came from CAMB, as described in section 3. CLASS was not needed and was not attempted.
-- **CLASS-only helpers.** `p_lnM_lambd_bins` and `mass_mean_float` call `assert(0)` outside the CLASS runmodes. They were not used; the P(λ|M) density comes from `int_probability_observed_richness_given_mass`.
+- **Python driver.** The lighthouse Python driver imports `emcee`, `mpp_blinding`, `emcee_wrapper` and `schwimmbad`; `lh.py` replicates its init sequence instead of importing it.
+- **No A_s in Halofit.** The A_s path in the Halofit runmode is unavailable, since only the σ8 normalization exists. σ8 comes from CAMB, as described in section 3; the Halofit runmode needs only σ8, so CLASS is not involved.
+- **CLASS-only helpers.** `p_lnM_lambd_bins` and `mass_mean_float` call `assert(0)` outside the CLASS runmodes, and the scripts do not call them; the P(λ|M) density comes from `int_probability_observed_richness_given_mass`.
 - **`hoverh0` not exported.** It is `static inline`, so it is reconstructed from `dchi_da`.
-- **No Limber switch.** The build has none. The Limber-only vector is assembled from the exported Limber tables with the same Legendre weights. That projection was validated: applied to the non-Limber spectra, it reproduces the data-vector w_cc and w_cg to 3e-11.
+- **No Limber switch.** The build has none. The Limber-only vector is assembled from the exported Limber tables with the same Legendre weights. Applied to the non-Limber spectra, that projection reproduces the data-vector w_cc and w_cg to 3e-11.
 - **Ystatistics on/off.** On and off give identical `theory_wrapper` output. The only difference is the final T applied in `compute_data_vector` and in χ². `gammat` and `gamma_c` are always computed at all θ here, because the mask is all ones.
 - **Stale static caches.** The C caches key on cosmology, MOR and selection only. A change of galaxy bias or n(z) does **not** refresh `C_clusterxgalaxyclustering_tomo_tab`. Always use one process per configuration.

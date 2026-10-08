@@ -80,30 +80,24 @@ The binning is the one of the paper: three cluster redshift bins with $z_\lambda
 From `Cocoa/Readme` instructions:
 
 > [!Note]
-> We provide several cosmolike projects that can be loaded and compiled using `setup_cocoa.sh` and `compile_cocoa.sh` scripts. Cocoa skips the project des_cluster by default. To activate it, comment the line `export IGNORE_COSMOLIKE_DES_CLUSTER_CODE=1` on `set_installation_options.sh`
+> Cocoa provides several cosmolike projects that can be loaded and compiled using `setup_cocoa.sh` and `compile_cocoa.sh` scripts. Cocoa skips the project des_cluster by default. To activate it, comment the line `export IGNORE_COSMOLIKE_DES_CLUSTER_CODE=1` on `set_installation_options.sh`
 >
 >     [Adapted from Cocoa/set_installation_options.sh shell script]
 >     (...)
->
 >     # ------------------------------------------------------------------------------
->     # The keys below control which cosmolike projects will be installed and compiled
+>     # The keys below control which cosmolike projects will be installed and compiled 
 >     # ------------------------------------------------------------------------------
 >     #export IGNORE_COSMOLIKE_LSST_Y1_CODE=1
->     #export IGNORE_COSMOLIKE_DES_Y3_CODE=1
+>     export IGNORE_COSMOLIKE_DES_Y3_CODE=1
 >     (...)
->     # The two projects below are skipped by default: comment the key to
->     # download and compile the project.
->     #export IGNORE_COSMOLIKE_DES_CLUSTER_CODE=1
->
+>     export IGNORE_COSMOLIKE_DES_CLUSTER_CODE=1
 >     (...)
->
->     # ------------------------------------------------------------------------------
->     # Cosmolike projects below -------------------------------------------
->     # ------------------------------------------------------------------------------
+>     # URL of Cosmolike projects below ----------------------------------------------
 >     (...)
+>     # WARNING: des_cluster is not production ready.
 >     export DES_CLUSTER_URL="https://github.com/CosmoLike/cocoa_des_cluster.git"
 >     export DES_CLUSTER_NAME="des_cluster"
->     export DES_CLUSTER_GIT_BRANCH="main" # no tagged release yet
+>     export DES_CLUSTER_GIT_TAG="v5.06"
 
 > [!NOTE]
 > The covariance `data/des_cluster_y6_cov.npy` (32 MB) is stored with Git LFS. A clone without `git lfs pull` holds a small pointer file in its place, and the likelihoods cannot load it.
@@ -142,7 +136,7 @@ From `Cocoa/Readme` instructions:
 >
 >     [... NotebookApp] or http://127.0.0.1:8888/?token=XXX
 >
-> The project des_cluster contains two jupyter notebook examples located at `projects/des_cluster` (see [Exploring notebooks](#notebooks)).
+> The project des_cluster contains three jupyter notebook examples located at `projects/des_cluster` (see [Exploring notebooks](#notebooks)).
 
 To run the example
 
@@ -154,7 +148,7 @@ and
 
       source start_cocoa.sh
 
- **Step :two:**: Select the number of OpenMP cores (below, we set it to 8).
+ **Step :two:**: Select the number of OpenMP cores (the commands below set it to 8).
 
   - Linux
 
@@ -191,7 +185,7 @@ The examples numbered `1` run 4x2pt + N, and the examples numbered `2` run 6x2pt
          mpirun -n 1 --oversubscribe \
           cobaya-run ./projects/des_cluster/EXAMPLE_EVALUATE1.yaml -f
 
-  `EXAMPLE_EVALUATE1.yaml` and `EXAMPLE_EVALUATE2.yaml` evaluate the likelihood at the point of the synthetic data vector (Table I of arXiv:2503.13631), so they return $\chi^2 \approx 0$.
+  `EXAMPLE_EVALUATE1.yaml` and `EXAMPLE_EVALUATE2.yaml` evaluate the likelihood at the point of the synthetic data vector (Table I of arXiv:2503.13631), so they return a $\chi^2$ near zero: the frozen copies of these examples in the unit tests record $\chi^2 = 0.151$ and $\chi^2 = 0.152$, because the data vector predates the cb variance at each redshift of the halo model (see [Cluster options](#des_cluster_options)).
 
 - **MCMC (Metropolis-Hastings Algorithm)**:
 
@@ -239,7 +233,7 @@ model. Check their training range before widening cosmological priors.
 This project does not distribute a full data-vector emulator: cluster
 likelihoods reject `use_emulator: 1`. These examples use `use_emulator: 2`.
 
-We assume Cocoa and this project are installed, the Cocoa Conda environment
+These steps assume Cocoa and this project are installed, the Cocoa Conda environment
 is active, the shell is Bash, and the current folder is `cocoa/Cocoa/`.
 
 **Step :one:**: activate Cocoa.
@@ -327,7 +321,7 @@ mpirun -n 2 --bind-to none cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_POLY1
 
 ### Minimization, profiles and Nautilus
 
-We assume Cocoa and this project are installed, the Cocoa Conda environment
+These steps assume Cocoa and this project are installed, the Cocoa Conda environment
 is active, the shell is Bash, and the current folder is `cocoa/Cocoa/`.
 
 **Step :one:**: check the hybrid setup before a long run.
@@ -382,11 +376,11 @@ accuracy or posterior convergence.
 Details on the matter power spectrum emulator designs will be presented in the
 [emulator_code](https://github.com/CosmoLike/emulators_code) repository.
 
-Basically, we apply standard neural network techniques to generalize
+The emulators apply standard neural network techniques to generalize
 the *syren-new* Eq. 6 of [arXiv:2410.14623](https://arxiv.org/abs/2410.14623)
 formula for the linear power spectrum (w0waCDM with a fixed neutrino mass of $0.06$ eV)
 to new models, extended ranges, or higher precision.
-Similarly, we use networks to generalize the *syren-Halofit* LCDM nonlinear
+Similarly, networks generalize the *syren-Halofit* LCDM nonlinear
 boost fit (Eq. 11 of [arXiv:2402.17492](https://arxiv.org/abs/2402.17492)).
 
 
@@ -490,7 +484,7 @@ arrays called cubes. A small interface layer connects them to NumPy through
 **pybind11**, with **CARMA** handling array conversion. The notebooks expose
 intermediate quantities; production calculations use the CLI interfaces.
 
-We assume Cocoa and this project are installed, the Cocoa Conda environment
+These steps assume Cocoa and this project are installed, the Cocoa Conda environment
 is active, the shell is Bash, and the current folder is `cocoa/Cocoa/`.
 
 Compile the project first; the covariance notebook also needs the optional
@@ -520,9 +514,27 @@ jupyter notebook --no-browser --port=8888
 
 | Notebook | Contents |
 |---|---|
-| [EXAMPLE_EVALUATE1.ipynb](EXAMPLE_EVALUATE1.ipynb) | Data-vector exploration through the project wrappers; inspect the setup cells before running. |
-| [EXAMPLE_EVALUATE2.ipynb](EXAMPLE_EVALUATE2.ipynb) | Data-vector exploration through the project wrappers; inspect the setup cells before running. |
+| [EXAMPLE_EVALUATE1.ipynb](EXAMPLE_EVALUATE1.ipynb) | The 4x2pt + N cluster observables at the fiducial point, their halo-model ingredients, and their response to the mass-observable relation, through the project wrappers; inspect the setup cells before running. |
+| [EXAMPLE_EVALUATE2.ipynb](EXAMPLE_EVALUATE2.ipynb) | 6x2pt + N parameter sweeps, the baryonic-feedback study with the `bfmt` theory block (six methods, a $\chi^2$ table and a per-block shift table), the angular binning and the accuracy setting, through the project wrappers; inspect the setup cells before running. |
 | [EXAMPLE_EVALUATE_COVARIANCE.ipynb](EXAMPLE_EVALUATE_COVARIANCE.ipynb) | G, SSC, cNG, total, separate 1h–4h matter trispectra and matrix diagnostics. |
+
+```mermaid
+flowchart TD
+  A["Compile the project, start Jupyter"] --> B["EXAMPLE_EVALUATE1.ipynb: 4x2pt + N observables"]
+  B --> C["EXAMPLE_EVALUATE2.ipynb: 6x2pt + N sweeps and bfmt feedback"]
+  A --> D["Covariance build"]
+  D --> E["EXAMPLE_EVALUATE_COVARIANCE.ipynb: joint forecast"]
+  W["Notebook wrappers: interface/"] --> B
+  W --> C
+  P["Plotting functions: plot_datavectors_cluster and cnu"] --> B
+  P --> C
+  F["bfmt block and its emulators"] --> C
+  E --> G["Covariance guide: covariance/README.md"]
+```
+
+Read `EXAMPLE_EVALUATE1.ipynb` first: it introduces each cluster observable
+that `EXAMPLE_EVALUATE2.ipynb` then varies. The covariance notebook needs
+the optional covariance build and continues in the covariance guide.
 
 Choose the Python kernel from the activated Cocoa environment and restart it
 after recompiling. The [covariance guide](covariance/README.md) explains the
@@ -532,7 +544,11 @@ forecast files, figures and refinement workflow.
 
 The notebook `EXAMPLE_EVALUATE1.ipynb` computes the cluster observables at the fiducial point with the options of `EXAMPLE_EVALUATE1.yaml` (4x2pt + N) and compares them with the synthetic data where the scale cuts keep them. It covers, in this order: the cluster counts per richness and redshift bin; the halo-model ingredients (the probability of a richness bin given the halo mass, the number density and the bias of each richness bin, the redshift selection kernels, the one-halo cluster-matter power spectrum); cluster lensing, both as $\gamma_t$ and as the $\Sigma = Y\gamma_t$ statistic of the data vector; $w_{cc}$; $w_{cg}$; the Limber spectra $C_\ell^{cs}$, $C_\ell^{cc}$, and $C_\ell^{cg}$; the response of the counts and of $\gamma_t$ to the mass-observable relation; and the $\chi^2$ against the synthetic data vector.
 
-The notebook `EXAMPLE_EVALUATE2.ipynb` runs 6x2pt + N with the options of `EXAMPLE_EVALUATE2.yaml`, in the form of parameter sweeps. It computes a reference model at the fiducial point, then varies one parameter at a time (five values each) and shows every block as a ratio to the reference, with the curves colored by the parameter value. The sweeps cover $\Omega_m$ and $A_s$; two parameters of the mass-observable relation ($\ln\lambda_0$ and $\sigma_{\rm int}$); two parameters of the selection bias ($b_{s2}$ and $r_0$); the number of angular bins; and the accuracy setting of cosmolike. The $\Omega_m$ sweep also shows the 3x2pt blocks ($\xi_\pm$, galaxy-galaxy lensing, and $w(\theta)$). The notebook ends with the $\chi^2$ against the synthetic data vector.
+The notebook `EXAMPLE_EVALUATE2.ipynb` runs 6x2pt + N with the options of `EXAMPLE_EVALUATE2.yaml`, in the form of parameter sweeps. It computes a reference model at the fiducial point, then varies one parameter at a time (five values each) and shows every block as a ratio to the reference, with the curves colored by the parameter value. The sweeps cover $\Omega_m$ and $A_s$; two parameters of the mass-observable relation ($\ln\lambda_0$ and $\sigma_{\rm int}$); and two parameters of the selection bias ($b_{s2}$ and $r_0$). The $\Omega_m$ sweep also shows the 3x2pt blocks ($\xi_\pm$, galaxy-galaxy lensing, and $w(\theta)$).
+
+The section *Baryonic feedback from the `bfmt` theory block* follows. For six methods (the three SP(k) relations, BCEmu, Flamingo and BCemu2025) it computes the suppression $S(k,z)$ with `get_baryon_suppression` and the joint data vector with `compute_probes`, and prints two tables over the 1,429 entries the 6x2pt + N mask keeps. The first gives each method's $\chi^2$ against the synthetic data vector; the $\chi^2$ of the shift between the predictions with and without feedback runs from 4.11 (SP(k) power law) down to 0.04 (BCemu2025). The second gives, per block, the largest shift of a kept entry in units of its error, $\max_i\lvert m_i-m_i^{\rm none}\rvert/\sqrt{C_{ii}}$: it is 0 for the counts with every method, because the mass function reads the linear cold dark matter + baryon power that feedback leaves unchanged, and it reaches 0.72 in galaxy-galaxy lensing (SP(k) power law). Two figures show the cluster tangential shear and $\xi_+$ as ratios to the prediction without feedback. The section needs the `bfmt` block and the SP(k), BCEmu and FLAMINGO emulators, which Cocoa's setup installs unless `IGNORE_BFMT_CODE`, `IGNORE_PYSPK_CODE`, `IGNORE_BCEMU_CODE` or `IGNORE_FBRE_CODE` is set in `set_installation_options.sh`.
+
+The notebook then changes the number of angular bins and the accuracy setting of cosmolike, and ends with the $\chi^2$ against the synthetic data vector.
 
 > [!NOTE]
 > The notebooks load their support functions from two places. The functions shared by
@@ -587,8 +603,10 @@ The wrappers module drives the compiled interface through the same steps as the 
 | `nz_cluster(z)`, `W_cluster(z)` | the normalized true-redshift distribution and the radial kernels of the cluster bins |
 | `get_datavector()`, `get_chi2()` | the masked joint theory vector and its $\chi^2$ against the loaded data |
 | `cluster_blocks(vector)`, `data_cluster_blocks()` | the cluster blocks (counts, cluster lensing, $w_{cc}$, $w_{cg}$) of a joint vector, or of the data and their errors, as arrays in the layouts above. Entries that the mask removes or that the data vector does not hold are NaN |
+| `get_baryon_suppression(theory_options, point, z_grid, log10k_grid)` | the suppression $S(k,z)$ of the `bfmt` theory block as `{z: S}`, one array over $k$ per redshift, with $k$ in 1/Mpc; it builds a minimal Cobaya model (CAMB, `bfmt`, and the `one` likelihood) at the fiducial cosmology |
+| `compute_probes(sup=None)` | every block at the fiducial point in the layouts above (`N`, `sigma`, `gammat_cluster`, `wcc` and `wcg` with the selection bias, `xi`, `gammat`, `wtheta`), the masked joint vector `dv`, its `chi2`, and the grids `z_grid` and `log10k_grid` ($k$ in 1/Mpc) of the CAMB tables; with `sup`, $\ln S$ is added to a copy of the nonlinear $\ln P$ table, as the likelihood does. Requires `init_cosmolike(with_data=True)` |
 
-Every wrapper that computes a model takes the cosmology (`omegam`, `omegab`, `H0`, `ns`, `As_1e9`, `w`, `w0pwa`, `mnu`), the accuracy settings, and the nuisance vectors (`M`, `A1`, `B1`, `MOR`, `SEL`, ...) as keyword arguments, and falls back to the project fiducial point, which the module holds as plain constants. For example, `nw.N_cluster(MOR=[4.3, 0.943, 0.15, 0.207])` changes the mass-observable relation for one call. Each wrapper sets the complete state of the interface on every call, so no call depends on which wrapper ran before it; the module keeps the last CAMB run, so repeated calls at one cosmology cost one CAMB run. The docstrings of the module document every argument and array layout.
+`get_baryon_suppression` and `compute_probes` run at the fiducial point only. Every other wrapper that computes a model takes the cosmology (`omegam`, `omegab`, `H0`, `ns`, `As_1e9`, `w`, `w0pwa`, `mnu`), the accuracy settings, and the nuisance vectors (`M`, `A1`, `B1`, `MOR`, `SEL`, ...) as keyword arguments, and falls back to the project fiducial point, which the module holds as plain constants. For example, `nw.N_cluster(MOR=[4.3, 0.943, 0.15, 0.207])` changes the mass-observable relation for one call. Each wrapper sets the complete state of the interface on every call, so no call depends on which wrapper ran before it; the module keeps the last CAMB run, so repeated calls at one cosmology cost one CAMB run. The docstrings of the module document every argument and array layout.
 
 # Likelihood options and nuisance parameters <a name="des_cluster_likelihood"></a>
 
@@ -614,7 +632,7 @@ The defaults of the two likelihoods are in `likelihood/combo_4x2pt_N.yaml` and `
 
 All halo statistics use cold dark matter plus baryons (cb). Massive neutrinos free-stream out of halos, so the variance integrates CAMB's `delta_nonu` spectrum at the requested redshift, and the Lagrangian smoothing radius and mass-function density use $\rho_{cb}=\rho_{crit}(\Omega_m-\Omega_\nu)$. FFTLog tabulates $\sigma^2_{cb}(M,a)$ and its mass slope; no scale-independent growth factor is applied to a present-day variance. The Bhattacharya concentration uses $D_{cb}(M,a)=\sigma_{cb}(M,a)/\sigma_{cb}(M,1)$ in its $D^{1.15}$ factor. This is the adopted neutrino extension of that fit, which was not calibrated with massive neutrinos.
 
-The NFW truncation radius still defines an M200m halo relative to the total mean density. The lensing mass weight $M/\rho_m$, lensing kernels, and nonlinear matter spectra also retain total matter. The likelihood always supplies $\Omega_\nu h^2$ and the cb spectrum. The former `halo_matter_field` option has been retired.
+The NFW truncation radius still defines an M200m halo relative to the total mean density. The lensing mass weight $M/\rho_m$, lensing kernels, and nonlinear matter spectra also retain total matter. The likelihood always supplies $\Omega_\nu h^2$ and the cb spectrum.
 
 The shipped synthetic data and covariance predate the evolving cb-variance calculation. Their measured change at the fiducial point is $|\Delta\chi^2|<0.152$ for the cluster combinations; the frozen tests record the current prediction against those same data.
 
@@ -622,8 +640,8 @@ The EMUL2 path has no separate cb spectrum and retains the approximation $P_{cb}
 
 Three more keys matter for the cluster combinations:
 
-- `integration_accuracy: 1`. The cluster combinations run with 1, while the value 0 is not accurate enough for the Y6-like inputs: the tails of the MagLim lens redshift distributions reach z = 2.99. The accuracy sweep `tests/validation/knob_sweep.py` measured $\Delta\chi^2 = 1.65$ against high-accuracy settings at 0 (galaxy-galaxy lensing 0.92, galaxy clustering 0.47) and 0.048 at 1, for about 30% more cosmolike time. The cluster blocks contribute $6\times10^{-3}$ either way.
-- `accuracyboost`. Keep it at 3 or below: above 3, the integration tables of the project this one was created from (desy1xplanck) broke down, and this limit was not re-measured here.
+- `integration_accuracy: 1`. The cluster combinations run with 1, while the value 0 is not accurate enough for the Y6-like inputs: the tails of the MagLim lens redshift distributions reach z = 2.99. The accuracy sweep `tests/validation/knob_sweep.py` measured $\Delta\chi^2 = 1.65$ against high-accuracy settings at 0 (galaxy-galaxy lensing 0.92, galaxy clustering 0.47) and $\Delta\chi^2 = 0.048$ at 1, for about 30% more cosmolike time. The cluster blocks contribute $\Delta\chi^2 = 6\times10^{-3}$ either way.
+- `accuracyboost`. Keep it at 3 or below, as the warning in the likelihood files says: the accuracy sweep reaches boost 2, and larger values have not been measured on the cluster combinations.
 - `IA_model: 0`. The intrinsic-alignment model is NLA: the cluster lensing code has no TATT.
 
 Galaxy clustering is non-Limber below $\ell = 150$ (`adopt_limber_gg: 0`), and galaxy-galaxy lensing is Limber (`adopt_limber_gs: 1`). The likelihoods refuse baryon PCAs with clusters.
@@ -697,7 +715,7 @@ The scale cuts are defined at the mean redshift of each bin, at the fiducial cos
 
 ## Regenerating the data <a name="des_cluster_data_scripts"></a>
 
-The scripts are in `scripts/`. We assume users are in the Conda cocoa environment, that `start_cocoa.sh` was sourced, and that the current folder is the cocoa main folder `cocoa/Cocoa`. Each script documents its options in its header.
+The scripts are in `scripts/`. The commands below assume the Conda cocoa environment is active, `start_cocoa.sh` was sourced, and the current folder is the cocoa main folder `cocoa/Cocoa`. Each script documents its options in its header.
 
 | step | script | writes | notes |
 |---|---|---|---|
@@ -706,7 +724,7 @@ The scripts are in `scripts/`. We assume users are in the Conda cocoa environmen
 | 3 | `make_y3_redmapper_counts.py` | `y3_redmapper_counts.txt` | tabulates the counts of the public DES Y3 redMaPPer catalog (`--h5` or `--npz`) |
 | 4 | `make_cluster_mask.py` | the two masks | applies the scale cuts above; the radii, the rule for the bin angle, and the choice of $\bar z$ are options |
 | 5 | `make_synthetic_data.py` | `des_cluster_y6.datavector`, `des_cluster_y6_cov.npy` | computes the data vector with the compiled code and the covariance with the Python reference (`tests/reference/ref_covariance_full.py`), checks the layout, the positive definiteness of the covariance under each mask, and the signal-to-noise per block, and asserts $\chi^2 < 10^{-6}$ at the fiducial for both combinations |
-| 6 | `make_example_files.py` | every example except the two evaluate examples | see below |
+| 6 | `make_example_files.py` | the MCMC and `EXAMPLE_EMUL2` YAML examples | see below |
 
 For example, steps 4 and 5 are
 
@@ -716,29 +734,34 @@ and
 
     python ./projects/des_cluster/scripts/make_synthetic_data.py --threads 3
 
-The two evaluate examples `EXAMPLE_EVALUATE1.yaml` and `EXAMPLE_EVALUATE2.yaml` are written by hand. The script `make_example_files.py` derives every other example from them (the MCMC examples and every `EXAMPLE_EMUL2` file), so the derived files cannot drift apart:
+The two evaluate examples `EXAMPLE_EVALUATE1.yaml` and `EXAMPLE_EVALUATE2.yaml` are written by hand and are the source of the cluster examples. The script `make_example_files.py` derives the YAML examples from them (`EXAMPLE_MCMC1.yaml`, `EXAMPLE_MCMC2.yaml`, and the `EXAMPLE_EMUL2` evaluate, MCMC, PolyChord and benchmark files), so these files cannot drift apart. Run its steps one at a time:
 
-    python ./projects/des_cluster/scripts/make_example_files.py
+    python ./projects/des_cluster/scripts/make_example_files.py evaluate
+    python ./projects/des_cluster/scripts/make_example_files.py samplers
+    python ./projects/des_cluster/scripts/make_example_files.py bench
 
-It reads the emulator and sampler blocks from the projects des_y3 and desy1xplanck, which must be installed.
+It reads the emulator and sampler blocks from the projects des_y3 and desy1xplanck, which must be installed. The script examples `EXAMPLE_EMUL2_{MINIMIZE,PROFILE,NAUTILUS}{1,2}.py` are short launchers of `cocoa_hybrid_sampling.py` that read `EXAMPLE_EMUL2_EVALUATE<n>.yaml` when they run, so they follow the derived YAML without being rewritten; the script's `scripts` step stops with a `ValueError` on such launchers, and its default step, `all`, therefore stops before the benchmark files (the docstring of the script describes each step). `EXAMPLE_EVALUATE3.yaml`, `EXAMPLE_EVALUATE4.yaml` and `EXAMPLE_EVALUATE_COVARIANCE.yaml` are hand-written, and the script does not touch them.
 
 > [!NOTE]
-> A change to the data vector, the n(z), the covariance, the examples, or the likelihood defaults also requires refreshing the snapshot of the unit tests (see [tests/README.md](tests/README.md)).
+> A change to the data vector, the n(z), the covariance, the examples, or the likelihood defaults also requires refreshing the snapshot of the unit tests (see [tests/data_vector/README.md](tests/data_vector/README.md#refreeze)).
 
 # Unit tests and validation tools <a name="des_cluster_unit_tests"></a>
 
-The `tests/` folder holds unit tests for the two cluster likelihoods of this
-project: they compare each likelihood against stored reference
+The `tests/` folder holds unit tests for the likelihoods of this project
+(the two cluster combinations and the three galaxy-only likelihoods):
+they compare each likelihood against stored reference
 values, check for race conditions from OpenMP threading, check that
 every cached table is rebuilt when one of its parameters moves, and
-measure the numerical error of the default accuracy settings. The
-tests read nothing from the live project;
-[tests/README.md](tests/README.md) describes every test, the tests'
-own data snapshot, and how to refresh it.
+measure the numerical error of the default accuracy settings. Every
+test except `test_neutrino_cb.py` reads nothing from the live project;
+[tests/README.md](tests/README.md) maps the test sectors and the
+order in which to read them, and the
+[data-vector test guide](tests/data_vector/README.md) describes every
+test, the tests' own data snapshot, and how to refresh it.
 
-We assume users are in the Conda cocoa environment from a previous
-`conda activate cocoa` command, that the shell is bash, and that the
-current folder is the cocoa main folder `cocoa/Cocoa`.
+The steps below assume the Conda cocoa environment is active
+(`conda activate cocoa`), the shell is bash, and the current folder is
+the cocoa main folder `cocoa/Cocoa`.
 
 **Step :one:**: activate the private Python environment by sourcing
 the script `start_cocoa.sh`
@@ -751,7 +774,7 @@ the script `start_cocoa.sh`
 
 ## Validation tools <a name="des_cluster_validation"></a>
 
-pytest does not collect the three other folders under `tests/`; each is run on its own.
+An unqualified pytest run collects only `tests/data_vector`, and pytest never descends into the three validation folders below; each is run on its own.
 
 - `tests/reference/` holds an independent Python reference model of the cluster observables and of the joint Gaussian covariance, with its own tests:
 
@@ -768,7 +791,7 @@ pytest does not collect the three other folders under `tests/`; each is run on i
       OMP_NUM_THREADS=4 python ./projects/des_cluster/tests/validation/knob_sweep.py \
         --cache-dir <compare_reference cache> --cov ./projects/des_cluster/data/des_cluster_y6_cov.npy
 
-- `tests/lighthouse_reference/` holds data vectors and intermediate quantities computed with the original CosmoLike cluster code (the `lighthouse` repository), kept for comparison. Its [README](tests/lighthouse_reference/README.md) documents the configuration and lists where that code deviates from the model of the paper. The port follows the paper, so this comparison is a sanity check at the percent level: the counts agree to 2.4% and the cluster bias to 0.8% (the original code integrates with a relative tolerance of $10^{-2}$).
+- `tests/lighthouse_reference/` holds data vectors and intermediate quantities computed with the original CosmoLike cluster code (the `lighthouse` repository), kept for comparison. Its [README](tests/lighthouse_reference/README.md) documents the configuration and lists where that code deviates from the model of the paper. The port follows the paper, apart from the choices documented in this README (the volume-only cluster kernel by default, the cluster-lensing pairs kept and masked, Limber-only $w_{cc}$ and $w_{cg}$), so this comparison is a sanity check at the percent level: `compare_reference.py` measures counts that agree to 2.4% and a cluster bias that agrees to 0.8% ([PORT_PLAN.md](PORT_PLAN.md), section 7; the original code integrates with a relative tolerance of $10^{-2}$).
 
 ## Timing <a name="des_cluster_timing"></a>
 
@@ -808,11 +831,10 @@ The port is complete for the model described above: the two likelihoods run, the
 - **Neutrinos in the halo mass function.** The cluster combinations use the cold dark matter + baryon prescription described in [Cluster options](#des_cluster_options) with one massive neutrino state in CAMB, while DES ran three degenerate ones; the two differ by up to 2.6% in the counts at the same $\Omega_\nu h^2$. One state is the convention of the Cosmolike projects. On the emulator path, whose matter power spectrum emulator has no neutrino input, the likelihood approximates the cb spectrum as $P_{lin}/(1 - f_\nu)^2$.
 - **Emulated Boltzmann inputs.** The emulators of the EMUL2 examples are fixed at a neutrino mass of 0.06 eV. At equal neutrino mass they differ from CAMB by $\Delta\chi^2 = 1.6$ on 6x2pt + N (the cluster counts differ by 1.5% in the median).
 - **The Y1 switches are not validated end to end.** The options that reproduce the DES Y1 choices (`cluster_selection_model: 1`, `cluster_ytransform: 0`, and the magnification and intrinsic-alignment switches) exist, but only the defaults have been validated.
-- **No parameter-recovery chain yet.** An MCMC that recovers the input parameters from the synthetic data is still open, as is an independent review of the model against the paper.
+- **No parameter-recovery chain.** No MCMC recovers the input parameters from the synthetic data, and no independent review checks the model against the paper.
 - **Thread scaling.** Going from 4 to 8 threads gains only a factor of 1.4 on 6x2pt + N; the cause has not been measured. Two optimizations of the cluster tables are left (the one-halo table, and the $w_{cc}$ and $w_{cg}$ spectra tables).
 - **Angular binning in the compiled interface.** cosmolike caches the bin-averaged Legendre kernels by the number of angular bins and the table key, not by the angular range, so a call to `init_binning` with a new range and the same number of bins returns the values of the old range. The notebook wrappers avoid this by drawing a new table key on every call.
 - **No response functions for the cluster blocks.** The data-vector plotting functions of `cosmolike_notebook_utils` have a cluster version (`plot_datavectors_cluster.py`); the response helpers (`plot_response.py`) do not.
-- **No tagged release.** Cocoa pins this project to the branch `main`.
 
 # Computing covariances <a name="computing_covariances"></a>
 
@@ -821,7 +843,7 @@ The production CLI saves G, SSC, cNG and total before scale cuts. It reads
 This is a joint Limber 6×2pt + counts forecast, with the approximations
 listed in the [covariance guide](covariance/README.md#joint).
 
-We assume Cocoa and this project are installed, the Cocoa Conda environment
+These steps assume Cocoa and this project are installed, the Cocoa Conda environment
 is active, the shell is Bash, and the current folder is `cocoa/Cocoa/`.
 
 **Step :one:**: enable this project in `set_installation_options.sh` by commenting out
@@ -904,6 +926,6 @@ Check interpolation, quadrature, input-power sampling and transform cutoffs
 separately at fixed cosmology and measurement bins. Narrow n(z) overlaps
 particularly require a quadrature check; increasing `accuracyboost` alone
 is not that check. The [data-vector test guide](tests/data_vector/README.md)
-and [covariance test guide](tests/covariance/README.md) state what each suite
+and [covariance test guide](tests/covariance/README.md) state what each sector
 actually verifies. A passing regression or a larger boost is not a general
 claim of survey or Fisher convergence.

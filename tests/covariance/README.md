@@ -4,7 +4,7 @@ These tests require the optional covariance build. Follow the
 [project build instructions](../../README.md#computing_covariances): unset
 `IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE` after activating Cocoa and rebuild.
 With the default data-vector-only build this sector reports skips; the
-separate `tests/data_vector` suite remains available.
+separate `tests/data_vector` sector remains available.
 
 These checks exercise this project's galaxy/shear forecast adapter and
 compiled covariance bindings. They use the project's redshift files and
@@ -13,8 +13,8 @@ Separate count-response tests use analytic shell integrals and do not
 require a selected halo-population model. Cluster spectrum tests project
 supplied windows and profiles, independently of the survey model tables.
 
-We assume Cocoa is installed, users have run `conda activate cocoa`, the
-shell is Bash and the current folder is `cocoa/Cocoa`.
+These steps assume Cocoa is installed, `conda activate cocoa` has been run,
+the shell is Bash and the current folder is `cocoa/Cocoa`.
 
 **Step :one:**: activate Cocoa's private Python environment.
 
@@ -33,16 +33,17 @@ shell is Bash and the current folder is `cocoa/Cocoa`.
 | Check | Purpose |
 | --- | --- |
 | Project layout | Verify the full angular and Fourier vector lengths from the measured row map. |
-| Accuracy refinement | Keep measurement bins fixed while increasing quadrature resolution. |
-| Real-space components | Check finite, symmetric G, SSC, cNG and total matrices for a measured subset. |
+| Accuracy refinement | At accuracy boost 2, keep the measurement bins, mass panels and 96-node quadrature fixed while the power refinement goes from 8 to 16 and the non-Gaussian multipole grid grows; integration level 1 alone selects 128 nodes. |
+| Real-space components | Check finite, symmetric G, SSC, cNG and total matrices, with total = G + SSC + cNG, for a measured subset. |
 | Fourier components | Check the same properties for bandpowers. |
+| Notebook and CLI bindings | Require identical G, SSC, cNG, total and signal from the notebook bindings and the production bindings. |
 | Thread repeatability | Compare every component bitwise with one and eight OpenMP threads. |
 | Positive total | Check variance positivity for every direction of the tested subset. |
 | Output archive | Read arrays and resolved survey metadata without pickle. |
 | Count shell volumes | Compare mean counts and count SSC with closed polynomial integrals. |
 | Counts–two-point SSC | Check the cancellation of radial distance factors and shared-mode positivity. |
 | Units and transforms | Change the length unit and transform the two-point observable while preserving the covariance. |
-| Count component boundaries | Check odd array lengths, one/eight-thread repeatability, owned outputs and rejected invalid inputs. |
+| Count component boundaries | Check odd array lengths, bitwise 1/2/4/8-thread repeatability, owned outputs and rejected invalid inputs. |
 | Cluster one-halo projection | Verify that the own-halo profile contributes only to cluster lensing, without an extra halo bias. |
 | Cluster biased-power projection | Compare all cluster–galaxy and cluster–cluster pairs with closed radial integrals. |
 | Cluster spectrum contraction | Compare supplied tables with independent NumPy sums, including odd node and pair counts. |
@@ -51,12 +52,12 @@ shell is Bash and the current folder is `cocoa/Cocoa`.
 | Cluster spectrum boundaries | Check owned outputs and rejection of malformed shapes, domains and richness indices. |
 | Selected mass moments | Compare one-, two- and three-profile integrals with closed polynomials and independent NumPy sums. |
 | Selection probabilities | Check that membership occurs once per shared halo and that a partition of categories recovers the unselected integral. |
-| Mass-moment units and threading | Check distinct length dimensions, signed profiles, odd/even grids, bitwise 1/2/4/8-thread results, ownership and input guards. |
+| Mass-moment units and threading | Check distinct length dimensions, signed profiles, odd/even grids, bitwise 1/2/4/8-thread results, ownership and input guards, and Fortran-ordered, sliced and read-only notebook inputs. |
 | Non-SSC count–matter terms | Compare closed radial integrals and exact Poisson-count expectations, including the two-halo factor of two and cancellation of survey volume. |
 | Cluster-lensing localization | Check exact angular polynomials, every joint cross block, known last-bin null modes and bitwise 1/2/4/8-thread propagation. |
-| Physical halo samples | Compare the covariance mass samples with scalar halo readers and the fixed-amplitude Tinker formula, including both HMF modes and the redshift-fit boundary. |
+| Physical halo samples | Compare the covariance mass samples with scalar halo readers and the fixed-amplitude Tinker formula, including both HMF modes and the redshift-fit boundary; check the selected-profile response by perturbing one shell's halo abundance. |
 | Joint survey preparation | Check the DES count insertion, richness ordering, absolute versus normalized windows and every field spectrum across memory-block boundaries. |
-| Joint forecast | Check all six two-point families and counts, one/eight-thread repeatability, Y propagation, defined null modes, positivity and saved model limits. |
+| Joint forecast | Check all six two-point families and counts, identical notebook and CLI results, one/eight-thread repeatability, Y propagation, defined null modes, positivity, saved model limits, and the rejection of non-Limber or intrinsic-alignment Gaussian requests. |
 
 The [shared component tests](https://github.com/CosmoLike/cocoa_lsst_y1/blob/main/tests/covariance/README.md)
 contain independent algebra and projection references. This project check

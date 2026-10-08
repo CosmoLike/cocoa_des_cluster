@@ -54,7 +54,7 @@ The base class applies this block to the defaults before cobaya merges them with
 
 The layout of the joint Y6-like data vector (2812 entries) and the entries each cluster mask keeps per block are in the table of the project [README](../README.md#des_cluster_overview). Per MagLim lens bin, the masks keep these entries (`cg` pairs cluster redshift bin $i$ with lens bin $i$, so it has no entry for lens bins 4-6):
 
-| mask | block | lens bin 1 | lens bin 2 | lens bin 3 | lens bin 4 | lens bin 5 | lens bin 6 |
+| mask | block | kept, lens bin 1 | kept, lens bin 2 | kept, lens bin 3 | kept, lens bin 4 | kept, lens bin 5 | kept, lens bin 6 |
 |---|---|---|---|---|---|---|---|
 | `des_cluster_y6_4x2ptN.mask` | `gs` | 0 | 0 | 0 | 0 | 0 | 0 |
 | `des_cluster_y6_4x2ptN.mask` | `gg` | 9 | 10 | 12 | 0 | 0 | 0 |
@@ -129,6 +129,8 @@ A `*` in a parameter name stands for every bin number or name.
 | `combo_6x2pt_N` | `DES_A1_3`, `DES_A1_4` | the redshift-evolution IA model reads only `DES_A1_1` and `DES_A1_2` | `IA_redshift_evolution: 3` | `0` | `params_source_y6.yaml` |
 | `combo_6x2pt_N` | `DES_BARYON_Q1`, `DES_BARYON_Q2`, `DES_BARYON_Q3`, `DES_BARYON_Q4` | the baryon PC amplitudes enter only when the likelihood applies the PCs (the cluster likelihoods refuse them) | `use_baryon_pca: False` | `0` | `params_source_y6.yaml` |
 
+The likelihood also turns `use_baryon_pca` off when `external_baryon_suppression: True` (the `bfmt` theory block) or `create_baryon_pca: True` is set, so the `DES_BARYON_Q*` rows of the galaxy likelihoods hold in those runs too.
+
 The photo-z shift and stretch of lens bins 4-6 in 4x2pt + N are the two families with a response that is not exactly zero. The magnification kernels of all lens bins are tabulated on one redshift grid, whose upper edge is the highest redshift any shifted and stretched lens bin reaches; with the fiducial values, lens bin 6 sets it. A shift of bin 6, a larger shift of bins 4-5, or a stretch above 1 moves that edge, and the kernels of bins 1-3 change at the level of the table interpolation.
 
 Three families are fixed by the parameter files but are not in the table, as they do change the data vector:
@@ -144,7 +146,7 @@ Three families are fixed by the parameter files but are not in the table, as the
 
 A `fixed_params` block in the likelihood block of the user's yaml replaces the combination's block as a whole: `fixed_params: null` samples every parameter again, and a shorter block keeps only the entries it repeats.
 
-We assume users are in the Conda cocoa environment from a previous `conda activate cocoa` command, that the shell is bash, and that the current folder is the cocoa main folder `cocoa/Cocoa`.
+The steps below assume the Conda cocoa environment is active (`conda activate cocoa`), the shell is bash, and the current folder is the cocoa main folder `cocoa/Cocoa`.
 
 **Step :one:**: activate the private Python environment by sourcing the script `start_cocoa.sh`
 
