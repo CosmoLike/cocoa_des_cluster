@@ -3,7 +3,7 @@
 1. [The des_cluster project](#des_cluster_overview)
 2. [Running Cosmolike projects (Basic instructions)](#des_cluster_running_cosmolike_projects)
 3. [Running Hybrid Cosmolike-ML emulators](#des_cluster_examples_emul2)
-4. [The notebooks and the notebook wrappers](#des_cluster_notebook)
+4. [Exploring notebooks](#notebooks)
 5. [The plotting functions](#des_cluster_plots)
 6. [The notebook wrappers](#des_cluster_wrappers)
 7. [Likelihood options and nuisance parameters](#des_cluster_likelihood)
@@ -17,6 +17,7 @@
 15. [Timing](#des_cluster_timing)
 16. [Status and known limitations](#des_cluster_status)
 17. [Computing covariances](#computing_covariances)
+18. [Appendix: Which accuracy settings are available?](#accuracy)
 
 
 > [!Warning]
@@ -28,7 +29,6 @@
 > `-fassociative-math`, `-ffinite-math-only`, `-freciprocal-math`,
 > `-fno-signed-zeros`, or `-fno-trapping-math` in CosmoLike builds.
 > This does not change Cocoa's separate `--aggressive` download option.
-
 
 # The des_cluster project <a name="des_cluster_overview"></a>
 
@@ -142,7 +142,7 @@ From `Cocoa/Readme` instructions:
 >
 >     [... NotebookApp] or http://127.0.0.1:8888/?token=XXX
 >
-> The project des_cluster contains two jupyter notebook examples located at `projects/des_cluster` (see [The notebooks and the notebook wrappers](#des_cluster_notebook)).
+> The project des_cluster contains two jupyter notebook examples located at `projects/des_cluster` (see [Exploring notebooks](#notebooks)).
 
 To run the example
 
@@ -214,281 +214,170 @@ The outputs are written to `projects/des_cluster/chains/`.
 
 # Running Hybrid Cosmolike-ML emulators <a name="des_cluster_examples_emul2"></a>
 
-> [!Warning]
-> The code and examples associated with this section are still in alpha stage
+> [!NOTE]
+> These hybrid examples remain experimental. The checks below verify the
+> workflow; assess emulator accuracy and posterior convergence for your analysis.
 
-The hybrid approach emulates only the Boltzmann outputs (comoving distance and linear and nonlinear matter power spectra), while cosmolike computes the data vector. Changes to the modeling of nuisance parameters or to the assumed redshift distributions then do not require retraining a network, and nearly all the run time is cosmolike. This project has no emulator of the data vector itself: the likelihoods refuse `use_emulator: 1` with clusters.
+The `EXAMPLE_EMUL2` examples emulate the background expansion and matter
+power spectra. CosmoLike still computes the survey projections, bias and
+intrinsic-alignment contributions. Changing n(z) or nuisance parameters does
+not require retraining a survey data-vector network.
 
-Examples in the hybrid case all have the prefix **EXAMPLE_EMUL2** (note the `2`). They set `use_emulator: 2` on the likelihood and replace the `camb` theory block with the emulator blocks `emulrdrag`, `emulbaosn`, and `emulmps`. Before running them, ensure the following lines are commented out in `set_installation_options.sh` before running the `setup_cocoa.sh` and `compile_cocoa.sh`. By default, these lines should be commented out, but it is worth checking.
+The shared theory networks live in `external_modules/data/emultrf`. Install
+them through the [main Cocoa emulator recipe](https://github.com/CosmoLike/cocoa#cobaya_base_code_examples_emul2).
+These networks assume **mnu = 0.06 eV**; do not sample neutrino mass. Their
+cold-matter power approximation is not a calibrated massive-neutrino halo
+model. Check their training range before widening cosmological priors.
 
-      [Adapted from Cocoa/set_installation_options.sh shell script]
-      # insert the # symbol (i.e., unset these environmental keys  on `set_installation_options.sh`)
-      #export IGNORE_EMULTRF_CODE=1              #SaraivanovZhongZhu (SZZ) transformer/CNN-based emulators
-      #export IGNORE_EMULTRF_DATA=1
-      #export IGNORE_NAUTILUS_SAMPLER_CODE=1     # to run EXAMPLE_EMUL2_NAUTILUS1.py
-      #export IGNORE_POLYCHORD_SAMPLER_CODE=1    # to run EXAMPLE_EMUL2_POLY1.yaml
+> [!IMPORTANT]
+> The supplied likelihood data are synthetic.
+> Sampling examples demonstrate the workflow; they do not yield DES measurements.
 
 > [!NOTE]
 > **The emulators are fixed at a neutrino mass of 0.06 eV.** The EMUL2 examples set `mnu` to 0.06 eV and do not sample it, while the synthetic data vector was generated with CAMB at $\Omega_\nu h^2 = 0.00083$ (`mnu` = 0.077 eV). The $\chi^2$ of `EXAMPLE_EMUL2_EVALUATE1.yaml` and `EXAMPLE_EMUL2_EVALUATE2.yaml` at the fiducial point is therefore not zero. At equal neutrino mass, the emulated inputs differ from CAMB by $\Delta\chi^2 = 1.6$ on 6x2pt + N (the cluster counts differ by 1.5% in the median).
 
-Now, users must follow all the steps below.
+This project does not distribute a full data-vector emulator: cluster
+likelihoods reject `use_emulator: 1`. These examples use `use_emulator: 2`.
 
- **Step :one:**: Activate the private Python environment by sourcing the script `start_cocoa.sh`
+We assume Cocoa and this project are installed, the Cocoa Conda environment
+is active, the shell is Bash, and the current folder is `cocoa/Cocoa/`.
 
-    source start_cocoa.sh
+**Step :one:**: activate Cocoa.
 
- **Step :two:**: Select the number of OpenMP cores. Below, we set it to 4 (in the table of the section [Timing](#des_cluster_timing), going from 4 to 8 threads gains a factor of 1.4 on 6x2pt + N).
+```bash
+source start_cocoa.sh
+```
 
-  - Linux
+**Step :two:**: select the OpenMP threads per process.
 
-        export OMP_NUM_THREADS=4; export OMP_PROC_BIND=close; \
-        export OMP_PLACES=cores; export OMP_DYNAMIC=FALSE; \
-        export OPENBLAS_NUM_THREADS=1; export MKL_NUM_THREADS=1
+```bash
+export OMP_NUM_THREADS=4
+```
 
-  - macOS (arm)
+**Step :three:**: remove GPU access on Linux; these examples use the CPU.
 
-        export OMP_NUM_THREADS=4; export OMP_PROC_BIND=disabled; \
-        export OMP_PLACES=cores; export OMP_DYNAMIC=FALSE; \
-        export OPENBLAS_NUM_THREADS=1; export MKL_NUM_THREADS=1
+```bash
+export CUDA_VISIBLE_DEVICES=""
+```
 
- **Step :three:**: Remove GPU (idea is to run emulators on the CPU!)
+**Step :four:**: evaluate the first hybrid example.
 
-  - Linux
+```bash
+cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_EVALUATE1.yaml --force
+```
 
-        export CUDA_VISIBLE_DEVICES=""
+The YAML selects the CPU for the distance emulator. Keep BLAS at one thread
+per MPI rank (`OPENBLAS_NUM_THREADS=1`, `MKL_NUM_THREADS=1`); on macOS also
+use `VECLIB_MAXIMUM_THREADS=1`. The Python sampler entry points set these
+BLAS limits before importing numerical libraries.
 
- **Step :four:** Run `cobaya-run` on the first emulator example, following the commands below. As before, the examples numbered `1` run 4x2pt + N and the examples numbered `2` run 6x2pt + N.
+| Example | Configuration 1 | Configuration 2 |
+|---|---|---|
+| Fixed evaluation | [EXAMPLE_EMUL2_EVALUATE1.yaml](EXAMPLE_EMUL2_EVALUATE1.yaml) | [EXAMPLE_EMUL2_EVALUATE2.yaml](EXAMPLE_EMUL2_EVALUATE2.yaml) |
+| Cobaya MCMC | [EXAMPLE_EMUL2_MCMC1.yaml](EXAMPLE_EMUL2_MCMC1.yaml) | [EXAMPLE_EMUL2_MCMC2.yaml](EXAMPLE_EMUL2_MCMC2.yaml) |
+| Annealed minimization | [EXAMPLE_EMUL2_MINIMIZE1.py](EXAMPLE_EMUL2_MINIMIZE1.py) | [EXAMPLE_EMUL2_MINIMIZE2.py](EXAMPLE_EMUL2_MINIMIZE2.py) |
+| Parameter profile | [EXAMPLE_EMUL2_PROFILE1.py](EXAMPLE_EMUL2_PROFILE1.py) | [EXAMPLE_EMUL2_PROFILE2.py](EXAMPLE_EMUL2_PROFILE2.py) |
+| Nautilus sampling | [EXAMPLE_EMUL2_NAUTILUS1.py](EXAMPLE_EMUL2_NAUTILUS1.py) | [EXAMPLE_EMUL2_NAUTILUS2.py](EXAMPLE_EMUL2_NAUTILUS2.py) |
+| Repeated evaluations | [EXAMPLE_EMUL2_BENCHMARK1.yaml](EXAMPLE_EMUL2_BENCHMARK1.yaml) | [EXAMPLE_EMUL2_BENCHMARK2.yaml](EXAMPLE_EMUL2_BENCHMARK2.yaml) |
+| PolyChord | [EXAMPLE_EMUL2_POLY1.yaml](EXAMPLE_EMUL2_POLY1.yaml) | [EXAMPLE_EMUL2_POLY2.yaml](EXAMPLE_EMUL2_POLY2.yaml) |
 
-- **One model evaluation**:
+Configuration **1** uses `des_cluster.combo_4x2pt_N`, NLA, and `des_cluster_y6_4x2ptN.dataset`.
+Configuration **2** uses `des_cluster.combo_6x2pt_N`, NLA, and `des_cluster_y6_6x2ptN.dataset`.
 
-  - Linux
+The minimization, profile and Nautilus scripts read the corresponding
+`EXAMPLE_EMUL2_EVALUATE1.yaml` or `2.yaml`; `--input` selects another evaluate
+YAML. They require `cocoa_hybrid_sampling.py` from the matching shared core
+revision. They do not maintain separate embedded cosmologies. `--check` evaluates
+the specified fiducial and prints the sampled parameter order without sampling.
+Use a new `--outroot` for each run; these scripts refuse to overwrite results.
 
-        "${CONDA_PREFIX}"/bin/mpirun -n 1 --oversubscribe \
-          --mca pml ob1 --mca btl vader,tcp,self \
-          --bind-to core:overload-allowed --report-bindings \
-          --rank-by slot --map-by numa:pe=${OMP_NUM_THREADS} \
-          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_EVALUATE1.yaml -f
+### Cobaya MCMC
 
-  - macOS (arm)
+With the same CPU environment, run the first MCMC example. Use configuration
+2 for the second likelihood listed above. Check chain convergence before
+interpreting posterior constraints.
 
-        mpirun -n 1 --oversubscribe \
-          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_EVALUATE1.yaml -f
+**Step :one:**: start Cobaya's hybrid MCMC.
 
-- **Benchmark (1000 model evaluations)**:
+```bash
+mpirun -n 2 --bind-to none cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_MCMC1.yaml
+```
 
-  `EXAMPLE_EMUL2_BENCHMARK1.yaml` (4x2pt + N) and `EXAMPLE_EMUL2_BENCHMARK2.yaml` (6x2pt + N) are the workloads for profiling cosmolike. Each runs 1000 evaluations with a fixed seed, and each evaluation draws every sampled parameter afresh from its `ref` distribution, so no cosmolike table is served from a cache. With the emulated Boltzmann inputs nearly all the run time is cosmolike. To profile, put the profiler (e.g., `perf stat` on Linux) in front of `cobaya-run`.
+Additional YAML workflows above retain their own parameter choices; inspect
+which parameters are fixed or sampled rather than assuming the evaluate
+and MCMC configurations have identical priors. PolyChord requires its
+optional Cocoa installation component.
 
-  - Linux
+The benchmark YAML repeats model evaluations for profiling. From the same
+CPU environment:
 
-        "${CONDA_PREFIX}"/bin/mpirun -n 1 --oversubscribe \
-          --mca pml ob1 --mca btl vader,tcp,self \
-          --bind-to core:overload-allowed --report-bindings \
-          --rank-by slot --map-by numa:pe=${OMP_NUM_THREADS} \
-          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_BENCHMARK1.yaml -f
+**Step :one:**: run the first benchmark configuration.
 
-  - macOS (arm)
+```bash
+cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_BENCHMARK1.yaml --force
+```
 
-        mpirun -n 1 --oversubscribe \
-          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_BENCHMARK1.yaml -f
+For the separate PolyChord example:
 
-- **MCMC (Metropolis-Hastings Algorithm)**:
+**Step :one:**: start the first PolyChord configuration.
 
-  - Linux
+```bash
+mpirun -n 2 --bind-to none cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_POLY1.yaml
+```
 
-        "${CONDA_PREFIX}"/bin/mpirun -n 4 --oversubscribe \
-          --mca pml ob1 --mca btl vader,tcp,self \
-          --bind-to core:overload-allowed --report-bindings \
-          --rank-by slot --map-by numa:pe=${OMP_NUM_THREADS} \
-          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_MCMC1.yaml -r
+### Minimization, profiles and Nautilus
 
-  - macOS (arm)
+We assume Cocoa and this project are installed, the Cocoa Conda environment
+is active, the shell is Bash, and the current folder is `cocoa/Cocoa/`.
 
-        mpirun -n 4 --oversubscribe \
-          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_MCMC1.yaml -r
+**Step :one:**: check the hybrid setup before a long run.
 
-  The MCMC and PolyChord examples sample $\Lambda$CDM (`w` and `w0pwa` are fixed at -1; to sample $w_0$-$w_a$, give them a prior as in the evaluate examples).
+```bash
+python ./projects/des_cluster/EXAMPLE_EMUL2_MINIMIZE1.py --check
+```
 
-> [!NOTE]
-> **Running on more than one node.** The flag `--mca btl vader,tcp,self` works unchanged across
-> nodes: Open MPI picks the transport per pair of ranks, using shared memory (`vader`) within a
-> node and TCP between nodes. Three things deserve attention on multi-node runs:
->
-> 1. **Network interface.** The TCP layer must not select an interface that is not routable
->    between compute nodes. The flag `--mca btl_tcp_if_exclude lo,docker0,virbr0,ib0` excludes
->    the common offenders. TCP bandwidth is not a limitation for our workloads, which exchange
->    small, infrequent MPI messages.
->
-> 2. **Environment.** Ranks on remote nodes must see Cocoa's environment (`ROOTDIR`, `PATH`,
->    `LD_LIBRARY_PATH`, `PYTHONPATH`, `CONDA_PREFIX`, the OpenMP/BLAS thread settings, and
->    `CLIK_PATH`/`CLIK_DATA`/`CLIK_PLUGIN`). Slurm forwards the submitting environment
->    automatically; the explicit `-x` flags in our sbatch templates repeat this so the
->    scripts also work under ssh-based launchers. No other Cocoa installation flags are read at runtime.
->
-> 3. **Slurm geometry.** Keep `ntasks-per-node` × `cpus-per-task` no larger than the cores per
->    node, and use `--map-by numa:pe=${OMP_NUM_THREADS}` so each rank reserves the cores its
->    OpenMP threads will use.
-
-> [!NOTE]
-> **Note on core oversubscription**: an MPI process that is waiting still burns 100% of its
-> core, checking for messages in a loop. With more processes than cores, this stalls the
-> processes doing real work. Open MPI usually detects this and makes waiting processes give
-> up the CPU, but its detection can be fooled. Adding `--mca mpi_yield_when_idle 1` forces
-> that behavior; it is harmless otherwise.
-
-The `Nautilus`, `Minimizer`, and `Profile` scripts below contain an internally
-defined `yaml_string` that specifies priors,
-likelihoods, and the theory code, all following Cobaya Conventions.
-The `PolyChord` example, in contrast, is configured directly by the YAML file `EXAMPLE_EMUL2_POLY1.yaml`.
-
-- **Nautilus**:
-
-  - Linux
-
-        export OMP_NUM_THREADS=1
-
-        "${CONDA_PREFIX}"/bin/mpirun -n 96 --oversubscribe --mca pml ob1 --mca btl vader,tcp,self \
-          -x PATH -x LD_LIBRARY_PATH -x PYTHONPATH -x CONDA_PREFIX -x ROOTDIR \
-          -x OMP_NUM_THREADS -x OMP_PROC_BIND -x OMP_PLACES -x OMP_DYNAMIC \
-          -x OPENBLAS_NUM_THREADS -x MKL_NUM_THREADS -x CLIK_PATH -x CLIK_DATA \
-          -x CLIK_PLUGIN --mca mpi_yield_when_idle 1 \
-          --mca btl_tcp_if_exclude lo,docker0,virbr0,ib0 \
-          --bind-to core:overload-allowed --report-bindings \
-          --rank-by slot --map-by numa:pe=${OMP_NUM_THREADS} \
-          python -m mpi4py.futures ./projects/des_cluster/EXAMPLE_EMUL2_NAUTILUS1.py \
-            --root ./projects/des_cluster/ --outroot "EXAMPLE_EMUL2_NAUTILUS1"  \
-            --maxfeval 750000 --nlive 2048 --neff 15000 \
-            --flive 0.01 --nnetworks 5
-
-  - macOS (arm)
-
-        export OMP_NUM_THREADS=1
-
-        mpirun -n 12 --oversubscribe \
-          python -m mpi4py.futures ./projects/des_cluster/EXAMPLE_EMUL2_NAUTILUS1.py \
-            --root ./projects/des_cluster/ \
-            --outroot "EXAMPLE_EMUL2_NAUTILUS1" \
-            --maxfeval 750000 --nlive 2048 --neff 15000 \
-            --flive 0.01 --nnetworks 5
-
-  The script writes the weighted samples to `chains/EXAMPLE_EMUL2_NAUTILUS1.1.txt`, together with the `.ranges`, `.paramnames`, and `.covmat` files, and keeps a checkpoint at `chains/EXAMPLE_EMUL2_NAUTILUS1_checkpoint.hdf5`, from which a new run resumes.
-
-- **PolyChord**:
-
-  - Linux (assuming node with 96 cores)
-
-        export OMP_NUM_THREADS=4
-
-        "${CONDA_PREFIX}"/bin/mpirun -n 24 --oversubscribe --mca pml ob1 --mca btl vader,tcp,self \
-          -x PATH -x LD_LIBRARY_PATH -x PYTHONPATH -x CONDA_PREFIX -x ROOTDIR \
-          -x OMP_NUM_THREADS -x OMP_PROC_BIND -x OMP_PLACES -x OMP_DYNAMIC \
-          -x OPENBLAS_NUM_THREADS -x MKL_NUM_THREADS -x CLIK_PATH -x CLIK_DATA \
-          -x CLIK_PLUGIN --mca mpi_yield_when_idle 1 \
-          --mca btl_tcp_if_exclude lo,docker0,virbr0,ib0 \
-          --bind-to core:overload-allowed --report-bindings \
-          --rank-by slot --map-by numa:pe=${OMP_NUM_THREADS} \
-          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_POLY1.yaml -r
-
-  - macOS (arm)
-
-        export OMP_NUM_THREADS=1
-
-        mpirun -n 12 --oversubscribe \
-          cobaya-run ./projects/des_cluster/EXAMPLE_EMUL2_POLY1.yaml -r
-
-- **Global Minimizer**:
-
-  Our minimizer is a reimplementation of `Procoli`, developed by Karwal et al (arXiv:2401.14225)
-
-  - Linux (assuming node with 96 cores)
-
-        export OMP_NUM_THREADS=4
-
-        "${CONDA_PREFIX}"/bin/mpirun -n 24 --oversubscribe --mca pml ob1 --mca btl vader,tcp,self \
-          -x PATH -x LD_LIBRARY_PATH -x PYTHONPATH -x CONDA_PREFIX -x ROOTDIR \
-          -x OMP_NUM_THREADS -x OMP_PROC_BIND -x OMP_PLACES -x OMP_DYNAMIC \
-          -x OPENBLAS_NUM_THREADS -x MKL_NUM_THREADS -x CLIK_PATH -x CLIK_DATA \
-          -x CLIK_PLUGIN --mca mpi_yield_when_idle 1 \
-          --mca btl_tcp_if_exclude lo,docker0,virbr0,ib0 \
-          --bind-to core:overload-allowed --report-bindings \
-          --rank-by slot --map-by numa:pe=${OMP_NUM_THREADS} \
-          python ./projects/des_cluster/EXAMPLE_EMUL2_MINIMIZE1.py \
-            --root ./projects/des_cluster/ \
-            --outroot "EXAMPLE_EMUL2_MIN1" \
-            --nstw 350
-
-  - macOS (arm)
-
-        export OMP_NUM_THREADS=1
-
-        mpirun -n 12 --oversubscribe \
-          python ./projects/des_cluster/EXAMPLE_EMUL2_MINIMIZE1.py \
-            --root ./projects/des_cluster/ \
-            --outroot "EXAMPLE_EMUL2_MIN1" \
-            --nstw 350
-
-  The number of steps per Emcee walker per temperature is $n_{\rm stw}$,
-  and the number of walkers is $n_{\rm w}={\rm max}(3n_{\rm params},n_{\rm MPI})$.
-  The minimum number of total evaluations is $3n_{\rm params} \times n_{\rm T} \times n_{\rm stw}$, which can be distributed among $n_{\rm MPI} = 3n_{\rm params}$ MPI processes for faster results.
-  The script writes the minimum to `chains/EXAMPLE_EMUL2_MIN1.txt`.
-
-- **Profile**:
-
-  - Linux (assuming node with 96 cores)
-
-        export OMP_NUM_THREADS=4
-
-        "${CONDA_PREFIX}"/bin/mpirun -n 24 --oversubscribe --mca pml ob1 --mca btl vader,tcp,self \
-          -x PATH -x LD_LIBRARY_PATH -x PYTHONPATH -x CONDA_PREFIX -x ROOTDIR \
-          -x OMP_NUM_THREADS -x OMP_PROC_BIND -x OMP_PLACES -x OMP_DYNAMIC \
-          -x OPENBLAS_NUM_THREADS -x MKL_NUM_THREADS -x CLIK_PATH -x CLIK_DATA \
-          -x CLIK_PLUGIN --mca mpi_yield_when_idle 1 \
-          --mca btl_tcp_if_exclude lo,docker0,virbr0,ib0 \
-          --bind-to core:overload-allowed --report-bindings \
-          --rank-by slot --map-by numa:pe=${OMP_NUM_THREADS} \
-          python ./projects/des_cluster/EXAMPLE_EMUL2_PROFILE1.py \
-            --root ./projects/des_cluster/ --cov 'chains/EXAMPLE_EMUL2_MCMC1.covmat' \
-            --outroot "EXAMPLE_EMUL2_PROFILE1" \
-            --factor 3 --nstw 350 --numpts 10 \
-            --profile 1 \
-            --minfile="./projects/des_cluster/chains/EXAMPLE_EMUL2_MIN1.txt"
-
-  - macOS (arm)
-
-        export OMP_NUM_THREADS=1
-
-        mpirun -n 12 --oversubscribe \
-          python ./projects/des_cluster/EXAMPLE_EMUL2_PROFILE1.py \
-            --root ./projects/des_cluster/ \
-            --cov 'chains/EXAMPLE_EMUL2_MCMC1.covmat' \
-            --outroot "EXAMPLE_EMUL2_PROFILE1" \
-            --factor 3 --nstw 350 --numpts 10 --profile 1 \
-            --minfile="./projects/des_cluster/chains/EXAMPLE_EMUL2_MIN1.txt"
-
-  The commands above read two files that earlier examples write: the covariance `chains/EXAMPLE_EMUL2_MCMC1.covmat` (from the MCMC example) and the minimum `chains/EXAMPLE_EMUL2_MIN1.txt` (from the minimizer example). Without `--minfile`, the script computes the minimum itself, which is slow.
-
-  The argument `profile` is the index of the profiled parameter in Cobaya's list of sampled parameters (the script prints its name at the start), and `numpts` sets the number of points of the profile. The argument `factor` specifies the start and end of the parameter being profiled:
-
-      start value ~ minimum value - factor*np.sqrt(np.diag(cov))
-      end   value ~ minimum value + factor*np.sqrt(np.diag(cov))
-
-  We advise ${\rm factor} \sim 3$ for parameters that are well constrained by the data when a covariance matrix is provided.
-  If `cov` is not supplied, the code estimates one internally from the prior.
-  If a parameter is poorly constrained or `cov` is not given, we recommend ${\rm factor} \ll 1$.
-  The script writes the profile to `chains/EXAMPLE_EMUL2_PROFILE1.<parameter name>.txt`.
-
-> [!Warning]
-> When running Profiles, you should not set flat priors on parameters that are not well constrained by the data.
-> By doing that, you then risk having the minimizer select values near the boundary of parameter space. This is a big problem when using emulators, as volume near the
-> boundary will be inevitable outside the training range. You can convert a flat prior to a Gaussian one by setting the standard deviation to be $\sigma^2 = (hi - lo)^2/12$,
-> where $(lo, hi)$ are the flat prior boundaries. The `Nautilus`, `Minimizer`, and `Profile` scripts of this project add the following prior block
->
->      prior:
->        # These priors are meant to prevent the sampler to wander far off training
->        g1: "lambda As_1e9: stats.norm.logpdf(As_1e9, loc=2.35, scale=1.6)"
->        g2: "lambda ns: stats.norm.logpdf(ns, loc=0.96, scale=0.05)"
->        g3: "lambda H0: stats.norm.logpdf(H0, loc=70, scale=10.0)"
->        g4: "lambda omegab: stats.norm.logpdf(omegab, loc=0.045, scale=0.012)"
->        g5: "lambda omegam: stats.norm.logpdf(omegam, loc=0.3 , scale=0.25)"
+**Step :two:**: search for a minimum with two MPI ranks.
+
+```bash
+mpirun -n 2 --bind-to none python ./projects/des_cluster/EXAMPLE_EMUL2_MINIMIZE1.py --nstw 200 --outroot hybrid_min1
+```
+
+**Step :three:**: profile the first sampled parameter using that saved minimum.
+
+```bash
+mpirun -n 2 --bind-to none python ./projects/des_cluster/EXAMPLE_EMUL2_PROFILE1.py --profile 0 --nstw 200 --numpts 11 --factor 1 --minfile ./projects/des_cluster/chains/hybrid_min1.json --outroot hybrid_profile1
+```
+
+**Step :four:**: run Nautilus as an independent sampling example.
+
+```bash
+mpirun -n 2 --bind-to none python ./projects/des_cluster/EXAMPLE_EMUL2_NAUTILUS1.py --nlive 1000 --neff 10000 --maxfeval 100000 --outroot hybrid_nautilus1
+```
+
+The annealed Emcee search follows the DES × Planck template. Its objective
+is **−2 log posterior**, including nuisance and cosmological priors; the
+profile is therefore a penalized profile, not a pure likelihood profile.
+`--nstw` sets steps per walker per temperature. More steps and independent
+starts are needed to assess whether a minimum is reliable.
+
+`--profile` accepts a sampled-parameter name or its printed zero-based index.
+`--factor` gives the half-width in proposal standard deviations, clipped to
+the prior bounds. `--cov` accepts a covariance whose header lists the sampled
+parameters in order; without it, the prior covariance sets the proposal.
+The minimum JSON must come from the same evaluate YAML and parameter order.
+Older plain-text minimum files are not accepted. Set any additional priors
+in the input YAML; these scripts do not insert hidden cosmological priors.
+
+Nautilus writes weighted GetDist-compatible rows and a JSON convergence
+record. Reaching `--maxfeval` is not convergence. If the budget ends before
+any posterior samples are retained, only the checkpoint and a JSON record
+with `converged: false` are saved. Its prior transform uses
+Cobaya's one-dimensional prior distributions; external prior factors enter
+once as additional log weight. Evidence with unnormalized external priors
+has that normalization limitation. These examples do not certify emulator
+accuracy or posterior convergence.
+
+### Emulator design and optional approximations
 
 Details on the matter power spectrum emulator designs will be presented in the
 [emulator_code](https://github.com/CosmoLike/emulators_code) repository.
@@ -500,7 +389,146 @@ to new models, extended ranges, or higher precision.
 Similarly, we use networks to generalize the *syren-Halofit* LCDM nonlinear
 boost fit (Eq. 11 of [arXiv:2402.17492](https://arxiv.org/abs/2402.17492)).
 
-# The notebooks and the notebook wrappers <a name="des_cluster_notebook"></a>
+
+### MPI across nodes
+
+The two-rank commands above disable MPI binding for a portable local run.
+For a cluster allocation, use the explicit binding and placement below.
+
+> [!NOTE]
+> **Running on more than one node.** With the Open MPI 4 launcher used here,
+> `--mca pml ob1 --mca btl vader,tcp,self` selects shared memory within a node
+> and TCP between nodes. The same transport list works across nodes.
+>
+> 1. **Network interface.** TCP must use an interface routable between compute
+>    nodes. A common exclusion list is
+>    `--mca btl_tcp_if_exclude lo,docker0,virbr0,ib0`; adapt it to the cluster.
+>    Keep `ib0` if routable IP-over-InfiniBand is the intended network. These
+>    examples exchange parameter vectors and scalar scores, so communication
+>    volume is small; actual scaling still depends on the machine.
+> 2. **Environment.** Remote ranks need the same Cocoa paths and libraries:
+>    `ROOTDIR`, `PATH`, `LD_LIBRARY_PATH`, `PYTHONPATH`, `CONDA_PREFIX`, OpenMP
+>    and BLAS settings, and `CLIK_PATH`/`CLIK_DATA`/`CLIK_PLUGIN` when used.
+>    Slurm normally exports the submitting environment (`--export=ALL`).
+>    Explicit `-x` options also forward these variables with SSH launchers.
+>    Activate Cocoa before launching; build/download flags do not replace
+>    runtime paths. All nodes must see the same files at the same paths.
+> 3. **Slurm geometry.** Keep `ntasks-per-node × cpus-per-task` within the
+>    allocated physical cores per node. Set `OMP_NUM_THREADS` to
+>    `SLURM_CPUS_PER_TASK` and use `--map-by numa:pe=${OMP_NUM_THREADS}`.
+>    The minimization, profile and Nautilus pool reserves one MPI rank as
+>    coordinator; the remaining ranks evaluate the model.
+>
+> Open MPI 5 calls the shared-memory transport `sm`; use `sm,tcp,self` there.
+> See the [Open MPI transport guide](https://docs.open-mpi.org/en/main/tuning-apps/networking/shared-memory.html),
+> [TCP interface guidance](https://www.open-mpi.org/faq/?category=tcp), and
+> [Slurm environment options](https://slurm.schedmd.com/sbatch.html#OPT_export).
+
+Within a Slurm allocation, first activate Cocoa in Bash on the launch node.
+The following steps assume Open MPI 4 and shared installation/data paths.
+Omit optional CLIK exports if those variables are not set.
+
+**Step :one:**: match OpenMP threads to the scheduler allocation.
+
+```bash
+export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK}"
+```
+
+**Step :two:**: bind each OpenMP team to its allocated cores.
+
+```bash
+export OMP_PROC_BIND=close
+```
+
+**Step :three:**: select core placement.
+
+```bash
+export OMP_PLACES=cores
+```
+
+**Step :four:**: disable dynamic team resizing.
+
+```bash
+export OMP_DYNAMIC=FALSE
+```
+
+**Step :five:**: keep OpenBLAS serial.
+
+```bash
+export OPENBLAS_NUM_THREADS=1
+```
+
+**Step :six:**: keep MKL serial.
+
+```bash
+export MKL_NUM_THREADS=1
+```
+
+**Step :seven:**: launch the hybrid minimizer across the allocated ranks.
+
+```bash
+"${CONDA_PREFIX}"/bin/mpirun -n "${SLURM_NTASKS}" \
+  --mca pml ob1 --mca btl vader,tcp,self \
+  --mca btl_tcp_if_exclude lo,docker0,virbr0 \
+  --map-by numa:pe=${OMP_NUM_THREADS} --bind-to core --report-bindings \
+  -x ROOTDIR -x PATH -x LD_LIBRARY_PATH -x PYTHONPATH -x CONDA_PREFIX \
+  -x OMP_NUM_THREADS -x OMP_PROC_BIND -x OMP_PLACES -x OMP_DYNAMIC \
+  -x OPENBLAS_NUM_THREADS -x MKL_NUM_THREADS -x CUDA_VISIBLE_DEVICES \
+  python ./projects/des_cluster/EXAMPLE_EMUL2_MINIMIZE1.py --nstw 200 --outroot hybrid_multinode
+```
+
+For a Planck likelihood add `-x CLIK_PATH -x CLIK_DATA -x CLIK_PLUGIN` when
+those variables are defined. Follow the cluster's MPI module and Slurm
+launch policy; do not oversubscribe a production allocation. Outside Slurm,
+supply the hosts and slots with the cluster's `--hostfile` or `--host` recipe.
+
+# Exploring notebooks <a name="notebooks"></a>
+
+**Armadillo** was chosen to make a convenient Python API for notebook
+exploration. This C++ library provides vectors, matrices and three-dimensional
+arrays called cubes. A small interface layer connects them to NumPy through
+**pybind11**, with **CARMA** handling array conversion. The notebooks expose
+intermediate quantities; production calculations use the CLI interfaces.
+
+We assume Cocoa and this project are installed, the Cocoa Conda environment
+is active, the shell is Bash, and the current folder is `cocoa/Cocoa/`.
+
+Compile the project first; the covariance notebook also needs the optional
+covariance build described [below](#computing_covariances).
+
+**Step :one:**: activate Cocoa.
+
+```bash
+source start_cocoa.sh
+```
+
+**Step :two:**: select the OpenMP team.
+
+```bash
+export OMP_NUM_THREADS=8
+```
+
+**Step :three:**: start Jupyter.
+
+```bash
+jupyter notebook --no-browser --port=8888
+```
+
+**Step :four:**: open the printed URL and choose a notebook below.
+
+**Step :five:**: select **Kernel → Restart Kernel and Run All Cells**.
+
+| Notebook | Contents |
+|---|---|
+| [EXAMPLE_EVALUATE1.ipynb](EXAMPLE_EVALUATE1.ipynb) | Data-vector exploration through the project wrappers; inspect the setup cells before running. |
+| [EXAMPLE_EVALUATE2.ipynb](EXAMPLE_EVALUATE2.ipynb) | Data-vector exploration through the project wrappers; inspect the setup cells before running. |
+| [EXAMPLE_EVALUATE_COVARIANCE.ipynb](EXAMPLE_EVALUATE_COVARIANCE.ipynb) | G, SSC, cNG, total, separate 1h–4h matter trispectra and matrix diagnostics. |
+
+Choose the Python kernel from the activated Cocoa environment and restart it
+after recompiling. The [covariance guide](covariance/README.md) explains the
+forecast files, figures and refinement workflow.
+
+<a name="des_cluster_notebook"></a>
 
 The notebook `EXAMPLE_EVALUATE1.ipynb` computes the cluster observables at the fiducial point with the options of `EXAMPLE_EVALUATE1.yaml` (4x2pt + N) and compares them with the synthetic data where the scale cuts keep them. It covers, in this order: the cluster counts per richness and redshift bin; the halo-model ingredients (the probability of a richness bin given the halo mass, the number density and the bias of each richness bin, the redshift selection kernels, the one-halo cluster-matter power spectrum); cluster lensing, both as $\gamma_t$ and as the $\Sigma = Y\gamma_t$ statistic of the data vector; $w_{cc}$; $w_{cg}$; the Limber spectra $C_\ell^{cs}$, $C_\ell^{cc}$, and $C_\ell^{cg}$; the response of the counts and of $\gamma_t$ to the mass-observable relation; and the $\chi^2$ against the synthetic data vector.
 
@@ -788,150 +816,94 @@ The port is complete for the model described above: the two likelihoods run, the
 
 # Computing covariances <a name="computing_covariances"></a>
 
-[EXAMPLE_EVALUATE_COVARIANCE.ipynb](EXAMPLE_EVALUATE_COVARIANCE.ipynb)
-computes a covariance with this project's 6×2pt + counts measurement layout.
-It keeps G, SSC and cNG separately, applies the supplied likelihood mask,
-and plots the computed and supplied totals together.
+The production CLI saves G, SSC, cNG and total before scale cuts. It reads
+[the joint cluster evaluate YAML](EXAMPLE_EVALUATE_COVARIANCE.yaml) and calls the shared C kernels.
+This is a joint Limber 6×2pt + counts forecast, with the approximations
+listed in the [covariance guide](covariance/README.md#joint).
 
-| Measurement choice | Notebook example |
-| --- | --- |
-| Dataset | [data/des_cluster_y6_6x2ptN.dataset](data/des_cluster_y6_6x2ptN.dataset) |
-| Primary space | Real-space 6×2pt + N, with $`\Sigma = Y\gamma_t`$ cluster lensing |
-| Lens bins | 6 |
-| Source bins | 4 |
-| Bins per two-point observable | 20, 2.5–250 arcmin |
-| Generated entries before cuts | 2,812 |
-| Entries after the dataset mask | 1,429 |
+We assume Cocoa and this project are installed, the Cocoa Conda environment
+is active, the shell is Bash, and the current folder is `cocoa/Cocoa/`.
 
-The primary example has 2,812 entries: 2,800 two-point measurements and 12
-counts from three cluster redshift bins and four richness bins. It follows the
-likelihood order ss, gs, gg, cg, N, cc, cs. Cluster lensing is transformed to $`\Sigma = Y\gamma_t`$ on both covariance axes. The 6×2pt + N mask removes the 48 defined Y null
-rows as well as physical scale cuts.
+**Step :one:**: enable this project in `set_installation_options.sh` by commenting out
+`export IGNORE_COSMOLIKE_DES_CLUSTER_CODE=1` before activation.
 
-The default [installation options](../../set_installation_options.sh) set
-`IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE=1`. This leaves covariance-generation
-kernels and notebook bindings out of the compiled interface. Likelihoods still
-read and invert their supplied covariance matrices. The steps below enable
-covariance generation for this build; comment out that export in
-`set_installation_options.sh` to keep it enabled in later sessions.
-Recompile after changing the option, then restart any running notebook kernel.
+**Step :two:**: activate Cocoa.
 
-We assume Cocoa and this project are installed, users have run
-`conda activate cocoa`, the shell is Bash, and the current folder is
-`cocoa/Cocoa`.
+```bash
+source start_cocoa.sh
+```
 
-**Step :one:**: activate Cocoa's private Python environment.
+**Step :three:**: enable covariance generation.
 
-    source start_cocoa.sh
+```bash
+unset IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE
+```
 
-**Step :two:**: enable covariance generation and compile the project interface.
+**Step :four:**: compile the project.
 
-    unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
-    unset IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE
-    source ./projects/des_cluster/scripts/compile_des_cluster.sh
+```bash
+source ./projects/des_cluster/scripts/compile_des_cluster.sh
+```
 
-**Step :three:**: start Jupyter.
+**Step :five:**: set the OpenMP team size.
 
-    jupyter notebook --no-browser --port=8888
+```bash
+export OMP_NUM_THREADS=8
+```
 
-**Step :four:**: open the printed URL and select
-`projects/des_cluster/EXAMPLE_EVALUATE_COVARIANCE.ipynb`.
+**Step :six:**: compute the fixed YAML cosmology.
 
-**Step :five:**: inspect the survey inputs and keep `boosts = [1]` for the
-first calculation, then select **Kernel → Restart Kernel and Run All Cells**.
-Set `boosts = [1, 2]` to add the accuracy comparison.
+```bash
+python ./projects/des_cluster/covariance/compute_covariance.py ./projects/des_cluster/EXAMPLE_EVALUATE_COVARIANCE.yaml
+```
 
-The notebook writes `covariance/forecast_cluster.npz`,
-`covariance/forecast_camb.npz` and
-`covariance/forecast_likelihood_selection.npz`. The last archive retains
-both cut totals and the original data-vector indices.
-The optional final cell computes a galaxy/shear-only Fourier companion.
-The [covariance guide](covariance/README.md) describes the physical inputs,
-component plots, accuracy controls and covariance-only tests.
+Use `--output PATH` for a separate output or `--overwrite` to replace an
+existing computed archive. Paths are relative to `cocoa/Cocoa/`. Threads
+come only from `OMP_NUM_THREADS`, never from the YAML; the runner fixes BLAS
+to one thread. Ordinary likelihoods read their supplied covariance and do
+not generate a new one.
 
-> [!NOTE]
-> The generated matrix is an analogous forecast, not a reproduction of the
-> supplied likelihood covariance. Gaussian spectra can include non-Limber
-> gg/gs and NLA/TATT; SSC/cNG retain zero-IA Limber physics. The forecast
-> uses massless neutrinos and a spherical-cap footprint.
-> `accuracy_boost` refines
-> tables and cutoffs; `integration_accuracy` separately selects precomputed
-> GSL rules from [covariance/default.yaml](covariance/default.yaml).
+Cobaya's YAML reader supplies the familiar `theory`, `params` and
+`sampler: evaluate` syntax. This runner evaluates one fixed cosmology and
+does not run MCMC. See the [covariance guide](covariance/README.md) for output
+ordering, physics, Gaussian non-Limber/IA limits, plots and test commands,
+and the [accuracy FAQ](#accuracy) for the separate numerical controls.
 
-The cluster calculation also uses biased-matter cNG and SSC-only count–spectrum
-crosses. Selected-cluster one-halo cNG and non-SSC count–spectrum terms remain
-absent. The supplied synthetic matrix uses Gaussian two-point covariance and
-Poisson plus sample-variance counts, with zero count–spectrum crosses.
-Differences from it therefore include deliberate model differences.
 
-## Command-line calculation
+# Appendix <a name="appendix"></a>
 
-The Python runner computes the full angular 6×2pt+N covariance in real space,
-using the optimized production interface. It saves G, SSC, cNG and their
-sum without plotting or opening a notebook. Numerical kernels and survey
-settings are shared with the notebook calculation.
+## FAQ: Which accuracy settings are available? <a name="accuracy"></a>
 
-From Bash in `cocoa/Cocoa`, with `conda activate cocoa`:
+Data-vector options belong to the selected `likelihood` block. Covariance
+options belong to the evaluate YAML's `covariance` block. They use separate
+names and settings; changing one does not refine the other.
 
-**Step :one:**: activate Cocoa and enable covariance generation.
+| Data-vector setting | What it changes |
+|---|---|
+| `accuracyboost` | Overall interpolation-table resolution. |
+| `integration_accuracy` | Quadrature resolution; refine independently of interpolation. |
+| `internal_accuracyboost` | C-FAST-PT convolution grid. |
+| `nonlimber_accuracyboost` | Non-Limber distance sampling. |
+| `pk_z_refinement` | Nested redshift refinement of matter-power inputs. |
+| `lmax` | Real-space angular-transform cutoff, where a real-space transform is used. |
+| `kmax_boltzmann` | Requested Boltzmann power range; coordinate it with the theory settings. |
 
-    source start_cocoa.sh
-    unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
-    unset IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE
+`adopt_limber_gg` and `adopt_limber_gs` choose a projection approximation.
+`photoz_interpolation_type` chooses how n(z) is interpolated, while
+`photoz_zmid_convention` describes the input coordinates. These are modeling
+or input-convention choices, not interchangeable accuracy boosts.
 
-**Step :two:**: compile the project interface.
+The default data-vector power grid has 1,500 wavenumbers at boost 1.
+Covariance alone uses `power_accuracyboost: 8` to prepare 11,993 nodes by
+natural cubic interpolation before C linear lookup. Its `accuracy_boost`
+refines tables and cutoffs; its `integration_accuracy` independently selects
+quadrature levels 0–4. See the complete [covariance accuracy table](covariance/README.md#accuracy-settings).
 
-    source ./projects/des_cluster/scripts/compile_des_cluster.sh
-
-**Step :three:**: inspect the YAML cosmology and compute the matrix components.
-
-    export OMP_NUM_THREADS=8
-    python ./projects/des_cluster/covariance/compute_covariance.py \
-        ./projects/des_cluster/EXAMPLE_EVALUATE_COVARIANCE.yaml
-
-The `.npz` archive contains the full matrix before likelihood scale cuts,
-its components, measurement ordering, resolved settings and stage timings.
-Existing output files require `--overwrite`; likelihood inputs are separate.
-
-This runner uses the joint cluster adapter, including counts.
-Its supported measurement space is real space.
-
-The [evaluate YAML](EXAMPLE_EVALUATE_COVARIANCE.yaml) uses Cobaya's YAML reader, with familiar
-`theory`, `params`, `sampler: evaluate` and `output` blocks. Fixed parameter
-values specify one cosmology; a parameter with a prior must be supplied
-explicitly in `sampler.evaluate.override`. No MCMC or random prior draw runs.
-
-In its `covariance` block, `accuracy_boost: 2` refines the project's
-`default.yaml` baseline. `integration_accuracy: 1` changes the quadrature
-level independently. Internal accuracy controls can also be set there.
-Use `space` for the measurement space. Set the OpenMP team with
-`OMP_NUM_THREADS` in the shell; no thread count belongs in the YAML.
-
-`theory.camb.extra_args` supports `AccuracyBoost`, `kmax`, `k_per_logint`,
-`lens_potential_accuracy` and `halofit_version`. CAMB's boost controls
-CAMB; the covariance boost controls its own tables and cutoffs.
-
-Paths in the YAML are relative to the working directory, `cocoa/Cocoa`.
-`output` names the `.npz` archive; `--output` can override it for an HPC
-job. Set `OMP_NUM_THREADS` in that job’s environment. `--help` lists the
-command options.
-
-To return to a data-vector-only build, use the following steps from
-`cocoa/Cocoa` with `conda activate cocoa` and Bash.
-
-**Step :one:**: activate Cocoa.
-
-    source start_cocoa.sh
-
-**Step :two:**: omit covariance generation and rebuild the interface.
-
-    unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
-    export IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE=1
-    source ./projects/des_cluster/scripts/compile_des_cluster.sh
-
-Gaussian non-Limber and NLA/TATT options are documented in the
-[covariance guide](covariance/README.md#choosing-the-gaussian-spectra).
-The YAML keeps these Gaussian choices separate from SSC/cNG. OpenMP
-threads come exclusively from `OMP_NUM_THREADS`, not from a YAML key.
-The joint selected-cluster forecast remains Limber and zero IA;
-these new Gaussian options apply to its separate galaxy/shear adapter.
+CAMB's `theory.camb.extra_args.AccuracyBoost` controls CAMB, not CosmoLike.
+Check interpolation, quadrature, input-power sampling and transform cutoffs
+separately at fixed cosmology and measurement bins. Narrow n(z) overlaps
+particularly require a quadrature check; increasing `accuracyboost` alone
+is not that check. The [data-vector test guide](tests/data_vector/README.md)
+and [covariance test guide](tests/covariance/README.md) state what each suite
+actually verifies. A passing regression or a larger boost is not a general
+claim of survey or Fisher convergence.

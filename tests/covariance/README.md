@@ -20,7 +20,7 @@ shell is Bash and the current folder is `cocoa/Cocoa`.
 
     source start_cocoa.sh
 
-**Step :two:**: compile this project's interface.
+**Step :two:**: enable the installed project.
 
     unset IGNORE_COSMOLIKE_DES_CLUSTER_CODE
     unset IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE
@@ -58,7 +58,7 @@ shell is Bash and the current folder is `cocoa/Cocoa`.
 | Joint survey preparation | Check the DES count insertion, richness ordering, absolute versus normalized windows and every field spectrum across memory-block boundaries. |
 | Joint forecast | Check all six two-point families and counts, one/eight-thread repeatability, Y propagation, defined null modes, positivity and saved model limits. |
 
-The [shared component tests](../../../lsst_y1/tests/covariance/README.md)
+The [shared component tests](https://github.com/CosmoLike/cocoa_lsst_y1/blob/main/tests/covariance/README.md)
 contain independent algebra and projection references. This project check
 covers its binding and inputs; it does not duplicate those references.
 Use the [covariance notebook](../../EXAMPLE_EVALUATE_COVARIANCE.ipynb)
