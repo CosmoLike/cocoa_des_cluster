@@ -52,6 +52,15 @@ the other Cocoa notebooks do: CLAccuracyBoost is multiplied by
 AccuracyBoost, the integration accuracy grows by |3 (CLAccuracyBoost - 1)|,
 and the C_ell table reaches lmax + 20000 (CLAccuracyBoost - 1).
 
+Baryonic feedback (the bfmt section of EXAMPLE_EVALUATE2):
+get_baryon_suppression evaluates the suppression S(k, z) of the bfmt
+theory block (the nonlinear matter power with feedback divided by the
+one without it) on a (z, k) grid through a minimal Cobaya model, and
+compute_probes returns every block of the joint vector, the masked
+data vector and its chi2 at the fiducial point, with S applied to the
+nonlinear power as the likelihood applies it. The linear spectra, which
+the cluster counts and the halo model read, do not change.
+
 Run the notebooks after `source start_cocoa.sh`, which sets ROOTDIR (the
 cocoa/Cocoa folder) and puts interface/ on the Python path.
 """
@@ -439,6 +448,65 @@ def _camb_cosmology(**kwargs):
     return _CAMB_CACHE["value"]
 
 
+def _apply_baryon_suppression(lnPNL, z_interp_2D, sup):
+    """Returns a copy of the nonlinear ln P table with ln S(k, z) added.
+
+    This is the operation the likelihood applies when
+    external_baryon_suppression is set: the baryonic suppression S of
+    the bfmt theory block multiplies the nonlinear matter power, so
+    ln S is added to ln P_nonlinear, and the linear tables (which the
+    cluster counts and the halo model read) stay as they are. The
+    table is flattened with the redshift running fastest (Fortran
+    order: entry i + j*n_z holds redshift i and wavenumber j), so the
+    slice [i :: n_z] holds every wavenumber of redshift i.
+
+    The whole dictionary is checked before the copy changes: a missing
+    redshift or a non-positive S would otherwise surface only as a NaN
+    chi2. The input table is never modified, because it belongs to the
+    module's stored CAMB run (_camb_cosmology), which later wrapper
+    calls must find unchanged.
+
+    Arguments:
+      lnPNL       = 1D array, ln P_nonlinear flattened as above
+                    (n_z*n_k entries).
+      z_interp_2D = 1D array of the n_z redshift nodes of the table.
+      sup         = dict {redshift node: 1D array of S over the n_k
+                    wavenumbers}, as get_baryon_suppression returns it.
+
+    Returns:
+      a new 1D array: lnPNL plus ln S at every (z, k) node.
+
+    Raises:
+      ValueError naming the first redshift node that has no S array, or
+      whose S is not positive and finite everywhere.
+    """
+    for z_val in z_interp_2D:
+        # {float(z_val)!r} prints the node as a plain Python float with
+        # every digit needed to reproduce it, so the message shows the
+        # exact value a dictionary key must equal
+        if z_val not in sup:
+            raise ValueError(
+                f"sup has no suppression at z = {float(z_val)!r}, a node of "
+                "the CAMB redshift grid; compute sup with "
+                "get_baryon_suppression on the z_grid that compute_probes "
+                "returns (the lookup needs exactly equal redshifts)")
+        suppression = np.asarray(sup[z_val])
+        if not (np.all(np.isfinite(suppression)) and np.all(suppression > 0.0)):
+            raise ValueError(
+                f"sup at z = {float(z_val)!r} holds a value of S that is not "
+                "positive and finite; ln S needs 0 < S < infinity: check "
+                "the feedback parameters handed to get_baryon_suppression")
+    # a private copy of ln P_nonlinear, modified in place below
+    lnPNL = np.array(lnPNL, copy=True)
+    for i, z_val in enumerate(z_interp_2D):
+        # every k row of redshift z_i sits at stride len(z) in the
+        # flattened table, the layout set_cosmology expects; sup[z_val]
+        # looks the redshift up by exact float equality, which holds
+        # because sup was computed on this same z grid
+        lnPNL[i :: len(z_interp_2D)] += np.log(sup[z_val])
+    return lnPNL
+
+
 def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
                AccuracyBoost, kmax, k_per_logint, CAMBAccuracyBoost,
                CLAccuracyBoost, CLIntegrationAccuracy, non_linear_emul,
@@ -446,7 +514,7 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
                A1=None, A2=None, BTA=None,
                lens_photoz_bias=None, lens_photoz_stretch=None,
                B1=None, B2=None, B_MAG=None, B3nl=None, BK=None, PM=None,
-               MOR=None, SEL=None):
+               MOR=None, SEL=None, sup=None):
     """Runs CAMB and pushes one complete state into the interface.
 
     This is the body every wrapper shares: the accuracy folds and
@@ -475,9 +543,21 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
       MOR      = mass-observable relation {ln lambda_0, A_lambda,
                  sigma_int, B_lambda}.
       SEL      = selection bias {b_s1, b_s2, r_0 [Mpc/h], s3}.
+      sup      = None, or the baryonic suppression {z: S array over k}
+                 of get_baryon_suppression, computed on the z grid of
+                 this CAMB run (compute_probes returns it as z_grid):
+                 S multiplies the nonlinear power handed to
+                 set_cosmology (_apply_baryon_suppression), as the
+                 likelihood applies it with external_baryon_suppression.
 
     Returns:
-      nothing; the interface state is the result.
+      (z_interp_2D, log10k_interp_2D): the redshift nodes and the log10
+      of the wavenumbers [h/Mpc] of the power-spectrum tables just
+      installed; the interface state itself is the main result.
+
+    Raises:
+      ValueError from _apply_baryon_suppression when sup does not fit
+      the redshift grid.
     """
     (log10k_interp_2D, z_interp_2D, lnPL, lnPNL,
      G_growth, z_growth, z_interp_1D, chi,
@@ -488,6 +568,13 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
         CAMBAccuracyBoost=CAMBAccuracyBoost,
         CLAccuracyBoost=CLAccuracyBoost,
         non_linear_emul=non_linear_emul)
+    if sup is not None:
+        # only the nonlinear table changes: lnPL and lnPL_cb, the linear
+        # spectra of the halo model and the cluster counts, stay as CAMB
+        # returned them
+        lnPNL = _apply_baryon_suppression(lnPNL=lnPNL,
+                                          z_interp_2D=z_interp_2D,
+                                          sup=sup)
     # CAMB (and other libraries) may call omp_set_num_threads: restore
     # the thread count of cosmolike's parallel regions, as the
     # likelihood does before every interface call
@@ -563,6 +650,9 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
     ci.set_nuisance_cluster_selection(
         SEL=SELECTION_FID if SEL is None else SEL)
     ci.reset_bary_struct()
+    # the grids of the tables just installed: compute_probes hands them
+    # on to get_baryon_suppression
+    return (z_interp_2D, log10k_interp_2D)
 
 
 def _state(ntheta=None, theta_min_arcmin=None, theta_max_arcmin=None,
@@ -570,7 +660,8 @@ def _state(ntheta=None, theta_min_arcmin=None, theta_max_arcmin=None,
            w=w, w0pwa=w0pwa, mnu=mnu,
            AccuracyBoost=1.0, kmax=10.0, k_per_logint=12,
            CAMBAccuracyBoost=1.0, CLAccuracyBoost=None,
-           CLIntegrationAccuracy=None, non_linear_emul=None, **nuisance):
+           CLIntegrationAccuracy=None, non_linear_emul=None, sup=None,
+           **nuisance):
     """The keyword interface every public wrapper shares.
 
     Fills the defaults that live in _CONFIG or in the dataset and
@@ -589,11 +680,17 @@ def _state(ntheta=None, theta_min_arcmin=None, theta_max_arcmin=None,
           values.
       non_linear_emul = 1 EuclidEmulator2, 2 halofit; None for the
           configure()d value.
+      sup = None, or the baryonic suppression {z: S array over k} of
+          get_baryon_suppression, applied to the nonlinear power (see
+          _set_state); a public wrapper forwards it like any other
+          keyword, e.g. w_cc(selection_bias=True, sup=sup).
       nuisance = any nuisance vector of _set_state (M, A1, B1, MOR,
           SEL, ...).
 
     Returns:
-      nothing; the interface state is the result.
+      (z_interp_2D, log10k_interp_2D) of _set_state: the grids of the
+      power-spectrum tables just installed (log10 of k in h/Mpc); the
+      interface state itself is the main result.
     """
     if non_linear_emul is None:
         non_linear_emul = _CONFIG["non_linear_emul"]
@@ -606,10 +703,10 @@ def _state(ntheta=None, theta_min_arcmin=None, theta_max_arcmin=None,
                 else theta_min_arcmin),
                (_DATASET["theta_max_arcmin"] if theta_max_arcmin is None
                 else theta_max_arcmin))
-    _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
-               AccuracyBoost, kmax, k_per_logint, CAMBAccuracyBoost,
-               CLAccuracyBoost, CLIntegrationAccuracy, non_linear_emul,
-               binning=binning, **nuisance)
+    return _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
+                      AccuracyBoost, kmax, k_per_logint, CAMBAccuracyBoost,
+                      CLAccuracyBoost, CLIntegrationAccuracy,
+                      non_linear_emul, binning=binning, sup=sup, **nuisance)
 
 
 # ----------------------------------------------------------------------
@@ -1088,3 +1185,162 @@ def data_cluster_blocks():
     data[~mask] = np.nan
     error[~mask] = np.nan
     return cluster_blocks(data), cluster_blocks(error)
+
+
+# ----------------------------------------------------------------------
+# Baryonic feedback via the bfmt theory block
+# ----------------------------------------------------------------------
+def get_baryon_suppression(theory_options, point, z_grid, log10k_grid):
+    """Return the suppression S(k, z) of the bfmt theory block on a grid.
+
+    S = P(k) with baryonic feedback / P(k) without it. Builds a minimal
+    Cobaya model (CAMB + bfmt + the likelihood "one", which returns
+    ln L = 0 and only makes the model complete), requests the
+    baryon_suppression product at the given grid (k in 1/Mpc, as the
+    Cosmolike likelihoods send it; the block converts to h/Mpc
+    internally), evaluates it at this module's fiducial cosmology, and
+    returns {z: S array over k}.
+
+    Arguments:
+      theory_options = bfmt options dict, e.g. {"baryon_model": 2}.
+      point   = {parameter name: value} for the method's feedback
+                parameters, fixed in the model.
+      z_grid  = redshifts of the evaluation grid.
+      log10k_grid = log10 of the wavenumbers, read as k in 1/Mpc.
+
+    Returns:
+      {z: 1D S array over k}, one entry per z_grid value.
+    """
+    from cobaya.model import get_model
+    # Cobaya model description: CAMB at this module's fiducial
+    # cosmology (tau = 0.0543, a Planck 2018 value, only completes
+    # CAMB's input; omch2 subtracts the massive-neutrino density),
+    # bfmt with the caller's options and feedback parameters, and
+    # debug = 50 (logging.CRITICAL: only critical messages print)
+    info = {
+        "likelihood": {"one": None},
+        "theory": {
+            # no "path" for camb: the session already imported it,
+            # and cobaya accepts the loaded module as is
+            "camb": {"extra_args": {"halofit_version": "takahashi",
+                                    "dark_energy_model": "ppf"}},
+            "bfmt": dict({"python_path": os.environ["ROOTDIR"]
+                          + "/external_modules/code/baryon_suppression"},
+                         **theory_options),
+        },
+        "params": dict({
+            "As": {"value": As_1e9*1e-9},
+            "ns": ns, "H0": H0, "mnu": mnu, "tau": 0.0543,
+            "w": w,
+            "ombh2": omegab*(H0/100)**2,
+            "omch2": (omegam-omegab)*(H0/100)**2
+                     - (mnu*(3.046/3)**0.75)/94.0708,
+            "omegam": {"derived": True, "latex": r"\Omega_m"},
+        }, **point),
+        "debug": 50,
+    }
+    model = get_model(info)
+    model.add_requirements({"baryon_suppression": {
+        "z": z_grid, "k": np.power(10.0, log10k_grid)}})
+    # every parameter is fixed, so the point to evaluate is the empty
+    # dictionary; the call runs CAMB and bfmt once
+    model.logposterior({})
+    return model.provider.get_baryon_suppression()
+
+
+def compute_probes(sup=None):
+    """Compute every block, the data vector and its chi2 at the fiducial point.
+
+    The bfmt section of EXAMPLE_EVALUATE2 calls it once without
+    baryonic feedback and once per feedback method. One call sets the
+    complete interface state through _state, as every wrapper of this
+    module does: CAMB at the module fiducial, the accuracy and the
+    angular binning of the dataset, set_cosmology, every nuisance
+    setter at its fiducial value (the mass-richness relation and the
+    selection bias included) and reset_bary_struct, with S(k, z) folded
+    into the nonlinear power when sup is given, the way the likelihood
+    folds it. It then reads every block from that one state, in the
+    layouts of the observable wrappers (N_cluster, sigma_cluster,
+    gamma_t_cluster, w_cc and w_cg with selection_bias = True, xi,
+    gamma_t, w_theta), so the call without sup gives the reference
+    model of the notebook. Requires init_cosmolike(with_data=True); dv
+    and chi2 cover the blocks of its CLprobe.
+
+    S multiplies the nonlinear matter power only. The galaxy blocks,
+    w_cc, w_cg and the two-halo term of cluster lensing integrate that
+    power; the counts and the one-halo term of cluster lensing come
+    from the halo mass function and the NFW profile, which read the
+    linear cold dark matter + baryon power, so they do not change.
+
+    Arguments:
+      sup = None for the prediction without feedback, or the {z: S
+            array} dictionary of get_baryon_suppression, computed on
+            the z_grid and log10k_grid that an earlier call returned.
+
+    Returns:
+      dict with (theta in arcmin)
+        N              = counts, 2D array (n_richness, n_cluster_z);
+        sigma          = (theta, array (n_theta, n_richness,
+                         n_cluster_z, n_source)): cluster lensing as
+                         the data vector holds it, Sigma = Y gamma_t
+                         times the selection bias and the shear
+                         calibration;
+        gammat_cluster = (theta, array of the same shape): the cluster
+                         tangential shear before those factors;
+        wcc            = (theta, array (n_theta, n_richness,
+                         n_richness, n_cluster_z)), times B(theta)^2;
+        wcg            = (theta, array (n_theta, n_richness,
+                         n_cluster_z, n_lens)), times B(theta);
+        xi             = (theta, xi_plus, xi_minus), each (n_theta,
+                         n_source, n_source);
+        gammat         = (theta, array (n_theta, n_lens, n_source));
+        wtheta         = (theta, array (n_theta, n_lens, n_lens));
+        dv             = 1D masked joint vector (masked entries zero);
+        chi2           = its chi2 against the loaded data, a float;
+        z_grid         = redshift nodes of the CAMB tables;
+        log10k_grid    = log10 of their wavenumbers in 1/Mpc, the unit
+                         get_baryon_suppression takes; the notebook
+                         feeds both grids to that function.
+    """
+    # one complete state; the returned grids are those of the tables
+    # just installed, log10 k in h/Mpc (the unit of set_cosmology)
+    (z_interp_2D, log10k_interp_2D) = _state(sup=sup)
+    theta = np.array(ci.get_binning_real_space())
+    N = np.array(ci.N_cluster_tomo())
+    sigma = np.array(ci.w_sigma_cluster_tomo())
+    gammat_cluster = np.array(ci.w_gammat_cluster_tomo())
+    # B(theta), the selection bias of eq (23), shape (cluster z bin,
+    # theta): the data vector carries one factor per cluster leg, so
+    # w_cc takes B^2 and w_cg takes B, as the wrappers w_cc and w_cg
+    # return them with selection_bias = True
+    selection = np.array(ci.get_cluster_selection_factor())
+    wcc_model = np.array(ci.w_cc_tomo(
+        limber=int(_CONFIG["cluster_adopt_limber_cc"])))
+    # selection.T is (theta, cluster z bin); the None axes let it
+    # broadcast over the two richness axes (1 and 2) of wcc_model
+    wcc = wcc_model * (selection.T ** 2)[:, None, None, :]
+    wcg_model = np.array(ci.w_cg_tomo(
+        limber=int(_CONFIG["cluster_adopt_limber_cg"])))
+    # the None axes broadcast selection.T over the richness axis (1)
+    # and the lens axis (3) of wcg_model
+    wcg = wcg_model * selection.T[:, None, :, None]
+    (xip, xim) = ci.xi_pm_tomo()
+    gammat = np.array(ci.w_gammat_tomo())
+    wtheta = np.array(ci.w_gg_tomo())
+    dv = np.array(ci.compute_data_vector_cluster_masked())
+    chi2 = ci.compute_chi2_cluster(dv)
+    return {"N": N,
+            "sigma": (theta, sigma),
+            "gammat_cluster": (theta, gammat_cluster),
+            "wcc": (theta, wcc),
+            "wcg": (theta, wcg),
+            "xi": (theta, np.array(xip), np.array(xim)),
+            "gammat": (theta, gammat),
+            "wtheta": (theta, wtheta),
+            "dv": dv,
+            "chi2": chi2,
+            "z_grid": z_interp_2D,
+            # get_baryon_suppression takes k in 1/Mpc, but the CAMB helper
+            # returns this grid in h/Mpc: convert here, at the one place
+            # that links the two, so S(k) is evaluated at the physical k.
+            "log10k_grid": log10k_interp_2D + np.log10(H0/100.0)}
