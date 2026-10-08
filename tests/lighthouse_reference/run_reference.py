@@ -2,9 +2,19 @@
 
     python run_reference.py main      # Ystatistics=1: data vectors + intermediates
     python run_reference.py Yoff      # Ystatistics=0: data vector (no final T)
-    python run_reference.py limber    # Ystatistics=1: w_gg, w_cg, w_cc replaced by Limber
+    python run_reference.py limber    # Ystatistics=1: w_gg, w_cg, w_cc by Limber
 
 Outputs go to ./outputs/. See README.md.
+
+lighthouse is the repository of the original CosmoLike cluster code; lh.py
+of this folder loads its prebuilt library through ctypes. Each variant
+needs a fresh process because the library keeps static caches. The main
+variant saves the data vector before and after the final Y transform T of
+the cluster-lensing block, and the intermediate quantities the port is
+compared with (distances, growth, P(k), halo model, mass-observable
+relation, cluster densities and biases, kernels, Limber and non-Limber
+C_ell). Ystatistics = 1 stores cluster lensing as the Y statistic of Park,
+Rozo & Krause (2021), 0 as gamma_t.
 """
 import json
 import os
@@ -19,6 +29,7 @@ import lh  # noqa: E402
 
 OUT = os.path.join(HERE, "outputs")
 os.makedirs(OUT, exist_ok=True)
+# multipoles 0 ... LMAX - 1 of the Legendre projections onto angular bins
 LMAX = 100000
 cfg = lh.CONFIG
 NL = len(cfg["cluster_lambda_bins"]) - 1
@@ -27,6 +38,16 @@ NT = cfg["ntheta"]
 
 
 def savetxt_dv(path, v, header):
+    """Write a data vector as "index value" lines under a commented header.
+
+    Arguments:
+      path   = output file path.
+      v      = the data vector, a float sequence.
+      header = header text; each of its lines is written after "# ".
+
+    Returns:
+      nothing; writes the file (values with 17 significant digits).
+    """
     with open(path, "w") as f:
         f.write("# " + header.replace("\n", "\n# ") + "\n")
         for i, x in enumerate(v):
@@ -34,6 +55,18 @@ def savetxt_dv(path, v, header):
 
 
 def block(v, name):
+    """Return the slice of data vector v that holds block name (lh.layout).
+
+    Arguments:
+      v    = the data vector, a numpy array.
+      name = a block name of lh.layout, e.g. "gamma_c".
+
+    Returns:
+      the view v[start:end] of that block.
+
+    Raises:
+      KeyError when no block has that name.
+    """
     for n, a, b in lh.layout()[0]:
         if n == name:
             return v[a:b]
@@ -41,6 +74,17 @@ def block(v, name):
 
 
 def theory(ndata):
+    """Compute the data vector at the CONFIG point with theory_wrapper.
+
+    theory_wrapper writes into the memory of a numpy array through
+    out.ctypes.data_as(lh.PD), a C pointer to its data.
+
+    Arguments:
+      ndata = data-vector length (from lh.init_all).
+
+    Returns:
+      the data vector before the final Y transform, float array [ndata].
+    """
     out = np.zeros(ndata)
     t0 = time.time()
     lh.theory_wrapper(lh.cosmo_struct(), lh.nuisance_struct(), out.ctypes.data_as(lh.PD))
@@ -49,13 +93,31 @@ def theory(ndata):
 
 
 def apply_T(v):
+    """Return a copy of v with the library's Y transform and mask applied.
+
+    Arguments:
+      v = a data vector from theory().
+
+    Returns:
+      a new array; v itself is unchanged.
+    """
     w = np.ascontiguousarray(v.copy())
     lh.apply_Ttransform_and_applymask(w.ctypes.data_as(lh.PD))
     return w
 
 
 def cc_pairs():
-    """(nz, l1, l2) in data-vector order of set_data_cc."""
+    """(nz, l1, l2) in data-vector order of set_data_cc.
+
+    The w_cc block stores, per cluster z bin nz, every richness pair
+    l1 <= l2 (l1 outer, l2 inner), NT angular bins each. The offset of a
+    pair is NT x (pairs per z bin) x nz, plus NT x l1 (2 NL - l1 + 1)/2 for
+    the pairs of the earlier rows l1, plus NT x (l2 - l1).
+
+    Returns:
+      (pairs, offsets): the list of (nz, l1, l2) tuples, l1 outermost, and
+      the offset of each pair from the start of the w_cc block.
+    """
     out = []
     for l1 in range(NL):
         for l2 in range(l1, NL):
@@ -69,12 +131,20 @@ def cc_pairs():
 
 
 def header_common():
+    """Return CONFIG as a JSON string (keys sorted) for file headers."""
     c = dict(cfg)
     return json.dumps(c, sort_keys=True)
 
 
 def gamma_c_raw_and_T():
-    """Raw flat-sky gamma_c(theta_i) and the T / T^+ matrices used by set_data_clusterWL."""
+    """Raw flat-sky gamma_c(theta_i) and the T matrix used by set_data_clusterWL.
+
+    Returns:
+      (raw, pairs, T): raw = cluster gamma_t at the bin centres, flat
+      [pair][richness][theta]; pairs = the (cluster z bin, source bin) of
+      each pair, int array [npair, 2]; T = the Y transform matrix
+      [NT, NT]. main_variant derives T^+ (pseudo-inverse) from T.
+    """
     tmin, tmax, th, logdt = lh.theta_bins(cfg)
     ncgl = lh.get_N_tomo_shear() * NZC
     raw = np.zeros(ncgl * NL * NT)
@@ -90,6 +160,17 @@ def gamma_c_raw_and_T():
 
 
 def main_variant():
+    """Save the main reference: data vectors and every intermediate quantity.
+
+    Writes outputs/dv_main_*.txt (data vector before and after the final Y
+    transform, and the library's own writer output),
+    outputs/lighthouse_reference_main.npz with the intermediates, and
+    outputs/config.json. Units are those of the C code unless a key says
+    otherwise: lengths in c/H0, k in H0/c, P in (c/H0)^3, M in M_sun/h.
+
+    Returns:
+      nothing; writes files and prints timings.
+    """
     ndata = lh.init_all(Ystatistics=1)
     blocks, _ = lh.layout()
     dv_pre = theory(ndata)
@@ -245,19 +326,24 @@ def main_variant():
     zz3 = zcen
     res["p1h_k_hMpc"] = kk
     res["p1h_z"] = zz3
-    # P_cm^1h(k,a) [(c/H0)^3]: (lambda, zc bin, k, z at zc centre); zs index 0 (does not enter)
+    # P_cm^1h(k,a) [(c/H0)^3]: (lambda, zc bin, k, z at zc centre); zs index 0
+    # (does not enter)
     res["P_cm_1h_exact"] = np.array([[[lh.P_cm_1h(k * lh.COVERH0, 1 / (1 + zz3[iz]), il, iz, 0) for k in kk]
                                       for iz in range(NZC)] for il in range(NL)])
     res["P_cc_2h_nl"] = np.array([[[lh.P_cc_2h(k * lh.COVERH0, 1 / (1 + zz3[iz]), il, il, 0.0) for k in kk]
                                    for iz in range(NZC)] for il in range(NL)])
 
-    # ---------------- non-Limber C_ell of w_cc / w_cg exactly as the data vector builds them
+    # ---------------- non-Limber C_ell of w_cc / w_cg exactly as the data
+    # vector builds them
     W = lh.legendre_bin_weights(cfg, LMAX)
     Cl = np.zeros(LMAX)
     cl_cc_mix = np.zeros((len(pairs_cc), 2001))
     cl_cc_lim = np.zeros((len(pairs_cc), 2001))
     w_cc_proj_mix = np.zeros((len(pairs_cc), NT))
     w_cc_proj_lim = np.zeros((len(pairs_cc), NT))
+    # the pair indices sorted by their (nz, l1, l2) tuple: the call order of
+    # the data vector, which matters because the non-Limber memo keeps the
+    # first richness pair of each redshift bin (nonlimber_rescaling_check.py)
     order = sorted(range(len(pairs_cc)), key=lambda i: pairs_cc[i])  # nz outer, l1, l2 (as w_clusterxcluster_nonlimber)
     lgrid = np.arange(LMAX, dtype=float)
     t0 = time.time()
@@ -303,10 +389,20 @@ def main_variant():
 
 
 def ctypes_cast(p):
+    """Return p as an untyped C pointer (void *), the type the library expects.
+
+    Arguments:
+      p = a ctypes array (here two doubles, M and z).
+    """
     return lh.ctypes.cast(p, lh.c_vp)
 
 
 def yoff_variant():
+    """Save the data vector with cluster lensing as gamma_t (Ystatistics = 0).
+
+    Returns:
+      nothing; writes outputs/dv_Yoff_*.txt and lighthouse_reference_Yoff.npz.
+    """
     ndata = lh.init_all(Ystatistics=0)
     blocks, _ = lh.layout()
     dv = theory(ndata)
@@ -319,13 +415,23 @@ def yoff_variant():
 
 
 def limber_variant():
+    """Save the data vector with w_gg, w_cg and w_cc recomputed in Limber.
+
+    The other blocks keep the theory_wrapper values; each replaced block is
+    the bin-averaged Legendre projection of the Limber C_ell.
+
+    Returns:
+      nothing; writes outputs/dv_limber_*.txt and
+      lighthouse_reference_limber.npz.
+    """
     ndata = lh.init_all(Ystatistics=1)
     blocks, _ = lh.layout()
     dv = theory(ndata)  # fills all caches exactly as in main
     W = lh.legendre_bin_weights(cfg, LMAX)
     lgrid = np.arange(1, LMAX, dtype=float)
     dvL = dv.copy()
-    # w_gg: Limber full-sky Legendre (w_tomo_exact, cosmo2D_real.c: same bin-averaged P_l, C_cl_tomo)
+    # w_gg: Limber full-sky Legendre (w_tomo_exact, cosmo2D_real.c: same
+    # bin-averaged P_l, C_cl_tomo)
     a, b = [(x[1], x[2]) for x in blocks if x[0] == "wtheta"][0]
     for j in range(cfg["ntomo_lens"]):
         for i in range(NT):
@@ -353,6 +459,8 @@ def limber_variant():
     print("saved limber", flush=True)
 
 
+# The dict maps each variant name to its function; [v] picks one and the
+# trailing () calls it (an unknown name raises KeyError).
 if __name__ == "__main__":
     v = sys.argv[1]
     {"main": main_variant, "Yoff": yoff_variant, "limber": limber_variant}[v]()

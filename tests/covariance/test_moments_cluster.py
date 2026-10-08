@@ -1,8 +1,27 @@
 """Selected halo integrals, independent of a chosen mass-function fit.
 
+The compiled function covariance_cluster_moments sums, over halo mass
+samples m, the quantities the cluster covariance needs for each state a
+(a redshift node) and observed category s (a richness bin):
+
+  density        = sum_m w            biased_density = sum_m w b
+  J01            = sum_m w p_K        J11            = sum_m w b p_K
+  J02            = sum_m w p_K p_Q    (pairs K <= Q of the wavenumbers)
+  J03_KKQ, J03_KQQ = sum_m w p_K p_Q p_K, sum_m w p_K p_Q p_Q
+
+with w[a, s, m] the mass function times the probability that a halo of
+mass m is observed in category s times the quadrature weight (a number
+density), b[a, m] the halo bias and p[a, k, m] the halo profile in
+Fourier space times M/rho (a volume). A halo is observed in at most one
+category, so its selection probability enters each moment once, however
+many profile factors (legs) of the same halo the moment holds.
+
 Closed polynomial integrals check profile powers, bias and selection
 normalization. Independent NumPy contractions exercise general signed
 profiles. These are algebra and units tests, not survey calibration.
+
+Run from the cocoa/Cocoa folder: python -m pytest
+projects/des_cluster/tests/covariance/test_moments_cluster.py
 """
 
 from pathlib import Path
@@ -18,7 +37,22 @@ import cosmolike_des_cluster_interface as ci
 
 
 def reference(weight, bias, profile):
-    """Evaluate each mass integral by independent NumPy tensor sums."""
+    """Evaluate each mass integral by independent NumPy tensor sums.
+
+    np.einsum writes a sum over array indices as a string: each letter
+    names an axis, and a letter absent after "->" is summed, so
+    'asm,am->as' is sum_m weight[a,s,m] bias[a,m].
+
+    Arguments:
+      weight  = float [state, selection, mass], selected number weights.
+      bias    = float [state, mass], halo bias.
+      profile = float [state, k, mass], profile times M/rho.
+
+    Returns:
+      a dict with the keys of covariance_cluster_moments: density and
+      biased_density [state, selection]; J01 and J11 [state, selection,
+      k]; J02, J03_KKQ and J03_KQQ [state, selection, k(k+1)/2].
+    """
     na, nselection, nmass = weight.shape
     nk = profile.shape[1]
     first, second = np.triu_indices(n=nk)
@@ -45,7 +79,22 @@ def reference(weight, bias, profile):
 
 
 def test_closed_polynomial_integrals_and_selection_partition():
-    """A probabilistic bin enters once, not once per same-halo leg."""
+    """A probabilistic bin enters once, not once per same-halo leg.
+
+    Mass samples x in [1, 2] (8 Gauss-Legendre nodes, exact for these
+    polynomials), bias b = x and profiles p_k = a_k x with amplitudes
+    1, 2 and -0.5. Two observed categories select every mass with
+    probabilities 0.25 and 0.75: their true-mass ranges overlap entirely,
+    yet each moment carries its probability once (not squared in J02 or
+    cubed in J03), and the two categories summed recover the unselected
+    integral. rtol = 2e-14 allows rounding only.
+
+    Arguments:
+      none.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+    """
     nodes, measure = roots_legendre(n=8)
     mass = 1.5+0.5*nodes
     measure = 0.5*measure
@@ -96,7 +145,27 @@ def test_closed_polynomial_integrals_and_selection_partition():
 
 @pytest.mark.parametrize('nk,nmass', [(1, 1), (2, 6), (3, 9), (5, 257)])
 def test_signed_profiles_threads_units_and_ownership(nk, nmass):
-    """Odd/even tails preserve each ordered integral at 1/2/4/8 workers."""
+    """Odd/even tails preserve each ordered integral at 1/2/4/8 workers.
+
+    Random positive weights and biases and signed profiles (fixed seed)
+    are compared with the NumPy reference, and every output must repeat
+    bit for bit at 1, 2, 4 and 8 OpenMP threads (.view(np.uint64) compares
+    raw 64-bit patterns). The (nk, nmass) sizes mix single, even and odd
+    lengths, so the paired and the leftover samples of the C loops are
+    both exercised. A length rescaling by 3000 (close to c/H0 in Mpc/h)
+    must scale each output by its dimension, and a later call with other
+    inputs must not change an earlier result (each call owns its arrays).
+
+    Arguments:
+      nk    = number of wavenumbers, set by @pytest.mark.parametrize.
+      nmass = number of mass samples, set by @pytest.mark.parametrize.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+
+    Side effects:
+      sets the OpenMP thread count of the compiled library.
+    """
     rng = np.random.default_rng(seed=1017)
     values = {
         'weight': rng.uniform(0.01, 0.1, size=(2, 3, nmass)),
@@ -120,7 +189,8 @@ def test_signed_profiles_threads_units_and_ownership(nk, nmass):
             )
 
     # A length conversion sends dn -> dn/f^3 and M/rho -> f^3 M/rho.
-    # Abundances, one-, two- and three-profile moments scale differently.
+    # Abundances, one-, two- and three-profile moments scale differently:
+    # as f^-3, f^0, f^3 and f^6.
     factor = 3000.0
     converted = dict(values)
     converted['weight'] = values['weight']/factor**3
@@ -143,7 +213,20 @@ def test_signed_profiles_threads_units_and_ownership(nk, nmass):
 
 
 def test_empty_selection_and_input_guards():
-    """An empty population is zero; malformed inputs fail before C starts."""
+    """An empty population is zero; malformed inputs fail before C starts.
+
+    Each malformed case replaces one input of a copy of the valid inputs:
+    a negative weight, no selection category, a weight without the state
+    axis, a bias with the wrong number of masses, a NaN bias, a profile
+    with the wrong number of states or masses, an infinite profile. Each
+    must raise ValueError (pytest.raises fails the test when it does not).
+
+    Arguments:
+      none.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+    """
     values = {
         'weight': np.zeros(shape=(1, 2, 3)),
         'bias': np.ones(shape=(1, 3)),
@@ -169,7 +252,22 @@ def test_empty_selection_and_input_guards():
 
 @pytest.mark.parametrize('layout', ['fortran', 'sliced', 'readonly'])
 def test_named_armadillo_moments_preserve_notebook_inputs(layout):
-    """Named matrices/cubes retain physical axes under notebook conversions."""
+    """Named matrices/cubes retain physical axes under notebook conversions.
+
+    The binding converts numpy arrays into Armadillo matrices (2D) and
+    cubes (3D). Notebook arrays arrive in three awkward forms, one per
+    parametrized run: column-major copies (order='F'), strided views that
+    take every second element of a larger array, and read-only arrays.
+    Each must give the NumPy reference result with the axes in their
+    physical order, and none may be modified.
+
+    Arguments:
+      layout = "fortran", "sliced" or "readonly", set by
+               @pytest.mark.parametrize.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+    """
     rng = np.random.default_rng(seed=762)
     values = {
         'weight': rng.uniform(0.1, 0.4, size=(2, 3, 5)),
@@ -181,6 +279,9 @@ def test_named_armadillo_moments_preserve_notebook_inputs(layout):
         if layout == 'fortran':
             values[key] = np.array(array, order='F', copy=True)
         elif layout == 'sliced':
+            # a parent array twice as long on every axis; the slice ::2 on
+            # each axis picks every second element, and view[...] = array
+            # writes the values through the view into the parent
             shape = tuple(2*size for size in array.shape)
             parent = np.zeros(shape=shape)
             selection = tuple(slice(None, None, 2) for size in array.shape)

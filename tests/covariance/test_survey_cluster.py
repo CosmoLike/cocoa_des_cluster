@@ -1,8 +1,19 @@
 """Test joint row ordering, count normalization and streamed cross spectra.
 
+The helpers under test (cosmolike_notebook_utils/covariance/survey_cluster.py)
+prepare the joint 6x2pt + N forecast: observable_layout numbers every
+measured row of the joint vector (ss, gs, gg, cg, N, cc, cs) and finds
+where the counts sit; selected_windows turns the cluster selection and
+abundance into absolute densities (for counts) and normalized radial
+windows (for cluster density contrasts); all_pairs_spectra adds every
+cluster spectrum to the galaxy and shear spectra.
+
 Analytic supplied catalogs isolate geometry and indexing from halo fits.
 The production C integrators are used, but their inputs come from explicit
 functions below. An independent NumPy projection checks every field pair.
+
+Run from the cocoa/Cocoa folder: python -m pytest
+projects/des_cluster/tests/covariance/test_survey_cluster.py
 """
 
 from pathlib import Path
@@ -29,40 +40,93 @@ from cosmolike_notebook_utils.covariance.survey_cluster import (
 
 
 class AnalyticCatalog:
-    """Supply two redshift bins and two richness bins without mutable state."""
+    """Supply two redshift bins and two richness bins without mutable state.
+
+    An object of this class is passed as the interface argument of the
+    helpers in place of the compiled library: the helpers call the
+    functions below by the library's names, so they read these simple
+    formulas instead of the halo model, while the two integrators are the
+    library's own. staticmethod stores a plain function on the class, one
+    that receives no self argument.
+    """
 
     covariance_project = staticmethod(ci.covariance_project)
     covariance_cluster_spectra = staticmethod(ci.covariance_cluster_spectra)
 
     @staticmethod
     def phi_cluster(z):
-        """Return overlapping radial selection probabilities [z,bin]."""
+        """Return overlapping radial selection probabilities [z,bin].
+
+        Arguments:
+          z = true redshifts, float array.
+
+        Returns:
+          float array [len(z), 2]: 0.2 + 0.1 z and 0.6 - 0.1 z.
+        """
         return np.column_stack((0.2+0.1*z, 0.6-0.1*z))
 
     @staticmethod
     def ncl_richness(a):
-        """Return selected abundances [a,richness] in inverse length cubed."""
+        """Return selected abundances [a,richness] in inverse length cubed.
+
+        Arguments:
+          a = scale factors, float array.
+
+        Returns:
+          float array [len(a), 2]: 2 a and 3 a.
+        """
         return np.column_stack((2.0*a, 3.0*a))
 
     @staticmethod
     def bcl_richness(a):
-        """Return distinct dimensionless halo biases [a,richness]."""
+        """Return distinct dimensionless halo biases [a,richness].
+
+        Arguments:
+          a = scale factors, float array.
+
+        Returns:
+          float array [len(a), 2]: 1 + a and 2 + a.
+        """
         return np.column_stack((1.0+a, 2.0+a))
 
     @staticmethod
     def covariance_power(a, k, linear):
-        """Supply a smooth nonlinear power with units of volume."""
+        """Supply a smooth nonlinear power with units of volume.
+
+        Arguments:
+          a      = scale factors, float array.
+          k      = wavenumbers, float array of the same shape.
+          linear = must be False: the cluster spectra use nonlinear power.
+
+        Returns:
+          a/(1 + k), elementwise.
+        """
         assert not linear
         return a/(1.0+k)
 
     @staticmethod
     def pcm_1h_richness(k, a):
-        """Supply the public [k,a,richness] profile-power convention."""
+        """Supply the public [k,a,richness] profile-power convention.
+
+        Arguments:
+          k = wavenumbers, float array [nk].
+          a = scale factors, float array [na].
+
+        Returns:
+          float array [nk, na, 2]: (k + 2) a times 0.3 and 0.7 for the two
+          richness bins.
+        """
         return (k[:, None, None]+2.0)*a[None, :, None]*np.array([0.3, 0.7])
 
 
 def geometry():
-    """Keep all distances away from zero; weights need not be uniform."""
+    """Keep all distances away from zero; weights need not be uniform.
+
+    Returns:
+      float array [4, 5], the rows (a, chi, f_K, dchi) of five radial
+      nodes, the geometry argument of selected_windows; f_K equals chi
+      here (no spatial curvature).
+    """
     return np.array([
         [0.5, 0.6, 0.7, 0.8, 0.9],
         [0.8, 0.6, 0.4, 0.2, 0.1],
@@ -72,7 +136,25 @@ def geometry():
 
 
 def test_des_joint_order():
-    """Counts sit between cg and cc; richness is fastest within cs pairs."""
+    """Counts sit between cg and cc; richness is fastest within cs pairs.
+
+    The DES layout (6 lens, 4 source, 3 cluster redshift and 4 richness
+    bins, 20 angular bins) has 140 two-point rows: 10 xi_+, 10 xi_-, 24
+    gamma_t, 6 w_gg, 12 w_cg, 30 w_cc (10 richness pairs per redshift bin)
+    and 48 cluster-lensing rows. ss + gs + gg + cg hold 400 + 480 + 120 +
+    240 = 1240 entries, so the 12 counts occupy positions 1240-1251, and
+    the counts plus the two-point positions cover 0-2811 exactly once.
+    A row is (probe, field A, field B) with probe 2 = tangential shear and
+    3 = clustering; field IDs run over the 6 lens bins, then the 12 cluster
+    categories (6-17, richness fastest), then the 4 source bins (18-21).
+    The first cluster-lensing row starts at 1240 + 12 + 600 = 1852.
+
+    Arguments:
+      none.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+    """
     layout = observable_layout(nlens=6, nsource=4, ncluster_z=3,
                                 nrichness=4, cg_lens_bin=[0, 1, 2], nbin=20)
     rows = layout['rows']
@@ -91,7 +173,20 @@ def test_des_joint_order():
 
 
 def test_smaller_layout_and_measured_exclusion():
-    """Removing one measured gs row preserves the full source field IDs."""
+    """Removing one measured gs row preserves the full source field IDs.
+
+    With 2 lens, 1 source, 2 cluster redshift and 2 richness bins and the
+    gamma_t pair (lens 0, source 0) excluded, 19 rows remain, and the
+    remaining gamma_t row still names the source by field ID 6 (after the
+    2 lens bins and the 4 cluster categories): excluding a measured row
+    must not renumber the fields of the internal spectra.
+
+    Arguments:
+      none.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+    """
     layout = observable_layout(nlens=2, nsource=1, ncluster_z=2,
                                 nrichness=2, cg_lens_bin=[1, 0], nbin=3,
                                 excluded_gammat=[(0, 0)])
@@ -102,7 +197,24 @@ def test_smaller_layout_and_measured_exclusion():
 
 
 def test_selected_catalog_normalization_and_threads():
-    """Counts integrate n chi^2 while each normalized q integrates to one."""
+    """Counts integrate n chi^2 while each normalized q integrates to one.
+
+    The expected arrays are built here from the AnalyticCatalog formulas:
+    density n_i = phi_i(z) n_richness(a) for the 4 categories (redshift
+    then richness), derivative n_i b_i, clusters per steradian
+    sum n_i f_K^2 dchi, and windows q_i with sum q_i dchi = 1. The results
+    must repeat bit for bit at 1, 2, 4 and 8 OpenMP threads
+    (.view(np.uint64) compares raw 64-bit patterns).
+
+    Arguments:
+      none.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+
+    Side effects:
+      sets the OpenMP thread count of the compiled library.
+    """
     radial = geometry()
     a, unused, distance, dchi = radial
     selection = np.array([0.2+0.1*(1.0/a-1.0), 0.6-0.1*(1.0/a-1.0)])
@@ -128,7 +240,27 @@ def test_selected_catalog_normalization_and_threads():
 
 @pytest.mark.parametrize('nell', [3, 1027])
 def test_all_pairs_streaming_and_spin(nell):
-    """Cross the 1024-mode block boundary and check every signed field pair."""
+    """Cross the 1024-mode block boundary and check every signed field pair.
+
+    all_pairs_spectra processes 1024 multipoles at a time, so nell = 1027
+    spans two blocks and nell = 3 one. The snapshot stands in for the
+    galaxy/shear spectra: fields 0 and 1 are galaxies, field 2 a source,
+    all their spectra 0.01. The expected 7x7 field matrix (galaxies 0-1,
+    clusters 2-5, source 6) is built with NumPy from the AnalyticCatalog
+    formulas, the cluster x source entries times the shear spin factor;
+    the result must match to 3e-14, be exactly symmetric, and repeat bit
+    for bit at 1 and 8 OpenMP threads.
+
+    Arguments:
+      nell = number of multipoles, set by @pytest.mark.parametrize, which
+             runs the test once per listed value.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+
+    Side effects:
+      sets the OpenMP thread count of the compiled library.
+    """
     radial = geometry()
     catalogs = selected_windows(interface=AnalyticCatalog(), geometry=radial)
     ell = np.geomspace(2.0, 500.0, nell)
@@ -144,6 +276,8 @@ def test_all_pairs_streaming_and_spin(nell):
     }
     expected = np.empty((nell, 7, 7))
     base_positions = np.array([0, 1, 6])
+    # base_positions[:, None] (a column) and base_positions (a row) broadcast
+    # to the 3x3 grid of (row, column) field pairs
     expected[:, base_positions[:, None], base_positions] = original
     measure = radial[3]/radial[2]**2
     weighted = catalogs['window']*catalogs['bias']
@@ -153,6 +287,8 @@ def test_all_pairs_streaming_and_spin(nell):
         power = radial[0]/(1.0+wave)
         cross = (weighted*measure*power) @ ordinary.T
         for cluster in range(4):
+            # categories run redshift then richness, so cluster % 2 is the
+            # richness bin of the one-halo amplitude
             amplitude = [0.3, 0.7][cluster % 2]
             profile = amplitude*(wave+2.0)*radial[0]
             cross[cluster, 2] += np.sum(catalogs['window'][cluster]*measure
@@ -177,7 +313,18 @@ def test_all_pairs_streaming_and_spin(nell):
 
 
 def test_bad_layout_and_geometry():
-    """Reject a missing matched bin or a singular radial measure directly."""
+    """Reject a missing matched bin or a singular radial measure directly.
+
+    A cg_lens_bin list one entry short, zero angular bins, and a zero f_K
+    node (row 2 of the geometry) must each raise ValueError whose message
+    contains the given word (pytest.raises(..., match=...) checks it).
+
+    Arguments:
+      none.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+    """
     with pytest.raises(ValueError, match='cg_lens_bin'):
         observable_layout(nlens=2, nsource=1, ncluster_z=2, nrichness=2,
                           cg_lens_bin=[0], nbin=3)

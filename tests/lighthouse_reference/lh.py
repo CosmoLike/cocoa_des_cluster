@@ -1,5 +1,13 @@
 """ctypes bindings to the prebuilt lighthouse cluster library (read-only use).
 
+lighthouse is the repository of the original CosmoLike cluster code
+(arXiv:2008.10757), the code this project's cluster model was ported from.
+ctypes is Python's standard module for calling functions of a compiled C
+library: each binding below declares the C return type (restype) and
+argument types (argtypes) so Python values are converted correctly, and
+the two Structure classes mirror the C input structs field by field.
+Nothing in lighthouse is modified; the library is only loaded and called.
+
 Library: lighthouse/lib/like_cluster_Buzzard_y3_2_fast_v37_IA_test4.so
 Build flags (lighthouse Makefile target like_cluster_fullsky_y3_IA_selectionB):
     -DCLASS_V29 -DIAC -DBuzzard -DFullsky -DDESY3 -DSELECTIONB
@@ -7,7 +15,11 @@ Driver logic mirrors lighthouse/python/cosmolike_libs_real_mpp_cluster.py
 (init_all_nuisance_param + theory_wrapper), without its emcee/MPI imports.
 
 Every library call must happen in a fresh process per data vector: the C
-code keeps static caches keyed on cosmology/nuisance only.
+code keeps static caches keyed on cosmology/nuisance only. Importing this
+module loads the library at the path LIGHTHOUSE below, a local checkout
+that is not part of Cocoa; README.md of this folder lists the
+configuration (CONFIG) and the deviations of that code from the model of
+arXiv:2503.13631.
 """
 import ctypes
 import os
@@ -32,6 +44,12 @@ PI = ctypes.POINTER(c_i)
 
 
 class InputCosmologyParams(ctypes.Structure):
+    """The C struct of cosmological parameters that theory_wrapper reads.
+
+    _fields_ lists (name, C type) in the order of the C definition; the
+    order and the types must match it exactly, since ctypes lays the
+    fields out in memory as the C compiler does.
+    """
     # input_cosmo_params_mpp (cosmolike_core/theory/structs.c:369)
     _fields_ = [("omega_m", c_d), ("sigma_8", c_d), ("A_s", c_d), ("n_s", c_d),
                 ("w0", c_d), ("wa", c_d), ("omega_b", c_d), ("omega_nuh2", c_d),
@@ -39,6 +57,11 @@ class InputCosmologyParams(ctypes.Structure):
 
 
 class InputNuisanceParams(ctypes.Structure):
+    """The C struct of nuisance parameters that theory_wrapper reads.
+
+    Each entry is a fixed-length C array (10 or 20 doubles, one per bin,
+    unused slots included), in the order of the C definition.
+    """
     # input_nuisance_params_mpp (cosmolike_core/theory/structs.c:396)
     _fields_ = [("bias", Double10), ("bias2", Double10), ("lens_z_bias", Double10),
                 ("lens_z_stretch", Double10), ("source_z_bias", Double10),
@@ -48,6 +71,17 @@ class InputNuisanceParams(ctypes.Structure):
 
 
 def _f(name, restype, argtypes):
+    """Return the library function name with its C signature declared.
+
+    Arguments:
+      name     = the C function name, a string.
+      restype  = the ctypes type of the return value (None for void).
+      argtypes = the list of ctypes types of the arguments.
+
+    Returns:
+      the ctypes function object; calling it converts the Python arguments
+      to those C types.
+    """
     f = getattr(lib, name)
     f.restype = restype
     f.argtypes = argtypes
@@ -154,9 +188,15 @@ C_cl_tomo = _f("C_cl_tomo", c_d, [c_d, c_i, c_i])
 w_tomo_exact = _f("w_tomo_exact", c_d, [c_i, c_i, c_i])
 
 ARCMIN = 2.90888208665721580e-4  # constants.arcmin in basics.c
+# c/H0 in Mpc/h, the length unit of the C code: chi in c/H0, k in H0/c
 COVERH0 = 2997.92458
 
 # ------------------------------------------------------------------ config
+# The reference configuration (README.md of this folder): the binning and
+# fiducial parameters of arXiv:2503.13631 Table I. lens_n_gal, source_n_gal
+# (galaxies per arcmin^2) and sigma_e come from the dataY6.yaml of
+# lighthouse and do not enter the model; ggl_overlap_cut = 1e-5 accepts all
+# 24 lens-source pairs of gamma_t.
 CONFIG = dict(
     runmode="Halofit",
     source_nz=os.path.join(HERE, "inputs", "source_y6.nz"),
@@ -187,6 +227,17 @@ CONFIG = dict(
 
 
 def cosmo_struct(cfg=CONFIG):
+    """Fill the cosmology struct from a configuration dictionary.
+
+    A_s is passed as 0 so theory_wrapper normalizes with sigma_8, the only
+    normalization of the Halofit runmode (README.md, "Cosmology").
+
+    Arguments:
+      cfg = a configuration dictionary with the keys of CONFIG.
+
+    Returns:
+      an InputCosmologyParams struct.
+    """
     c = InputCosmologyParams()
     c.omega_m = cfg["omega_m"]
     c.sigma_8 = cfg["sigma_8"]
@@ -204,6 +255,18 @@ def cosmo_struct(cfg=CONFIG):
 
 
 def nuisance_struct(cfg=CONFIG):
+    """Fill the nuisance struct: fiducial biases, MOR and selection, the rest neutral.
+
+    Unused bin slots of the 10-element arrays get neutral values: galaxy
+    bias 2 (never read), shifts, calibrations, IA, magnification and point
+    masses 0, lens photo-z stretch 1.
+
+    Arguments:
+      cfg = a configuration dictionary with the keys of CONFIG.
+
+    Returns:
+      an InputNuisanceParams struct.
+    """
     n = InputNuisanceParams()
     n.bias[:] = list(cfg["b1"]) + [2.0] * (10 - len(cfg["b1"]))
     n.bias2[:] = [0.0] * 10
@@ -222,7 +285,27 @@ def nuisance_struct(cfg=CONFIG):
 
 
 def init_all(cfg=CONFIG, mask_path=None, Ystatistics=None):
-    """Replicates init_all_nuisance_param() of cosmolike_libs_real_mpp_cluster.py."""
+    """Replicates init_all_nuisance_param() of cosmolike_libs_real_mpp_cluster.py.
+
+    Calls the library's init functions in the same order: runmode, source
+    and lens n(z), angular binning, richness and cluster redshift bins,
+    (cluster z bin, lens bin) pairs of w_cg, survey, cluster area and
+    photo-z options, nonlinear switch, probes, the Y statistic, and a mask
+    that keeps every entry.
+
+    Arguments:
+      cfg         = a configuration dictionary with the keys of CONFIG.
+      mask_path   = the mask file to load, or None for inputs/ones_<ndata>.mask.
+      Ystatistics = 1 stores cluster lensing as the Y statistic, 0 as
+                    gamma_t; None takes cfg["Ystatistics"].
+
+    Returns:
+      ndata, the length of the data vector (an int).
+
+    Side effects:
+      sets the global state of the library; writes the all-ones mask file
+      (one "index 1.0" line per entry) when it does not exist.
+    """
     if Ystatistics is None:
         Ystatistics = cfg["Ystatistics"]
     init_cosmo_runmode(cfg["runmode"].encode())
@@ -259,7 +342,18 @@ def init_all(cfg=CONFIG, mask_path=None, Ystatistics=None):
 
 
 def layout(cfg=CONFIG):
-    """Block layout of the data vector (like_real_mpp.c:1041-1076)."""
+    """Block layout of the data vector (like_real_mpp.c:1041-1076).
+
+    Must run after init_all (get_N_ggl reads the library). The cluster
+    lensing block holds every (cluster z bin, source bin) pair.
+
+    Arguments:
+      cfg = a configuration dictionary with the keys of CONFIG.
+
+    Returns:
+      (blocks, ndata): a list of (name, start, end) tuples in vector order,
+      end exclusive, and the total length.
+    """
     nt = cfg["ntheta"]
     ns = cfg["ntomo_source"]
     nlens = cfg["ntomo_lens"]
@@ -280,7 +374,18 @@ def layout(cfg=CONFIG):
 
 
 def theta_bins(cfg=CONFIG):
-    """theta edges and the area-weighted bin centre used by the C code (radian)."""
+    """theta edges and the area-weighted bin centre used by the C code (radian).
+
+    The centre 2/3 (tmax^3 - tmin^3)/(tmax^2 - tmin^2) is the mean angle
+    weighted by the area 2 pi theta dtheta of the annulus.
+
+    Arguments:
+      cfg = a configuration dictionary with the keys of CONFIG.
+
+    Returns:
+      (tmin, tmax, th, logdt): lower edges, upper edges and centres, numpy
+      arrays [ntheta] in radian, and the bin width in ln theta.
+    """
     nt = cfg["ntheta"]
     vtmin = cfg["theta_min_arcmin"] * ARCMIN
     vtmax = cfg["theta_max_arcmin"] * ARCMIN
@@ -292,7 +397,22 @@ def theta_bins(cfg=CONFIG):
 
 
 def legendre_bin_weights(cfg=CONFIG, LMAX=100000):
-    """Pl[i][l] of w_clusterx*_nonlimber: 1/(4pi) (P_{l+1}-P_{l-1})|_{xmax}^{xmin} / (xmin-xmax)."""
+    """Return the Legendre bin weights Pl[i][l] of w_clusterx*_nonlimber.
+
+    Pl[i][l] = 1/(4pi) (P_{l+1}-P_{l-1})|_{xmax}^{xmin} / (xmin-xmax): the
+    bin-averaged Legendre weights of a full-sky angular correlation,
+    w(theta bin i) = sum_l W[i, l] C(l), with x = cos(theta) at the bin
+    edges; the l = 0 column is set to 1. The Legendre polynomials
+    P_l(x) come from Bonnet's recursion
+    (l + 1) P_{l+1} = (2 l + 1) x P_l - l P_{l-1}.
+
+    Arguments:
+      cfg  = a configuration dictionary with the keys of CONFIG.
+      LMAX = number of multipoles, 0 ... LMAX - 1.
+
+    Returns:
+      float array [ntheta, LMAX].
+    """
     tmin, tmax, _, _ = theta_bins(cfg)
     xmin = np.cos(tmin)
     xmax = np.cos(tmax)
@@ -314,6 +434,15 @@ def legendre_bin_weights(cfg=CONFIG, LMAX=100000):
 
 
 def hoverh0(a, cfg=CONFIG):
+    """Return H(a)/H0 = sqrt(Omega_m/a^3 + 1 - Omega_m), flat LCDM, no radiation.
+
+    Arguments:
+      a   = scale factor, float or numpy array.
+      cfg = a configuration dictionary with the key omega_m.
+
+    Returns:
+      H(a)/H0, same shape as a.
+    """
     # static inline in cosmo3D.c (not exported): no radiation, flat LCDM here
     # set_cosmology_params sets Omega_v = 1 - Omega_m; w0=-1, wa=0 here
     Om = cfg["omega_m"]

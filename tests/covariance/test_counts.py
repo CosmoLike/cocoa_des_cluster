@@ -1,10 +1,33 @@
 """Independent shell-volume and joint-SSC checks for cluster counts.
 
-Polynomial shell integrals have closed forms, so these tests do not use
-the legacy cluster covariance as a reference. They check the distance
-powers, exclusive-bin Poisson noise, unit invariance, common-mode
-positivity, supplied signed responses and one-to-eight-thread consistency.
-No cosmological model or survey-accuracy prescription is calibrated here.
+The function under test, count_statistics of
+cosmolike_notebook_utils/covariance/counts_cluster.py, integrates supplied
+radial "shells" of a cluster sample. For count bin i at transverse
+comoving distance f_K, with survey solid angle Omega:
+
+  mean    N_i = integral dchi Omega f_K^2 n_i        (an absolute number)
+  Poisson C_ij = N_i delta_ij
+  SSC     C_ij = integral dchi sigma_b^2 Phi_i Phi_j,
+          Phi_i = Omega f_K^2 dn_i/d(delta_b)
+
+Counts are absolute numbers of clusters, so their Poisson (shot) noise is
+the mean count. The observed bins are exclusive (each cluster lands in
+one richness/redshift bin), so the Poisson part is diagonal, while the
+super-sample covariance (SSC, the response of every bin to one density
+mode delta_b larger than the survey, of variance sigma_b^2) correlates
+all bins. The count x two-point SSC block uses the response Phi_AB of a
+two-point function to the same mode.
+
+Polynomial shell integrals have closed forms, so these tests need no
+other covariance code as a reference: Gauss-Legendre quadrature with n
+nodes integrates polynomials up to degree 2n - 1 exactly, so the only
+error is floating-point rounding. They check the distance powers,
+exclusive-bin Poisson noise, unit invariance, common-mode positivity,
+supplied signed responses and one-to-eight-thread consistency. No
+cosmological model or survey-accuracy prescription is calibrated here.
+
+Run from the cocoa/Cocoa folder: python -m pytest
+projects/des_cluster/tests/covariance/test_counts.py
 """
 
 from pathlib import Path
@@ -14,6 +37,8 @@ import numpy as np
 import pytest
 from scipy.special import roots_legendre
 
+# project = projects/des_cluster; the shared core (cosmolike_notebook_utils)
+# and interface/ (the compiled library) go first on the import path
 project = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project.parents[1]/"external_modules/code/cosmolike_core"))
 sys.path.insert(0, str(project/"interface"))
@@ -23,12 +48,29 @@ from cosmolike_notebook_utils.covariance.counts_cluster import count_statistics
 
 
 def shell_inputs(nnode=9):
-    """Supply constant selected abundances on a radial interval [0.2,0.8]."""
+    """Supply constant selected abundances on a radial interval [0.2,0.8].
+
+    Three count bins with constant densities n = 0.4, 0.2, 0.1 (L^-3) and
+    linear biases b = 1.5, 2.0, 2.5, so dn/d(delta_b) = b n; solid angle
+    0.7 sr; background variance sigma_b^2 = 0.03 (L) at every node. The
+    Gauss-Legendre nodes x in [-1, 1] map to distances 0.5 + 0.3 x, and
+    the weights scale by the half-width 0.3. L is an arbitrary length unit.
+
+    Arguments:
+      nnode = number of Gauss-Legendre nodes, a positive integer.
+
+    Returns:
+      a dict of the keyword arguments of count_statistics: distance and
+      dchi [nnode], density and derivative [3, nnode], area_sr (float),
+      background_variance [nnode].
+    """
     nodes, weights = roots_legendre(n=nnode)
     distance = 0.5+0.3*nodes
     dchi = 0.3*weights
     number = np.array([0.4, 0.2, 0.1])
     bias = np.array([1.5, 2.0, 2.5])
+    # number[:, None] is a [3, 1] column; repeat copies it into nnode
+    # columns, giving the [count bin, node] layout
     density = np.repeat(number[:, None], nnode, axis=1)
     return {
         "distance": distance,
@@ -41,7 +83,21 @@ def shell_inputs(nnode=9):
 
 
 def two_point_shell(distance):
-    """Construct Phi_AB=A/f_K^2 using the production two-point response."""
+    """Construct Phi_AB=A/f_K^2 using the production two-point response.
+
+    covariance_ssc_shell_response returns, per two-point row and node,
+    Phi_AB = W_A W_B D((l+1/2)/f_K)/f_K^2 - (U_A + U_B) C_AB. With a unit
+    pair window W_A W_B = 1, no mean subtraction (U = 0) and a constant
+    power response D = A, it reduces to A/f_K^2. One amplitude is negative:
+    a response may have either sign.
+
+    Arguments:
+      distance = transverse distances f_K of the shell nodes, float [nnode].
+
+    Returns:
+      float array [2, nnode]: Phi_AB of two two-point rows, amplitudes
+      0.02 and -0.07.
+    """
     amplitude = np.array([0.02, -0.07])
     shape = (2, len(distance))
     return ci.covariance_ssc_shell_response(
@@ -52,7 +108,20 @@ def two_point_shell(distance):
 
 
 def test_counts_and_cross_ssc_against_closed_integrals():
-    """Volume powers cancel only in the count-two-point cross integral."""
+    """Volume powers cancel only in the count-two-point cross integral.
+
+    With constant densities the integrands are polynomials in chi (chi^2
+    for the mean, chi^4 for the count SSC, chi^0 for the cross term), so
+    9 Gauss-Legendre nodes give the closed forms below exactly; rtol =
+    2e-14, about a hundred double-precision rounding units, leaves room
+    for summation order only.
+
+    Arguments:
+      none.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+    """
     inputs = shell_inputs()
     other = two_point_shell(distance=inputs["distance"])
     actual = count_statistics(interface=ci, two_point_response=other, **inputs)
@@ -65,7 +134,8 @@ def test_counts_and_cross_ssc_against_closed_integrals():
                     *np.outer(biased_number, biased_number))
 
     # Phi_N contains chi^2 and Phi_AB contains chi^-2. Their product is
-    # constant here. The legacy missing-denominator error fails this check.
+    # constant here. A cross term computed without the 1/f_K^2 of Phi_AB
+    # would grow as chi^2 and fail this check.
     expected_cross = (0.7*0.03*(0.8-0.2)
                       *np.outer(biased_number, np.array([0.02, -0.07])))
     np.testing.assert_allclose(actual["mean"], expected_mean, rtol=2.e-14)
@@ -76,6 +146,11 @@ def test_counts_and_cross_ssc_against_closed_integrals():
 
     # The joint SSC comes from one background field. Negative cross entries
     # are allowed; every joint variance must remain nonnegative to roundoff.
+    # covariance_project sums weight*left_i*right_j over the nodes, so
+    # other_ssc is the two-point SSC block, and np.block assembles the
+    # 2x2 arrangement of blocks into one [5, 5] matrix. Its smallest
+    # eigenvalue may fall below zero only by rounding relative to the
+    # largest one.
     other_ssc = ci.covariance_project(
         left=other, right=other,
         weight=inputs["dchi"]*inputs["background_variance"],
@@ -89,13 +164,25 @@ def test_counts_and_cross_ssc_against_closed_integrals():
 
 
 def test_length_units_and_observable_transform():
-    """Changing length units or linearly combining measurements is consistent."""
+    """Changing length units or linearly combining measurements is consistent.
+
+    Every result is a number of clusters or a dimensionless covariance, so
+    rescaling every length by the same factor must leave it unchanged.
+
+    Arguments:
+      none.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+    """
     inputs = shell_inputs()
     other = two_point_shell(distance=inputs["distance"])
     original = count_statistics(interface=ci, two_point_response=other, **inputs)
 
     # A larger numerical distance unit scales n and dn by its inverse cube,
     # Phi by its inverse, and the collapsed background variance by its length.
+    # The factor 3000 is close to c/H0 in Mpc/h (2997.9), the length unit of
+    # cosmolike. dict(inputs) copies the dict, so inputs keeps its values.
     factor = 3000.0
     converted = dict(inputs)
     converted["distance"] = inputs["distance"]*factor
@@ -110,7 +197,9 @@ def test_length_units_and_observable_transform():
         np.testing.assert_allclose(actual[key], original[key], rtol=2.e-14)
 
     # Counts have one index; only the two-point side receives this transform.
-    # This is the algebra needed for angular bins and a later Y transform.
+    # A linear map T of the two-point rows (an angular-bin average and the Y
+    # localization are such maps) turns the cross block X into X T^t; here T
+    # is a [3, 2] matrix and @ is the matrix product.
     transform = np.array([[1.0, 0.4], [0.2, -0.3], [-0.5, 1.0]])
     combined = count_statistics(
         interface=ci, two_point_response=transform @ other, **inputs,
@@ -123,7 +212,28 @@ def test_length_units_and_observable_transform():
 
 @pytest.mark.parametrize("nnode", [1, 6, 9])
 def test_threads_tails_and_output_ownership(nnode):
-    """Single, paired and odd shell arrays repeat bitwise with owned outputs."""
+    """Single, paired and odd shell arrays repeat bitwise with owned outputs.
+
+    The C code processes two shell nodes at a time (SIMD lanes) and treats
+    an odd last node separately, so nnode = 1, 6 and 9 test the single,
+    paired and odd cases. Every output must be identical bit for bit at
+    1, 2, 4 and 8 OpenMP threads: .view(np.uint64) reads each float64 as
+    its raw 64-bit pattern, so even a last-digit difference fails. Without
+    a two-point response the cross block has zero columns, shape (3, 0).
+    The ownership check calls again with doubled densities and requires
+    the first result to stay unchanged: each call returns arrays of its
+    own, not views of a buffer that a later call overwrites.
+
+    Arguments:
+      nnode = number of shell nodes, set by @pytest.mark.parametrize,
+              which runs the test once per listed value.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+
+    Side effects:
+      sets the OpenMP thread count of the compiled library.
+    """
     inputs = shell_inputs(nnode=nnode)
     baseline = None
     for threads in (1, 2, 4, 8):
@@ -146,7 +256,22 @@ def test_threads_tails_and_output_ownership(nnode):
 
 
 def test_zero_response_and_validation():
-    """A nonresponding catalog has Poisson noise only; malformed inputs stop."""
+    """A nonresponding catalog has Poisson noise only; malformed inputs stop.
+
+    With dn/d(delta_b) = 0 the SSC term vanishes and the total equals the
+    Poisson diagonal. Each malformed case replaces one input of a copy of
+    the valid inputs: zero or more than full-sky area (4 pi sr), a zero
+    distance, a negative density, a density with one node missing, a NaN
+    response, a zero quadrature weight, a negative background variance,
+    and a two-point response with 8 nodes instead of 9. Each must raise
+    ValueError (pytest.raises fails the test when it does not).
+
+    Arguments:
+      none.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+    """
     inputs = shell_inputs()
     inputs["derivative"] = np.zeros_like(inputs["derivative"])
     result = count_statistics(interface=ci, **inputs)

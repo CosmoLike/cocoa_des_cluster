@@ -1,7 +1,12 @@
 #!/usr/bin/env python
-"""Independent Python reference of the DES cluster observables
-(2503.13631, "Y6 methods" model) used as ground truth for the C port of
-the cluster code into cosmolike_core (des_cluster project).
+"""Independent Python reference model of the DES cluster observables.
+
+The model is the "Y6 methods" model of arXiv:2503.13631, written in
+plain Python (numpy, scipy, CAMB) without CosmoLike, so that
+tests/validation/compare_reference.py can check the compiled cluster code
+of cosmolike_core against it quantity by quantity. This file ties the
+modules below together into one object, ClusterReference, at one
+parameter point; its first docstring line is also the --help summary.
 
 Modules (same folder):
   ref_cosmology  CAMB background, growth, P_lin/P_NL; n(z) files
@@ -33,7 +38,8 @@ CLI:
         [--hmf-matter cb] [--hmf-alpha-mode 1] [--cov] [--nonlimber-check]
         [--set key=value ...]
 
-Data-vector layout (ref.data_vector(), lighthouse inner ordering):
+Data-vector layout (ref.data_vector(), the inner ordering of lighthouse, the
+repository of the original CosmoLike cluster code):
   N  [zc][lambda]
   cs [(zc, zs) pair, zc-major][lambda][theta]   Sigma = b_sel * (T gamma_t)
   cc [zc][lambda1 <= lambda2][theta]            w_cc * b_sel^2
@@ -60,6 +66,9 @@ from ref_projection import (theta_edges, theta_area_weighted,     # noqa: E402
                             selection_factor)
 from ref_covariance import cc_pairs                               # noqa: E402
 
+# Folder of the default lens and source n(z) files: the DES Y6 code
+# comparison n(z) of a local lighthouse checkout (not part of Cocoa);
+# compare_reference.py passes the project's own n(z) files instead.
 LIGHTHOUSE_NZ = ("/Users/vivianmiranda/data/COCOA/september2026/test/lighthouse/"
                  "analysis/des_y6_code_comparison")
 
@@ -69,7 +78,8 @@ FIDUCIAL = dict(
     Omega_nu_h2=0.00083, w0=-1.0, wa=0.0,
     # mass-observable relation (Eqs. 18-19), M_piv = 5e14 Msun/h
     lnlambda0=4.26, A=0.943, B=0.207, sigma_int=0.15,
-    # selection bias (Eq. 23): b_s1, b_s2, r0 [Mpc/h], z-slope (lighthouse s3)
+    # selection bias (Eq. 23): the keys sel_s0, sel_s1, sel_s2, sel_s3 hold
+    # b_s1, b_s2, r0 [Mpc/h] and the z-slope (lighthouse s3)
     sel_s0=1.1, sel_s1=0.2, sel_s2=30.0, sel_s3=0.0,
     # lenses (MagLim, 6 bins; clusters use bins 1-3)
     lens_b1=[1.42, 1.66, 1.70, 1.62, 1.78, 1.75],
@@ -79,10 +89,18 @@ FIDUCIAL = dict(
     # sources (4 bins)
     source_dz=[0.034, 0.028, 0.011, -0.010],
     shear_m=[0.0, 0.0, 0.0, 0.0],
-    # NLA (TATT a1, eta1; A2 = 0 in the cluster lensing)
+    # NLA intrinsic alignment: amplitude a1 and redshift power eta1 (the
+    # TATT a1, eta1 with A2 = 0 in the cluster lensing)
     IA_A1=0.0, IA_eta1=0.0,
 )
 
+# Numerical and survey settings of the reference. The mass integrals use
+# Gauss-Legendre panels of width 0.25 in ln M (8 nodes each) between 1e12
+# and 1e16 M_sun/h; z_piv holds 1 + z_piv = 1.45 of the mass-observable
+# relation; the spectra are computed at every integer l below l_exact and
+# at n_per_decade log-spaced l above it, then splined onto every integer
+# l < lmax for the angular projections; z_panel, z_panel_far and z_order
+# set the Gauss-Legendre panels of the Limber integrals.
 DEFAULT_SETTINGS = dict(
     lambda_edges=[20.0, 30.0, 45.0, 60.0, 500.0],
     zc_edges=[0.2, 0.4, 0.55, 0.65],
@@ -113,6 +131,7 @@ DEFAULT_SETTINGS = dict(
     sigma_e=0.384666 / np.sqrt(2.0),
 )
 
+# the keys of FIDUCIAL handed to the cosmology (CAMB) and to the MOR
 COSMO_KEYS = ("Omega_m", "A_s", "n_s", "Omega_b", "h", "Omega_nu_h2", "w0", "wa")
 MOR_KEYS = ("lnlambda0", "A", "B", "sigma_int")
 
@@ -121,9 +140,22 @@ class ClusterReference:
     """Reference model at one parameter point. Every intermediate is exposed.
 
     `cosmo` can be passed to reuse a CAMB run (same cosmological parameters).
+    The spectra, the counts and the real-space statistics are computed at
+    their first request and kept (self._spectra, self._counts,
+    self._real), so later calls reuse them.
     """
 
     def __init__(self, params=None, settings=None, cosmo=None, verbose=False):
+        """Build the cosmology, halo model, cluster model and n(z) of one point.
+
+        Arguments:
+          params   = dict of parameter values replacing those of FIDUCIAL.
+          settings = dict of settings replacing those of DEFAULT_SETTINGS.
+          cosmo    = an existing ref_cosmology.Cosmology to reuse (its
+                     cosmological parameters must equal params'), or None
+                     to run CAMB.
+          verbose  = True prints the time of each stage.
+        """
         self.params = dict(FIDUCIAL)
         if params:
             self.params.update(params)
@@ -161,6 +193,12 @@ class ClusterReference:
         self._real = None
 
     def _log(self, what, t0):
+        """Print the time elapsed since t0 for stage what (verbose only).
+
+        Arguments:
+          what = name of the stage, a string.
+          t0   = its start time, from time.time().
+        """
         if self.verbose:
             print(f"[reference_cluster] {what}: {time.time() - t0:.1f} s", flush=True)
 
@@ -168,18 +206,55 @@ class ClusterReference:
     # one-point pieces
     # ------------------------------------------------------------------
     def counts(self):
+        """Expected cluster counts N_iA per redshift bin i and richness bin A.
+
+        Returns:
+          float array (nzc, nA), absolute numbers of clusters in the survey
+          area (computed once, then kept).
+        """
         if self._counts is None:
             self._counts = self.cluster.counts()
         return self._counts
 
     def nA_bA(self, z):
+        """Comoving number density and mean halo bias of each richness bin.
+
+        Arguments:
+          z = redshift, scalar or array.
+
+        Returns:
+          (n, b): float arrays (nA, nz); n in (h/Mpc)^3, b dimensionless.
+        """
         return self.cluster.n_b(np.atleast_1d(z))
 
     def p1h(self, k, z):
+        """One-halo cluster-matter power P^1h_A(k) of each richness bin at z.
+
+        Arguments:
+          k = wavenumbers in h/Mpc, array.
+          z = one redshift.
+
+        Returns:
+          float array (nA, nk) in (Mpc/h)^3.
+        """
         return self.cluster.p1h(k, z)
 
     def kernels(self, z):
-        """<phi_i|z>, normalized q_iA(z), lensing efficiency g_c,iA(z)."""
+        """<phi_i|z>, normalized q_iA(z), lensing efficiency g_c,iA(z).
+
+        <phi_i|z> is the probability that a cluster at true redshift z is
+        observed in cluster bin i; q_iA is the normalized radial kernel of
+        bin i and richness bin A (kernel_mode 0: volume only, 1: abundance
+        weighted); g_c is the lensing efficiency of that kernel, used by
+        the cluster magnification term.
+
+        Arguments:
+          z = redshifts, array.
+
+        Returns:
+          dict(phi (nzc, nz), q (nzc, nA, nz), g_c (nzc, nA, nz),
+          norms = the kernel normalizations).
+        """
         cl = self.cluster
         z = np.asarray(z, dtype=float)
         km = self.settings["kernel_mode"]
@@ -193,6 +268,7 @@ class ClusterReference:
     # spectra and real space
     # ------------------------------------------------------------------
     def limber_model(self):
+        """Return a ref_limber.LimberModel for this point and these settings."""
         s = self.settings
         nuis = {k: self.params[k] for k in ("lens_b1", "lens_bmag", "lens_dz", "lens_stretch",
                                             "source_dz", "IA_A1", "IA_eta1")}
@@ -205,6 +281,15 @@ class ClusterReference:
                            include_1h=s["include_1h"], source_g_zmax=s["source_g_zmax"])
 
     def spectra(self, with_cov_spectra=True):
+        """Limber C_l of every cluster and galaxy probe (computed once, then kept).
+
+        Arguments:
+          with_cov_spectra = True also computes the extra spectra the
+                             Gaussian covariance needs.
+
+        Returns:
+          dict of spectra on the multipoles sp["ells"] (ref_limber).
+        """
         if self._spectra is None:
             t0 = time.time()
             self.limber = self.limber_model()
@@ -213,11 +298,21 @@ class ClusterReference:
         return self._spectra
 
     def theta_sel(self):
+        """Angle of each bin, in radians, used for the selection factor.
+
+        "area" gives the area-weighted centre 2/3 (t1^3 - t0^3)/(t1^2 - t0^2),
+        "log" the logarithmic centre.
+        """
         return (theta_area_weighted(self.edges) if self.settings["theta_sel"] == "area"
                 else theta_log_centre(self.edges))
 
     def selection(self):
-        """b_sel(theta) per cluster z bin, shape (nzc, ntheta)."""
+        """b_sel(theta) per cluster z bin, shape (nzc, ntheta).
+
+        Eq. 23 evaluated at the midpoint of each cluster redshift bin:
+        b_sel = [s0 + s1 exp(-theta D_M/s2)] ((1+z_mid)/1.45)^s3, with D_M
+        the comoving distance to the midpoint (ref_projection).
+        """
         p, cl = self.params, self.cluster
         th = self.theta_sel()
         zmid = 0.5 * (cl.zc_edges[:-1] + cl.zc_edges[1:])
@@ -227,6 +322,21 @@ class ClusterReference:
                          for i in range(cl.nzc)])
 
     def real_space(self):
+        """Project the spectra onto the angular bins (computed once, then kept).
+
+        Full-sky, bin-averaged projections: gamma_t (spin 2 x 0) of the
+        cluster lensing spectra times (1 + m) of the source bin, w_cc of the
+        richness pairs in the same redshift bin, w_cg of each cluster bin
+        with its paired lens bin, Sigma = T gamma_t (the Y transform along
+        theta), and the versions multiplied by the selection factor B
+        (Sigma and w_cg by B, w_cc by B^2).
+
+        Returns:
+          dict of arrays: gamma_t, gamma_t_1h, Sigma, Sigma_sel
+          (nzc, nA, ns, ntheta); w_cc, w_cc_sel (nzc, nA, nA, ntheta);
+          w_cg, w_cg_sel (nzc, nA, ntheta); b_sel (nzc, ntheta); T
+          (ntheta, ntheta); theta_edges and theta_sel in radians.
+        """
         if self._real is not None:
             return self._real
         sp = self.spectra()
@@ -253,7 +363,21 @@ class ClusterReference:
         return self._real
 
     def data_vector(self, selected=True):
-        """(vector, index dict) in the lighthouse layout (module docstring)."""
+        """(vector, index dict) in the lighthouse layout (module docstring).
+
+        The list comprehensions inside np.concatenate list the rows in the
+        layout order (outer loop first), e.g. cs: cluster bin i, then source
+        bin j, then richness bin A, each row ntheta entries long.
+
+        Arguments:
+          selected = True stores Sigma, w_cc and w_cg with the selection
+                     factor (the data-vector form); False stores gamma_t
+                     (no Y transform), w_cc and w_cg without it.
+
+        Returns:
+          (vector, index): the concatenated float array, and dict(N, cs, cc,
+          cg, end) of block start positions.
+        """
         rs = self.real_space()
         N = self.counts()
         nzc, nA, ns = N.shape[0], N.shape[1], self.nz_src.nbin
@@ -274,7 +398,17 @@ class ClusterReference:
     # covariance and diagnostics
     # ------------------------------------------------------------------
     def covariance(self):
-        """Full covariance (N, cs as Sigma, cc, cg); no selection factors."""
+        """Full covariance (N, cs as Sigma, cc, cg); no selection factors.
+
+        The counts block (Poisson + super-sample covariance, ref_covariance)
+        comes first, then the Gaussian two-point covariance with the Y
+        transform on the cluster-lensing rows; the counts x two-point
+        block is zero.
+
+        Returns:
+          (cov, info): the square matrix, and the dict of intermediate
+          quantities of the counts covariance.
+        """
         from ref_covariance import GaussianCovariance, counts_covariance
         s = self.settings
         t0 = time.time()
@@ -293,7 +427,21 @@ class ClusterReference:
         return cov, info
 
     def wcc_nonlimber_check(self, i=0, A=0, B=0, ells=(2, 5, 10, 20, 30, 50), dchi=0.5):
-        """Exact j_l vs Limber for the density leg of C_cc (bin i, lambda A x B)."""
+        """Exact j_l vs Limber for the density leg of C_cc (bin i, lambda A x B).
+
+        A diagnostic of the Limber approximation at low multipoles: the
+        exact linear spectrum (spherical Bessel functions j_l) and its
+        Limber value with the same kernels, the Limber value with P_NL, and
+        their combination nl + exact - Limber (the FKEM correction).
+
+        Arguments:
+          i, A, B = cluster bin and the two richness bins.
+          ells    = multipoles of the check.
+          dchi    = step of the comoving-distance grid, in Mpc/h.
+
+        Returns:
+          dict of arrays over ells.
+        """
         from ref_nonlimber import cl_exact_linear, cl_limber_linear
         cl, cosmo = self.cluster, self.cosmo
         km = self.settings["kernel_mode"]
@@ -320,7 +468,19 @@ class ClusterReference:
 
     # ------------------------------------------------------------------
     def results(self, with_cov=False, with_nonlimber=False, z_grid=None, k_grid=None):
-        """Flat dict of every intermediate (for np.savez)."""
+        """Flat dict of every intermediate (for np.savez).
+
+        Arguments:
+          with_cov       = True adds the covariance (key "cov").
+          with_nonlimber = True adds wcc_nonlimber_check() (keys
+                           "nonlimber_*").
+          z_grid         = redshifts of n_A, b_A and the kernels (default
+                           0.10 to 0.80 in steps of 0.005).
+          k_grid         = wavenumbers in h/Mpc of P^1h (default 1e-3 to 1e2).
+
+        Returns:
+          dict {name: numpy array}.
+        """
         cl = self.cluster
         out = {}
         z_grid = np.arange(0.10, 0.8001, 0.005) if z_grid is None else z_grid
@@ -361,6 +521,17 @@ class ClusterReference:
 
 # ----------------------------------------------------------------------
 def _parse_set(items):
+    """Turn --set "key=value" words into {key: value}.
+
+    Each value goes through eval (numbers, lists, expressions using np);
+    a value eval cannot read stays a string.
+
+    Arguments:
+      items = list of "key=value" strings, or None.
+
+    Returns:
+      dict {key: value}.
+    """
     out = {}
     for it in items or []:
         key, val = it.split("=", 1)
@@ -373,6 +544,17 @@ def _parse_set(items):
 
 
 def main(argv=None):
+    """Command-line entry: compute the reference at one point and save it.
+
+    Arguments:
+      argv = None (the command line) or a list of command-line words.
+
+    Returns:
+      nothing; writes the --out .npz file and prints the counts.
+
+    Raises:
+      SystemExit when a --set key is neither a parameter nor a setting.
+    """
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", default="reference_cluster_fiducial.npz")
     ap.add_argument("--kernel-mode", type=int, default=0, choices=(0, 1))

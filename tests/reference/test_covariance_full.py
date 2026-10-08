@@ -18,6 +18,17 @@ likelihood through cobaya in a subprocess (no evaluation).
   test_reduction_to_ref_covariance cluster-only blocks = ref_covariance.py
   test_bruteforce_*                single elements against direct l sums
   test_selection_modes             none / jacobian / signal relations
+
+The covariance under test (ref_covariance_full.FullGaussianCovariance) is
+the Gaussian covariance of the joint vector ss, gs, gg, cg, N, cc, cs:
+for two angular statistics, Cov = sum_l K_i(l) K_j(l) [products of
+spectra plus noise]/((2l+1) f_sky), with K the bin-averaged projection
+kernels and f_sky the observed sky fraction. Band matrices hold those
+l sums once for every pair of kernels. The counts block is Poisson plus
+sample variance, with zero covariance between counts and two-point
+entries. Fixtures (functions marked @pytest.fixture) build the shared
+objects once per module; a test receives them by naming them as
+arguments.
 """
 
 import json
@@ -25,6 +36,9 @@ import os
 import subprocess
 import sys
 
+# Thread counts of OpenMP and of numpy's linear-algebra libraries: 3 unless
+# the caller set a value (setdefault keeps an existing one). This must run
+# before numpy is imported, since its BLAS reads them when it loads.
 for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
              "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
     os.environ.setdefault(_var, "3")     # before numpy loads its BLAS
@@ -50,6 +64,10 @@ from ref_covariance_full import (FullGaussianCovariance, band_matrices,  # noqa:
                                  xi_pm_kernels)
 from ref_projection import theta_edges                                # noqa: E402
 
+# Tolerances: the reduction test compares the same sums assembled two ways
+# (rounding only); the brute-force tests repeat one element's sum directly
+# with the same interpolation; the xi kernels come from a recursion and are
+# compared with an independent quadrature of Wigner d functions.
 TOL_REDUCTION = 1e-12     # |delta C_ij| / sqrt(C_ii C_jj)
 TOL_BRUTE = 1e-10         # element vs direct l sum (same interpolation)
 TOL_XI_KERNEL = 2e-9      # |delta G_l| / max_l |G_l| per theta bin
@@ -60,6 +78,17 @@ TOL_XI_KERNEL = 2e-9      # |delta G_l| / max_l |G_l| per theta bin
 # ----------------------------------------------------------------------
 @pytest.fixture(scope="module")
 def setup():
+    """The shared reference model, band matrices and counts covariance.
+
+    The reference uses the settings of scripts/make_synthetic_data.py
+    (every lens bin, as the covariance of CL+3x2pt needs) at the Table I
+    fiducial; one CAMB run and one set of band matrices serve the module.
+
+    Returns:
+      dict(ds = the dataset entries, settings, ref = the ClusterReference
+      with its spectra, M = the band matrices, cN = the counts covariance,
+      info = its intermediate quantities).
+    """
     ds = msd.load_dataset()
     lik = msd.load_yaml(os.path.join(PRJ, "likelihood", "combo_6x2pt_N.yaml"))
     settings = msd.reference_settings(ds, lik)
@@ -71,6 +100,20 @@ def setup():
 
 
 def make_fc(setup, mode="signal", selection="ref", noise="exact", spectra=None):
+    """Build a FullGaussianCovariance from the shared reference.
+
+    Arguments:
+      setup     = the module fixture.
+      mode      = selection_mode: "signal", "jacobian" or "none".
+      selection = "ref" (the reference's selection factor B) or an array
+                  B (nzc, ntheta).
+      noise     = "exact" (noise x noise summed to l = infinity) or
+                  "lsum" (the LMAX-truncated sum).
+      spectra   = None (the reference spectra) or a replacement dict.
+
+    Returns:
+      the FullGaussianCovariance object (nothing assembled yet).
+    """
     ref, s = setup["ref"], setup["settings"]
     B = ref.selection() if isinstance(selection, str) else selection
     return FullGaussianCovariance(
@@ -85,27 +128,71 @@ def make_fc(setup, mode="signal", selection="ref", noise="exact", spectra=None):
 
 @pytest.fixture(scope="module")
 def cov_signal(setup):
+    """(object, full matrix) of the default "signal" selection mode.
+
+    Arguments:
+      setup = the module fixture.
+    """
     fc = make_fc(setup, "signal")
     return fc, fc.full(setup["M"])
 
 
 @pytest.fixture(scope="module")
 def cov_none(setup):
+    """(object, full matrix) without any data-vector factor ("none" mode).
+
+    Arguments:
+      setup = the module fixture.
+    """
     fc = make_fc(setup, "none")
     return fc, fc.full(setup["M"])
 
 
 def scaled(C):
+    """Return sqrt(|C_ii| |C_jj|), the scale that turns C_ij into a correlation.
+
+    Differences divided by it are relative to the standard deviations of
+    the two entries, so blocks with very different units compare fairly.
+
+    Arguments:
+      C = square matrix.
+
+    Returns:
+      the outer product of sqrt(|diag(C)|) with itself.
+    """
     d = np.sqrt(np.abs(np.diag(C)))
     return np.outer(d, d)
 
 
 def effective_mask(path, lay):
+    """Read a mask file and drop the last angular bin of every cs row.
+
+    That bin of the Y statistic is zero by construction (zero variance),
+    so the likelihood drops it whatever the mask file says.
+
+    Arguments:
+      path = mask file ("index value" lines).
+      lay  = the joint layout (ref_covariance_full.joint_layout).
+
+    Returns:
+      boolean array over the joint vector.
+    """
     m = np.loadtxt(path)[:, 1] > 0.5
     return msd.effective_mask(m, lay)
 
 
 def obs_index(lay, block, label):
+    """Return the position in lay["obs"] of the row with this block and label.
+
+    Arguments:
+      lay   = the joint layout.
+      block = block name, e.g. "cs".
+      label = the row label of that block, e.g. (cluster bin, source bin,
+              richness bin) for cs.
+
+    Raises:
+      KeyError when no row matches.
+    """
     for o, ob in enumerate(lay["obs"]):
         if ob[0] == block and ob[3] == label:
             return o
@@ -113,7 +200,17 @@ def obs_index(lay, block, label):
 
 
 def spline_sum(ells, nodes, Ki, Kj, lmax):
-    """sum_{l=1}^{lmax-1} K_i(l) K_j(l) spline(nodes)(l)/(2l+1), directly."""
+    """sum_{l=1}^{lmax-1} K_i(l) K_j(l) spline(nodes)(l)/(2l+1), directly.
+
+    Arguments:
+      ells   = multipole nodes of the spectra.
+      nodes  = the function of l on those nodes, splined in ln l.
+      Ki, Kj = kernel rows over l = 0 ... lmax - 1.
+      lmax   = upper end (exclusive) of the sum.
+
+    Returns:
+      a float.
+    """
     l = np.arange(1, lmax, dtype=float)
     g = CubicSpline(np.log(ells), nodes)(np.log(l))
     return float(np.sum(Ki[1:] * Kj[1:] * g / (2.0 * l + 1.0)))
@@ -125,7 +222,13 @@ def spline_sum(ells, nodes, Ki, Kj, lmax):
 def test_xi_kernels_vs_wigner():
     """G+/-_i(l) = (2l+1)/(4 pi) (l+2)!/(l-2)!/[l(l+1)]^2 <d^l_{2,+/-2}>_bin,
     d^l_{22} = ((1+x)/2)^2 P^{(0,4)}_{l-2}(x), d^l_{2,-2} = ((1-x)/2)^2
-    P^{(4,0)}_{l-2}(x) (Jacobi), bin average by Gauss-Legendre in x."""
+    P^{(4,0)}_{l-2}(x) (Jacobi), bin average by Gauss-Legendre in x.
+
+    The kernels of xi_+ and xi_- are computed by a recursion; this checks
+    them at 4 angular bins and multipoles from 2 to LMAX - 1 against an
+    independent 400-point average of the Wigner d functions, written with
+    Jacobi polynomials, to TOL_XI_KERNEL relative to the largest kernel
+    value of the bin."""
     edges = theta_edges(20, 2.5, 250.0)
     lmax = 75000
     Gp, Gm = xi_pm_kernels(edges, lmax)
@@ -151,6 +254,11 @@ def test_xi_kernels_vs_wigner():
 # ----------------------------------------------------------------------
 # layout
 # ----------------------------------------------------------------------
+# Python source that the compiled_layout fixture runs with `python -c` in a
+# child process: it builds the 6x2pt + N likelihood through cobaya on a
+# placeholder dataset (all-ones mask, zero data vector, identity covariance)
+# and prints the layout of the compiled library as one "LAYOUT_JSON" line.
+# {scripts!r} is filled with the scripts folder by str.format.
 LAYOUT_WORKER = r"""
 import json, os, sys, tempfile
 sys.path.insert(0, {scripts!r})
@@ -174,6 +282,18 @@ print("LAYOUT_JSON " + json.dumps(out))
 
 @pytest.fixture(scope="module")
 def compiled_layout():
+    """The layout of the compiled library: block sizes, starts, mask, pair maps.
+
+    Runs LAYOUT_WORKER in a fresh process (one thread), so the library's
+    global state never meets the rest of the test session.
+
+    Returns:
+      dict decoded from the worker's JSON line.
+
+    Raises:
+      AssertionError with the end of the worker's output when it fails;
+      the test is skipped when start_cocoa.sh was not sourced (no ROOTDIR).
+    """
     if "ROOTDIR" not in os.environ:
         pytest.skip("start_cocoa.sh not sourced")
     code = LAYOUT_WORKER.format(scripts=SCRIPTS)
@@ -186,6 +306,16 @@ def compiled_layout():
 
 
 def test_layout_sizes_starts(compiled_layout):
+    """The Python joint layout equals the compiled one, entry by entry.
+
+    Block sizes and starts must agree, the vector has 2812 entries, every
+    two-point entry and count has exactly one joint index, and the all-ones
+    mask, as the library applies it, keeps everything except the last
+    angular bin of each cluster-lensing row.
+
+    Arguments:
+      compiled_layout = the fixture above.
+    """
     ds = msd.load_dataset()
     lay = joint_layout(ds["cluster_ntomo"], len(ds["richness_edges"]) - 1, ds["source_ntomo"],
                        ds["lens_ntomo"], ds["n_theta"], ds["cg_lens_bins"])
@@ -202,6 +332,11 @@ def test_layout_sizes_starts(compiled_layout):
 
 
 def test_layout_pair_maps(compiled_layout):
+    """The bin pairs of gs, cs, cg and cc rows come in the compiled order.
+
+    Arguments:
+      compiled_layout = the fixture above.
+    """
     ds = msd.load_dataset()
     lay = joint_layout(ds["cluster_ntomo"], len(ds["richness_edges"]) - 1, ds["source_ntomo"],
                        ds["lens_ntomo"], ds["n_theta"], ds["cg_lens_bins"])
@@ -214,7 +349,11 @@ def test_layout_pair_maps(compiled_layout):
 
 
 def test_layout_masks_match_blocks():
-    """The scale-cut masks switch whole probes off where the combos do."""
+    """The scale-cut masks switch whole probes off where the combos do.
+
+    The 4x2pt + N mask keeps no entry of cosmic shear (ss) or
+    galaxy-galaxy lensing (gs).
+    """
     ds = msd.load_dataset()
     lay = joint_layout(ds["cluster_ntomo"], len(ds["richness_edges"]) - 1, ds["source_ntomo"],
                        ds["lens_ntomo"], ds["n_theta"], ds["cg_lens_bins"])
@@ -228,6 +367,15 @@ def test_layout_masks_match_blocks():
 # matrix properties
 # ----------------------------------------------------------------------
 def test_symmetry(setup):
+    """The assembled two-point covariance is symmetric before symmetrization.
+
+    Cov(a, b) and Cov(b, a) are computed separately in the assembly; they
+    must agree to 1e-13 in units of sqrt(C_ii C_jj), which catches a
+    swapped pairing of spectra in any block.
+
+    Arguments:
+      setup = the module fixture.
+    """
     fc = make_fc(setup, "signal")
     c2 = fc.twopoint(setup["M"], symmetrize=False)
     asym = np.max(np.abs(c2 - c2.T) / np.maximum(scaled(c2), 1e-300))
@@ -236,6 +384,17 @@ def test_symmetry(setup):
 
 
 def test_positive_definite_on_masks(cov_signal):
+    """The covariance is positive definite under both likelihood masks.
+
+    For the matrix assembled here and for the shipped file
+    data/des_cluster_y6_cov.npy (when present), restricted to each mask
+    (the last cs angular bin dropped), the smallest eigenvalue of the
+    correlation matrix must be positive and the Cholesky factorization
+    must succeed. The eigenvalue range and condition number are printed.
+
+    Arguments:
+      cov_signal = the fixture (object, matrix) of the signal mode.
+    """
     fc, cov = cov_signal
     lay = fc.layout
     covs = {"in-memory": cov}
@@ -256,6 +415,12 @@ def test_positive_definite_on_masks(cov_signal):
 
 
 def test_counts_block_and_zero_cross(cov_signal, setup):
+    """The counts block is the counts covariance, and N x 2pt is exactly zero.
+
+    Arguments:
+      cov_signal = the fixture (object, matrix) of the signal mode.
+      setup      = the module fixture (its counts covariance cN).
+    """
     fc, cov = cov_signal
     lay = fc.layout
     iN = lay["N_index"].ravel()
@@ -268,7 +433,17 @@ def test_counts_block_and_zero_cross(cov_signal, setup):
 # reduction to ref_covariance.py on the cluster blocks
 # ----------------------------------------------------------------------
 def test_reduction_to_ref_covariance(setup):
-    """noise = "lsum" (the LMAX-truncated noise sum of ref_covariance.py)."""
+    """noise = "lsum" (the LMAX-truncated noise sum of ref_covariance.py).
+
+    Restricted to the cluster blocks, without selection factors, the
+    joint covariance must equal the cluster-only covariance of
+    ref_covariance.py to 1e-12 in units of sqrt(C_ii C_jj); the rows of
+    the last cs angular bin (zero variance) must be exactly zero, and the
+    counts block must equal counts_covariance.
+
+    Arguments:
+      setup = the module fixture.
+    """
     fc = make_fc(setup, "none", noise="lsum")
     cov = fc.full(setup["M"])
     ref, s = setup["ref"], setup["settings"]
@@ -285,6 +460,15 @@ def test_reduction_to_ref_covariance(setup):
     c2, obs = gc.twopoint(y_transform=True)
 
     def label(o):
+        """Return the joint-layout label of a ref_covariance observable o.
+
+        Arguments:
+          o = an observable tuple (block, legs, kernel, label) of
+              ref_covariance.
+
+        Returns:
+          the label tuple of the joint layout.
+        """
         # ref_covariance labels cg by (i, A); the joint layout by (i, g, A)
         return (o[3][0], cg[o[3][0]], o[3][1]) if o[0] == "cg" else o[3]
 
@@ -309,7 +493,17 @@ def test_bruteforce_xi_xi(setup, cov_signal):
     """xi+(s1 s1) x xi+(s1 s1) and xi+ x xi-: E-mode 2 (S + N)^2 +/- B-mode
     2 N^2. The pieces with signal are summed over every integer l < LMAX;
     the noise x noise piece (2 N^2 E + 2 N^2 B for ++, 0 for +-) is the
-    all-l value, delta_ij/(8 pi^2 Delta x_i f_sky)."""
+    all-l value, delta_ij/(8 pi^2 Delta x_i f_sky).
+
+    Elements at an off-diagonal (3, 11) and a diagonal (3, 3) pair of
+    angular bins must agree with the direct sums to TOL_BRUTE. The last
+    check splines C_l instead of the product of spectra: a different
+    interpolation, so only 1e-3 agreement is expected.
+
+    Arguments:
+      setup      = the module fixture.
+      cov_signal = the fixture (object, matrix) of the signal mode.
+    """
     fc, cov = cov_signal
     ref, lay = setup["ref"], fc.layout
     sp, lmax = ref.spectra(), setup["settings"]["lmax"]
@@ -346,7 +540,12 @@ def test_bruteforce_gs_cs(setup, cov_signal):
     """Cov(gamma_t[g1 s2](theta_i), Sigma[c(1,A=1) s2](theta_j)) =
     B_1(theta_j) sum_k T_jk sum_l Pg_i Pg_k [C_gc (C_ss + N_s) + C_gs C_sc]/((2l+1) f_sky)
     (the cluster leg never meets its own shot noise here, so it always
-    carries B)."""
+    carries B).
+
+    Arguments:
+      setup      = the module fixture.
+      cov_signal = the fixture (object, matrix) of the signal mode.
+    """
     fc, cov = cov_signal
     ref, lay = setup["ref"], fc.layout
     sp, lmax = ref.spectra(), setup["settings"]["lmax"]
@@ -369,7 +568,15 @@ def test_bruteforce_gs_cs(setup, cov_signal):
 
 def test_bruteforce_cc_selection(setup, cov_signal):
     """w_cc(i, A, A) auto: 2 (B_i(t) B_i(t') C + N)^2 per l (signal mode);
-    the 2 N^2 piece is the all-l value (zero off the diagonal)."""
+    the 2 N^2 piece is the all-l value (zero off the diagonal).
+
+    N = Omega_s/N_iA is the cluster shot noise (one over the number per
+    steradian); in the signal mode only the signal leg carries B.
+
+    Arguments:
+      setup      = the module fixture.
+      cov_signal = the fixture (object, matrix) of the signal mode.
+    """
     fc, cov = cov_signal
     ref, lay = setup["ref"], fc.layout
     sp, lmax = ref.spectra(), setup["settings"]["lmax"]
@@ -400,7 +607,14 @@ def test_pure_noise_is_pair_count_variance(setup):
       gamma_t (g_k s_j): sigma_e^2/(n_k n_j Omega 2 pi Dx);
       w auto: 1/(n^2 Omega pi Dx);  w_cg: 1/(n_c n_g Omega 2 pi Dx);
       Sigma: T diag(sigma_e^2/(n_c n_s Omega 2 pi Dx)) T^T,
-    Dx = cos(theta_lo) - cos(theta_hi); diagonal in theta except through T."""
+    Dx = cos(theta_lo) - cos(theta_hi); diagonal in theta except through T.
+
+    The dict comprehension copies the spectra dict with every "C_" array
+    replaced by zeros (other entries, such as ells, kept).
+
+    Arguments:
+      setup = the module fixture.
+    """
     ref = setup["ref"]
     zero = {k: (np.zeros_like(v) if k.startswith("C_") else v) for k, v in ref.spectra().items()}
     fc = make_fc(setup, "signal", spectra=zero)
@@ -445,6 +659,20 @@ def test_pure_noise_is_pair_count_variance(setup):
 # selection modes
 # ----------------------------------------------------------------------
 def test_selection_modes(setup, cov_signal, cov_none):
+    """The three selection modes obey their defining relations.
+
+    "jacobian" equals R C_none R with R the diagonal of the whole model
+    factor (B for each cluster leg, 1 + m for each shear leg, 1 for the
+    counts); "signal" with B = 1 equals "none"; and on the diagonal the
+    signal mode lies between "none" and "jacobian", since only its signal
+    pieces carry B (here B >= 1). All to 1e-13 in units of
+    sqrt(C_ii C_jj).
+
+    Arguments:
+      setup      = the module fixture.
+      cov_signal = the fixture (object, matrix) of the signal mode.
+      cov_none   = the fixture (object, matrix) of the none mode.
+    """
     fcs, cs = cov_signal
     fcn, cn = cov_none
     # jacobian = D (none) D with D = the model's data-vector factor
@@ -475,7 +703,15 @@ def test_selection_modes(setup, cov_signal, cov_none):
 
 
 def test_full_covariance_wrapper(setup, cov_signal):
-    """full_covariance(ref) = the class assembled here."""
+    """full_covariance(ref) = the class assembled here.
+
+    The convenience function used by scripts/make_synthetic_data.py must
+    give the same matrix as the class built in this module (to 1e-13).
+
+    Arguments:
+      setup      = the module fixture.
+      cov_signal = the fixture (object, matrix) of the signal mode.
+    """
     fc, cov = cov_signal
     c2, info = full_covariance(setup["ref"], "signal", cg_lens_bins=setup["ds"]["cg_lens_bins"],
                                M=setup["M"])

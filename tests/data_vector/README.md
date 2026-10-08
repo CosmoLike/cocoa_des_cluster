@@ -1,5 +1,9 @@
 # Unit tests for the likelihoods
 
+The frozen snapshot `frozen/`, its manifest `manifest_sha256.json`,
+`pytest.ini` and the folders `reference/` and `validation/` live in the
+parent `tests/` directory; the paths below are relative to it.
+
 These tests catch three kinds of silent breakage: a $\chi^2$ that
 drifted because code or data changed by accident, a race condition (a
 bug where evaluating several points in a row corrupts a later result
@@ -36,16 +40,16 @@ and TATT, and their tests cover both.
     7. [Accuracy checks](#accuracy_checks)
 3. [Appendix](#appendix)
     1. [FAQ: Do the tests keep their own data?](#frozen_copy)
-    2. [FAQ: Why is the reference $\chi^2$ zero?](#synthetic_vectors)
+    2. [FAQ: Why is the reference $\chi^2$ near zero?](#synthetic_vectors)
     3. [FAQ: Why do some tests start a process of their own?](#own_process)
     4. [FAQ: How can maintainers refresh the snapshot?](#refreeze)
     5. [FAQ: What are the other folders under tests?](#other_folders)
 
 ## Running the tests <a name="run_tests"></a>
 
-We assume users are in the Conda cocoa environment from a previous
-`conda activate cocoa` command, that the shell is bash, and that the
-current folder is the cocoa main folder `cocoa/Cocoa`.
+The steps below assume the Conda cocoa environment is active
+(`conda activate cocoa`), the shell is bash, and the current folder is
+the cocoa main folder `cocoa/Cocoa`.
 
 **Step :one:**: activate the private Python environment by sourcing
 the script `start_cocoa.sh`
@@ -58,14 +62,14 @@ the script `start_cocoa.sh`
 
 Without pytest:
 
-    python -m unittest discover -s ./projects/des_cluster/tests -v
+    python -m unittest discover -s ./projects/des_cluster/tests/data_vector -v
 
 The tests change no project files. Each test prints a progress line
 per model build and per evaluation, then a report with the
 computed $\chi^2$, the stored reference, the difference, and the pass
 limit.
 
-A full run performs about 355 likelihood evaluations, about 230 of
+A full run performs about 345 likelihood evaluations, about 220 of
 them on the cluster combinations. The test files force
 `OMP_NUM_THREADS=4` internally, and every model build of the
 reference, race, and accuracy tests runs in its own worker subprocess:
@@ -75,12 +79,14 @@ examples use two data sets (2812 and 900 entries). The two
 covariances of the frozen data (`frozen/data/des_cluster_y6_cov.npy`,
 32 MB, and `frozen/data/des_y3_cov_unblinded_final.txt`, 19 MB) are
 stored with Git LFS: a clone without `git lfs pull` holds a pointer
-file in place of each, and every test then stops at the manifest
-check, naming the file.
+file in place of each, and every test except `test_neutrino_cb.py`
+(which reads the live data set) then stops at the manifest check,
+naming the file.
 
-The whole suite (28 tests) takes about 10 minutes on an Apple M2
-laptop (611 s of pytest time at the forced 4 OpenMP threads), not
-counting `test_neutrino_cb.py`, whose run time is not measured yet.
+This sector has 29 tests. The 28 other than `test_neutrino_cb.py` take
+about 10 minutes on an Apple M2 laptop (611 s of pytest time at the
+forced 4 OpenMP threads); the run time of `test_neutrino_cb.py` is not
+recorded.
 
 ## The tests <a name="the_tests"></a>
 
@@ -98,11 +104,11 @@ The two checks and their pass limits:
 | check | pass limit                                        | a failure means                    |
 |-------|---------------------------------------------------|------------------------------------|
 | $\Delta\chi^2$ | the recomputed $\chi^2$ must stay within 0.2 of the value stored in `frozen/reference_chi2.json` | code or data changed the numbers |
-| race condition | the fiducial evaluated on its own vs evaluated again after nine other cosmologies; the two must agree within $10^{-4}$ | leftover state or an OpenMP race |
+| race condition | the fiducial evaluated on its own vs evaluated again after nine other cosmologies; the two $\chi^2$ values must agree within $10^{-4}$ | leftover state or an OpenMP race |
 
-Everything the tests compare against lives under `frozen/`: one
-snapshot of configurations, data, and reference values, captured
-together when the references were generated and unchanged since. The
+Everything the tests compare against, except in `test_neutrino_cb.py`,
+lives under `frozen/`: one snapshot of configurations, data, and
+reference values, pinned together by the manifest. The
 [Appendix](#appendix) explains how the snapshot is protected.
 
 The test files and the configurations they cover:
@@ -139,8 +145,8 @@ cosmolike caches every expensive stage behind its own key, and the
 cluster tables (the richness-weighted mass integrals, the one-halo
 lensing table, the cluster kernels, the Limber spectra of every
 cluster pair) are keyed on combinations of those keys: the cosmology,
-the mass-observable relation, the selection bias, the cluster redshift
-kernels, the photo-z shifts, the intrinsic alignment, the galaxy bias.
+the mass-observable relation, the cluster redshift kernels, the photo-z
+shifts, the intrinsic alignment, the galaxy bias.
 A partial-invalidation bug - one sector's update path leaving a stale
 static another sector consumes - produces wrong data vectors only in
 MIXED update sequences, which the per-point checks never exercise.
@@ -240,17 +246,17 @@ difference and $C^{-1}$ the masked inverse covariance: the $\chi^2$ the
 Limber model would score against a data set generated with non-Limber
 galaxy-galaxy lensing. It also prints the contribution of each
 lens-source pair. The assertions are a dead-flag floor
-on $\Delta\chi^2$, that only galaxy-galaxy lensing entries change, a
-bit-identical round trip back to Limber, and, last, the
-frozen-reference check on the Limber evaluation.
+on $\Delta\chi^2$, a 5% band around the recorded $\Delta\chi^2$, that
+only galaxy-galaxy lensing entries change, a bit-identical round trip
+back to Limber, and, last, the frozen-reference check on the Limber
+evaluation.
 
 > [!NOTE]
-> The des_y3 version of this check also pins $\Delta\chi^2$ to a
-> measured value within 5%. Here that assertion is armed by the
-> constant `DCHI2_MEASURED` of the test file, which holds no value
-> yet: the test prints the $\Delta\chi^2$ it measures, and recording
-> that number in the constant switches the assertion on. The same
-> holds for the galaxy clustering check below.
+> Both non-Limber checks pin $\Delta\chi^2$ to the value recorded in the
+> constant `DCHI2_MEASURED` of the test file, within 5% (`DCHI2_RTOL`):
+> $\Delta\chi^2 = 0.012494$ for galaxy-galaxy lensing and
+> $\Delta\chi^2 = 7.12375$ for galaxy clustering, at the frozen 3x2pt
+> fiducial with NLA.
 
 ### The non-Limber galaxy clustering check (`test_nonlimber_gg.py`) <a name="nonlimber_gg"></a>
 
@@ -267,17 +273,17 @@ The test evaluates the frozen 3x2pt fiducial with the default, the
 other setting, and the default again in one process and reports
 $\Delta\chi^2 = \delta^T C^{-1} \delta$, with $\delta$ the non-Limber
 minus the Limber data vector, and the contribution of each lens bin.
-The assertions are a dead-flag floor on $\Delta\chi^2$, that only
-clustering entries change, a bit-identical round trip back to the
-default, and, last, the frozen-reference check on the default
-evaluation.
+The assertions are a dead-flag floor on $\Delta\chi^2$, a 5% band
+around the recorded $\Delta\chi^2$, that only clustering entries
+change, a bit-identical round trip back to the default, and, last, the
+frozen-reference check on the default evaluation.
 
 ### The photo-z convention checks (`test_photoz_conventions.py`) <a name="photoz_conventions"></a>
 
 The likelihood exposes two runtime knobs for how the n(z) table files
 become the smooth distributions the Limber integrals consume, both
-declared in the likelihood yamls and both defaulting to the
-historical behavior: `photoz_interpolation_type` (0 = cubic spline,
+declared in the likelihood yamls and both defaulting to 0, cosmolike's
+own default: `photoz_interpolation_type` (0 = cubic spline,
 1 = linear, 2+ = Steffen monotone, which cannot overshoot below zero
 around a sharp feature in the table) and `photoz_zmid_convention`
 (0 = the z column of the n(z) file holds Z_LOW left bin edges, so
@@ -294,8 +300,9 @@ $\Delta\chi^2 = \delta^T C^{-1} \delta$, with $\delta$ the
 data-vector difference and $C^{-1}$ the masked inverse covariance.
 The assertions are a dead-flag floor on each alternative (a stale
 n(z) cache would give exactly zero), the frozen-reference check on
-the default, and a bit-identical round trip back to the default (a
-cache that fails to rebuild on the way back would fail loudly).
+the default, and a round trip back to the default that reproduces the
+printed data vector (9 significant digits) entry for entry (a cache
+that fails to rebuild on the way back would fail loudly).
 
 ### The cold dark matter + baryon halo field (`test_neutrino_cb.py`) <a name="neutrino_cb"></a>
 
@@ -308,14 +315,14 @@ massive neutrinos) through the same interface as the likelihood. It checks:
 1. Changing only cb inputs leaves the diagnostic total-matter variance unchanged.
 2. With zero neutrino density and identical spectra, both variance fields agree exactly at a = 1, 0.8, 0.55 and 0.3.
 3. Both fields agree with independent Simpson quadrature at five masses from $10^{13}$ to $10^{15} M_\odot/h$, those four scale factors, and $\Omega_\nu h^2$ = 0.00083 and 0.00644, to $10^{-4}$.
-4. The cb counts increase and cluster bias decreases relative to a synthetic total-matter halo input. Non-halo galaxy and shear blocks stay unchanged. The comparison feeds total power and zero neutrino density to the halo inputs; there is no production field switch.
-5. Changing the neutrino density or cb spectrum invalidates the variance cache. Restoring the original inputs restores the full data vector bit for bit.
-6. The variance is identical at one and eight threads, including after changing the thread count in one process.
-7. Asking for cb variance without its spectrum stops with a message naming the missing input (tested in a child process).
+4. The cb counts increase and cluster bias decreases relative to a synthetic total-matter halo input. The galaxy clustering block stays bit-identical (4x2pt + N computes no shear blocks). The comparison feeds total power and zero neutrino density to the halo inputs; there is no production field switch.
+5. Changing the neutrino density or cb spectrum invalidates the variance cache. Restoring the original inputs restores the full data vector bit for bit. The variance recomputed at 1, 8 and again 4 OpenMP threads is identical.
+6. Asking for cb variance without its spectrum stops with a message naming the missing input (tested in a child process).
 
-The independent reference now integrates $P_{cb}(k,z)$ at each redshift
-and uses the resulting mass-dependent cb growth for concentration. Its
-non-halo growth convention remains the external DES convention.
+The independent reference integrates $P_{cb}(k,z)$ at each redshift
+and uses the resulting mass-dependent cb growth,
+$D_{cb}(M,z)=\sigma_{cb}(M,z)/\sigma_{cb}(M,0)$, in the concentration;
+its non-halo growth factor follows the external DES convention.
 
 ### Accuracy checks (`test_accuracy.py`, A1-A6) <a name="accuracy_checks"></a>
 
@@ -338,9 +345,9 @@ There is no pass/fail. The settings:
 | `k_per_logint` (CAMB) | 50 | k samples CAMB computes per logarithmic interval of the transfer functions |
 | `kmax` (CAMB) | 50 | highest k of CAMB's matter power spectrum; one physical cutoff with `kmax_boltzmann`, seen from the CAMB side |
 
-`accuracyboost` stays at 3: the examples warn that the integration
-tables of the donor project (desy1xplanck) broke down above it, and a
-breakdown would read as a large numerical error of the defaults.
+`accuracyboost` stays at 3: the likelihood files warn against values
+above 3, which have not been measured on the cluster combinations, and
+a breakdown would read as a large numerical error of the defaults.
 
 The numbers are those of the scale cuts in each example's mask, which
 hide the smallest scales, where the numerical error is largest.
@@ -359,15 +366,20 @@ To run the accuracy checks on their own:
 
 To run every other test while skipping these:
 
-    python -m pytest ./projects/des_cluster/tests --ignore ./projects/des_cluster/tests/data_vector/test_accuracy.py
+    python -m pytest ./projects/des_cluster/tests/data_vector --ignore ./projects/des_cluster/tests/data_vector/test_accuracy.py
 
 # Appendix <a name="appendix"></a>
 
 ## :interrobang: FAQ: Do the tests keep their own data? <a name="frozen_copy"></a>
 
-The tests read nothing from the live project: not `../data`, not the
-`EXAMPLE_EVALUATE` yaml files, and not the likelihood default yaml
-files. Instead, `frozen/` holds:
+Every test except `test_neutrino_cb.py` reads nothing from the live
+project: not the project's `data/` folder, not the `EXAMPLE_EVALUATE`
+yaml files, and not the likelihood default yaml files.
+`test_neutrino_cb.py` builds its state from the live
+`likelihood/combo_4x2pt_N.yaml` and `data/des_cluster_y6_4x2ptN.dataset`
+(with dummy data-vector, mask and covariance files) through
+`validation/compare_reference.py`, and does not check the manifest.
+For the other tests, `frozen/` holds:
 
 | `frozen/` entry | holds |
 |---|---|
@@ -381,33 +393,37 @@ written out, including the ones that normally come from
 `params_cluster.yaml` and the other default files, so editing those
 files cannot change what the tests evaluate.
 
-The files of `../data` that no example reads stay out of the copy
+The files of the project's `data/` folder that no example reads stay out of the copy
 (the all-ones mask of the DES Y3 placeholder data set, the baryon PCA
 inputs, and the table of observed redMaPPer counts; `DATA_IGNORE` in
 `generate_frozen_reference.py` lists them).
 
 `manifest_sha256.json` stores a SHA-256 hash (a fingerprint that
-changes when any byte changes) of every file under `frozen/`. The
-tests verify the manifest first and refuse to run when a file under
-`frozen/` was edited, naming the file.
+changes when any byte changes) of every file under `frozen/`. Every
+test except `test_neutrino_cb.py` verifies the manifest first and
+refuses to run when a file under `frozen/` was edited, naming the file.
 
-## :interrobang: FAQ: Why is the reference $\chi^2$ zero? <a name="synthetic_vectors"></a>
+## :interrobang: FAQ: Why is the reference $\chi^2$ near zero? <a name="synthetic_vectors"></a>
 
-Every test evaluates against a data vector that is the model itself
-at the test's own point, so every reference sits at the minimum of
-the $\chi^2$, at zero.
+Every reference test evaluates against a data vector that is, or is
+close to, the model at the test's own point: the galaxy-only
+references sit at $\chi^2 < 10^{-12}$, and the cluster ones at
+$\chi^2 = 0.151$ (`example1`) and $\chi^2 = 0.152$ (`example2`), near
+the minimum of the $\chi^2$.
 
 That is what a $\chi^2$ comparison needs. Away from the minimum the
 $\chi^2$ responds linearly to tiny numerical changes, and a harmless
-rounding-level shift reads as an alarming difference; at the minimum
-the response is quadratic, so the 0.2 limit of the drift checks and
-the accuracy numbers measure the numerics.
+rounding-level shift reads as an alarming difference; near the minimum
+the response is quadratic, so the $\Delta\chi^2 = 0.2$ limit of the
+drift checks and the accuracy numbers measure the numerics.
 
 The cluster combinations get such a vector from the project itself:
 the shipped data vector is synthetic. `scripts/make_synthetic_data.py`
 wrote the model, at the fiducial point of the examples (Table I of
 arXiv 2503.13631), into `data/des_cluster_y6.datavector`, and the
-frozen copy of that file serves `example1` and `example2`.
+frozen copy of that file serves `example1` and `example2`. That vector
+predates the halo model's cb variance at each redshift, so the present
+model scores the $\chi^2$ values above against it.
 
 The galaxy-only likelihoods do not: the data vector of the DES Y3
 placeholder is the real measurement, and the point of their examples
@@ -442,19 +458,20 @@ from the compiled interface and need several model builds to share
 cosmolike's caches. The cluster ladder keeps pytest's process; each
 galaxy-only test of that kind (`test_cache_consistency_tatt.py`,
 `test_nonlimber_ggl.py`, `test_nonlimber_gg.py`,
-`test_photoz_conventions.py`, `test_neutrino_cb.py`) restarts itself
+`test_photoz_conventions.py`) restarts itself
 in a process of its own, prints its report from there, and passes when that process
 exits cleanly (the decorator `own_process` of `cocoa_test_utils.py`).
-The commands above stay the same.
+`test_neutrino_cb.py` (4x2pt + N, without cobaya) also runs in a
+process of its own, because it sets cosmolike's C state by hand.
 
 ## :interrobang: FAQ: How can maintainers refresh the snapshot? <a name="refreeze"></a>
 
 A deliberate change to the data vectors, n(z), covariance, examples,
 or likelihood defaults requires a re-freeze.
 
-We assume users are in the Conda cocoa environment from a previous
-`conda activate cocoa` command, that the shell is bash, and that the
-current folder is the cocoa main folder `cocoa/Cocoa`.
+The steps below assume the Conda cocoa environment is active
+(`conda activate cocoa`), the shell is bash, and the current folder is
+the cocoa main folder `cocoa/Cocoa`.
 
 **Step :one:**: activate the private Python environment by sourcing
 the script `start_cocoa.sh`
@@ -477,10 +494,16 @@ away from the minimum.
 
 ## :interrobang: FAQ: What are the other folders under tests? <a name="other_folders"></a>
 
-pytest does not collect them (`pytest.ini`); each is run on its own:
+An unqualified pytest run collects only `data_vector/` (`testpaths` in
+`pytest.ini`), and `norecursedirs` keeps pytest out of `reference/`,
+`validation/` and `lighthouse_reference/`; run each on its own:
 
 | folder | holds |
 |---|---|
+| `covariance/` | the covariance sector of the tests ([guide](../covariance/README.md)); run it in its own invocation |
 | `reference/` | the independent Python reference model of the cluster observables and of the joint Gaussian covariance, with its own tests (`python -m pytest ./projects/des_cluster/tests/reference`) |
 | `validation/` | the C code against the Python reference (`compare_reference.py`), the accuracy-setting sweep (`knob_sweep.py`), and the timing scripts |
 | `lighthouse_reference/` | data vectors of the original cluster code (lighthouse), kept for comparison |
+
+`test_neutrino_cb.py` imports `validation/compare_reference.py` and the
+`reference/` modules `reference_cluster`, `ref_cosmology` and `ref_halo`.
