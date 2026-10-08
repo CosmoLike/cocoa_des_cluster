@@ -1,12 +1,20 @@
 """Shared harness for the des_cluster unit tests: the project's data
 bound to the shared Cocoa test machinery.
 
-The machinery itself (frozen-state verification, the chi2 pipeline,
-worker-subprocess isolation, the race check, and the terminal
-reports) lives in
-external_modules/code/cosmolike_core/cocoa_testing.py. This file
-carries what is des_cluster's alone - the examples table covering
-BOTH data sets of the project (examples 1-2: the two cluster
+The harness is the code every test uses to build a Cobaya model from a
+stored configuration, evaluate chi2 and compare it with a stored
+reference value. The machinery itself (frozen-state verification, the
+chi2 pipeline, worker-subprocess isolation, the race check, and the
+terminal reports) lives in
+external_modules/code/cosmolike_core/cocoa_testing.py. A worker
+subprocess is a separate Python process started for one evaluation, so
+the C globals of one configuration never meet another; the race check
+evaluates the fiducial point, nine other cosmologies and the fiducial
+point again in one process, and a change of the last chi2 reveals state
+leaking between evaluations or a race between OpenMP threads.
+
+This file carries what is des_cluster's alone: the examples table
+covering BOTH data sets of the project (examples 1-2: the two cluster
 combinations of arXiv 2503.13631, example1 = 4x2pt + N and
 example2 = 6x2pt + N, on the synthetic DES Y6-like data set;
 examples 3-4: the galaxy-only likelihoods, example3 = cosmic shear
@@ -14,9 +22,9 @@ and example4 = 3x2pt with its 2x2pt reduction, on the DES Y3
 placeholder data set), the TATT point and the generated data vectors
 of the galaxy-only examples, the high-accuracy settings of the
 accuracy checks, and the process isolation of the galaxy tests that
-build their models in process - and binds it to ONE
-cocoa_testing.CocoaTestHarness instance whose methods are
-re-exported under the historical names, so the test modules and
+build their models in process. It binds all of it to ONE
+cocoa_testing.CocoaTestHarness instance whose methods are re-exported
+here under the names the test modules use, so the test modules and
 generate_frozen_reference.py import everything from this module.
 
 The intrinsic-alignment model of the cluster examples is NLA: the
@@ -25,11 +33,14 @@ dataset and no TATT test. The galaxy-only likelihoods run both
 models, so examples 3-4 carry both variants. has_tatt() tells the
 two kinds apart.
 
-The frozen-state doctrine is unchanged: everything a test evaluates
-lives under tests/frozen/, pinned byte for byte by
-tests/manifest_sha256.json and verified before any model is built;
-refreshing the frozen state stays a deliberate maintainer action
-(generate_frozen_reference.py --overwrite).
+The frozen-state rule: everything a test evaluates (configurations,
+data files, reference chi2 values) lives under tests/frozen/, a
+snapshot taken by generate_frozen_reference.py, so a change of the live
+project cannot change what a test compares. tests/manifest_sha256.json
+pins every snapshot file byte for byte (a SHA-256 digest is a
+fingerprint of a file's bytes), and the digests are verified before any
+model is built; refreshing the frozen state is a deliberate maintainer
+action (generate_frozen_reference.py --overwrite).
 """
 
 import os
@@ -60,13 +71,17 @@ import cocoa_testing as _cct
 # ---- the project data ------------------------------------------------------
 
 # The cluster examples' shipped data_file is SYNTHETIC: the joint data
-# vector data/des_cluster_y6.datavector is the model itself at the
-# examples' fiducial point (scripts/make_synthetic_data.py, Table I of
-# arXiv 2503.13631), so the fiducial sits AT the chi2 minimum
-# (chi2 ~ 0), where the chi2 responds quadratically to tiny theory
-# changes and a chi2 comparison measures the numerics. Examples 1-2
-# therefore evaluate against their own frozen data_file and carry no
-# "nla_dataset" key (the harness then keeps the shipped data_file).
+# vector data/des_cluster_y6.datavector is the model at the examples'
+# fiducial point (scripts/make_synthetic_data.py, Table I of
+# arXiv 2503.13631) without the redshift-by-redshift cold-matter halo
+# variance sigma_cb(M, z) of the present model (README, "Cluster
+# options"); the present model differs from it by chi2 = 0.1507
+# (example1) and 0.1518 (example2) (tests/frozen/reference_chi2.json).
+# The fiducial therefore sits close to the chi2 minimum, where the chi2
+# responds quadratically to tiny theory changes and a chi2 comparison
+# measures the numerics. Examples 1-2 therefore evaluate against their own
+# frozen data_file and carry no "nla_dataset" key (the harness then keeps
+# the shipped data_file).
 
 # The galaxy-only examples' shipped data_file is REAL data (the DES-Y3
 # measurement, the placeholder data set copied from the project
@@ -108,9 +123,9 @@ TATT_POINT = {
 # in cocoa_testing).
 HIGH_ACCURACY_LIKELIHOOD = {
     # boost 3, not higher: the examples warn that the integration
-    # tables of the donor project (desy1xplanck) broke down above 3,
-    # and a breakdown would read as a huge "numerical error" of the
-    # defaults
+    # tables of the project this one was created from (desy1xplanck)
+    # broke down above 3, and a breakdown would read as a huge
+    # "numerical error" of the defaults
     "accuracyboost": 3.0,       # default 1.0
     "internal_accuracyboost": 2.0, # default 1.0 (denser convolution grid)
     # the cluster quadratures and the halo-model mass integrals read
@@ -201,7 +216,14 @@ def has_tatt(example):
 
 # ---- project-independent constants ------------------------------------------
 
-# These are identical in every project and live in the core module.
+# These are identical in every project and live in the core module, where
+# each carries the reason for its value: REQUIRED_OMP_THREADS = "4", the
+# thread count of the race tests and workers (one thread could not show a
+# race); CHI2_TOLERANCE = 0.2, the largest |chi2(now) - chi2(reference)| a
+# reference test accepts; RACE_TOLERANCE = 1e-4, the float noise allowed
+# between two evaluations of the same point; RACE_PERTURBATIONS, the nine
+# cosmologies of the race test; HIGH_ACCURACY_CAMB_EXTRA_ARGS, the CAMB
+# side of the accuracy checks.
 REQUIRED_OMP_THREADS = _cct.REQUIRED_OMP_THREADS
 CHI2_TOLERANCE = _cct.CHI2_TOLERANCE
 RACE_TOLERANCE = _cct.RACE_TOLERANCE
@@ -211,7 +233,8 @@ HIGH_ACCURACY_CAMB_EXTRA_ARGS = _cct.HIGH_ACCURACY_CAMB_EXTRA_ARGS
 # ---- the harness -----------------------------------------------------------
 
 # ONE instance binds the shared machinery to this project's data;
-# everything below re-exports its surface under the historical names.
+# everything below re-exports its functions under the names the test
+# modules import.
 # The constructor also takes the tables of checks this project does
 # not run (the one-knob-at-a-time scan, the CFASTPT-vs-FASTPT
 # comparison); they are empty here, so a later project test that
@@ -310,8 +333,29 @@ def own_process(test_file):
     import functools
 
     def decorator(test_method):
+        """Return the replacement of test_method that runs it in a child process.
+
+        Arguments:
+          test_method = the unittest test method being decorated.
+
+        Returns:
+          wrapper, which keeps test_method's name and docstring.
+        """
         @functools.wraps(test_method)
         def wrapper(self):
+            """Run the test body here in the child, else start the child and check it.
+
+            functools.wraps replaces this docstring by the test method's.
+
+            Arguments:
+              self = the unittest.TestCase instance of the test.
+
+            Returns:
+              the body's result in the child process; nothing in the parent.
+
+            Raises:
+              AssertionError in the parent when the child exits nonzero.
+            """
             # .get returns None when the variable is absent: only the
             # child process, which carries the flag, runs the body
             if os.environ.get(OWN_PROCESS_FLAG) == "1":

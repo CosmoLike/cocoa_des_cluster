@@ -17,7 +17,9 @@ the tests consume each piece):
     baseline mask, n(z)); DATA_IGNORE below lists what stays out.
     Plus the generated NLA and TATT data vectors of the galaxy-only
     examples and their dataset descriptors
-    (cocoa_test_utils.SYNTHETIC_VECTORS).
+    (cocoa_test_utils.SYNTHETIC_VECTORS). NLA (nonlinear alignment)
+    and TATT (tidal alignment and tidal torquing) are the two
+    intrinsic-alignment models of the source galaxies.
   - frozen/EXAMPLE_EVALUATE{1,2,3,4}.yaml: snapshots of the current
     examples, kept for humans to diff (the tests never load them).
   - frozen/frozen_config_<example>.py: for each configuration of
@@ -33,10 +35,12 @@ the tests consume each piece):
     4x2pt + N, example2 = 6x2pt + N, example3 = cosmic shear,
     example4 = 3x2pt, example4_2x2pt = 2x2pt) and one TATT value per
     galaxy-only configuration (the cluster lensing code has no
-    TATT). Every one sits near zero: the cluster examples' shipped
-    data vector is the model at their fiducial point, and the
-    galaxy-only examples evaluate against the vectors generated
-    here.
+    TATT). Every one sits near zero: the galaxy-only examples
+    evaluate against the vectors generated here (chi2 ~ 1e-13), and
+    the cluster examples' shipped data vector is the model at their
+    fiducial point without the redshift-by-redshift cold-matter halo
+    variance sigma_cb(M, z) of the present model (chi2 = 0.15 for
+    both).
   - manifest_sha256.json: the SHA-256 pin of every frozen file.
 
 Usage (from the Cocoa/ folder, cocoa environment active,
@@ -82,8 +86,11 @@ FROZEN_DATA_RELPATH = "./projects/des_cluster/tests/frozen/data"
 #                            the two keys only with a baryon option
 #                            switched on (it refuses them with
 #                            clusters), and no example switches one on
-#   y3_redmapper_counts.txt  the observed DES-Y3 counts, an input of
-#                            the covariance script, not of the model
+#   y3_redmapper_counts.txt  the observed DES-Y3 counts: not read by the
+#                            model; make_synthetic_data.py compares the
+#                            model counts with them and
+#                            make_cluster_mask.py reads them for an
+#                            optional w_cc cut
 # A new file in ../data is frozen unless it is added here. The two
 # covariances (des_cluster_y6_cov.npy, des_y3_cov_unblinded_final.txt) are
 # stored with Git LFS; ../.gitattributes matches them by file name, so
@@ -365,9 +372,22 @@ def main():
     vector: their shipped one already is the model at the fiducial
     point (see cocoa_test_utils).
 
+    Arguments:
+      none; the flags come from sys.argv: --overwrite, or the worker
+      modes --freeze-one <example> --stamp <UTC time> and
+      --vector-one <dataset name>.
+
     Returns:
       0 on success, 1 when --overwrite was not given (the usage text
       and the refusal reason are printed).
+
+    Raises:
+      RuntimeError when a worker subprocess exits with a nonzero code.
+
+    Side effects:
+      deletes and recreates tests/frozen/, writes the files listed in
+      the module docstring, reference_chi2.json and
+      manifest_sha256.json.
     """
     # `in` scans the argument list for the flag; .index returns the
     # position of its first occurrence, so [index + 1] is the value

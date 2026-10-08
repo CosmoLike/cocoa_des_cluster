@@ -47,10 +47,13 @@ layouts, so a model and the data go to the plotting functions
 3x2pt blocks of 6x2pt + N (xi, gamma_t, w_theta) come back in the
 layouts of the galaxy plotting functions (cnu.plot_xi, ...).
 
-Every wrapper accepts the same accuracy arguments and applies the
-house folds: CLAccuracyBoost multiplies by AccuracyBoost, the
-integration accuracy grows as |3 (CLAccuracyBoost - 1)|, and the C_ell
-table reaches lmax + 20000 (CLAccuracyBoost - 1).
+Every wrapper accepts the same accuracy arguments and combines them as
+the other Cocoa notebooks do: CLAccuracyBoost is multiplied by
+AccuracyBoost, the integration accuracy grows by |3 (CLAccuracyBoost - 1)|,
+and the C_ell table reaches lmax + 20000 (CLAccuracyBoost - 1).
+
+Run the notebooks after `source start_cocoa.sh`, which sets ROOTDIR (the
+cocoa/Cocoa folder) and puts interface/ on the Python path.
 """
 
 import os
@@ -61,7 +64,8 @@ from getdist import IniFile
 
 # the shared notebook utilities live in cosmolike_core; the compiled
 # interface is on the path already (each project's interface/
-# directory is part of the Cocoa PYTHONPATH)
+# directory is part of the Cocoa PYTHONPATH); ROOTDIR is the cocoa/Cocoa
+# folder, set by start_cocoa.sh
 sys.path.insert(0, os.environ["ROOTDIR"] + "/external_modules/code/cosmolike_core")
 import cosmolike_notebook_utils as cnu
 import cosmolike_des_cluster_interface as ci
@@ -195,9 +199,6 @@ _CONFIG = {
     "adopt_limber_gg": 0,
     "include_HOD_GX": 0,
     "include_halo_IA": 0,
-    # halo field of sigma(M) and dn/dM: 0 = total matter, 1 = cold dark
-    # matter + baryons (the cluster yamls and the shipped data; the P_cb
-    # of the CAMB run is then handed over too)
     # cluster model (structs_cluster.h; the likelihood yaml documents
     # every switch)
     "cluster_kernel_mode": 0,       # 0 = volume, 1 = abundance weighted
@@ -246,16 +247,36 @@ def configure(**overrides):
 
 
 def _ini_list(ini, key, tp):
-    """Comma- (or space-) separated dataset entry as a list of tp."""
+    """Read one list-valued .dataset entry, e.g. `richness_edges = 20, 30, 45`.
+
+    Commas become spaces, the text is split at whitespace, and the list
+    comprehension converts each piece with tp (the same helper as in
+    likelihood/_cosmolike_prototype_base.py).
+
+    Arguments:
+      ini = the getdist IniFile holding the .dataset entries
+      key = the entry name, a string
+      tp  = the conversion applied to each piece (float or int)
+
+    Returns:
+      a Python list of tp values, in file order.
+    """
     return [tp(x) for x in ini.string(key).replace(",", " ").split()]
 
 
 def _vector(x):
     """A fresh float64 copy of x for the compiled interface.
 
-    carma borrows the buffer of a numpy array handed to an armadillo
-    argument and refuses one it cannot own (a slice such as z[::2], a
-    read-only array); a copy is always accepted.
+    carma (the C++ layer that turns numpy arrays into the Armadillo
+    vectors of the compiled code) borrows the buffer of a numpy array
+    handed to an armadillo argument and refuses one it cannot own (a
+    slice such as z[::2], a read-only array); a copy is always accepted.
+
+    Arguments:
+      x = a number sequence or numpy array
+
+    Returns:
+      a new, contiguous float64 numpy array with the values of x.
     """
     return np.array(x, dtype=np.float64)
 
@@ -405,7 +426,12 @@ def _camb_cosmology(**kwargs):
     Returns:
       its tuple (log10k_2D, z_2D, lnPL, lnPNL, G, z_G, z_1D, chi,
       omegan2, lnPL_cb).
+
+    Side effects:
+      replaces the stored run (_CAMB_CACHE) when any argument changed.
     """
+    # the key lists the arguments as (name, value) pairs sorted by name, so
+    # the same call written in another argument order gives the same key
     key = tuple(sorted(kwargs.items()))
     if _CAMB_CACHE["key"] != key:
         _CAMB_CACHE["value"] = cnu.get_camb_cosmology(**kwargs)
@@ -467,9 +493,9 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
     # likelihood does before every interface call
     ci.set_omp_threads(int(os.environ.get("OMP_NUM_THREADS", 1)))
 
-    # the house accuracy folds: the overall boost multiplies the
-    # cosmolike boost, and the integration accuracy and the C_ell
-    # table length grow with it
+    # the accuracy combination shared with the other Cocoa notebooks: the
+    # overall boost multiplies the cosmolike boost, and the integration
+    # accuracy and the C_ell table length grow with it
     CLAccuracyBoost = CLAccuracyBoost * AccuracyBoost
     CLIntegrationAccuracy = max(
         0, CLIntegrationAccuracy + abs(3*(CLAccuracyBoost - 1.0)))
@@ -693,6 +719,8 @@ def w_cg(selection_bias=False, **kwargs):
         limber=int(_CONFIG["cluster_adopt_limber_cg"])))
     if selection_bias:
         B = np.array(ci.get_cluster_selection_factor())
+        # B.T is (theta, cluster z bin); the None axes let it broadcast over
+        # the richness axis (1) and the lens axis (3) of wcg
         wcg = wcg * B.T[:, None, :, None]
     return (np.array(ci.get_binning_real_space()), wcg)
 
@@ -959,10 +987,14 @@ def get_datavector(**kwargs):
 def get_chi2(**kwargs):
     """chi2 of the masked theory vector against the loaded data.
 
-    Requires init_cosmolike(with_data=True). Keyword arguments are
-    those of get_datavector. The synthetic data vector is the
-    likelihood's model at the module fiducial, so chi2 is small there
-    (not zero: this module's CAMB run is not the cobaya one).
+    Requires init_cosmolike(with_data=True). The synthetic data vector
+    is the likelihood's model at the module fiducial, so chi2 is small
+    there (not zero: this module's CAMB run is not the cobaya one).
+    chi2 = (m - d)^T C^-1 (m - d) over the entries the mask keeps.
+
+    Arguments:
+      kwargs = cosmology, accuracy and nuisance arguments of _state, as
+               for get_datavector (binning arguments are not accepted).
 
     Returns:
       float chi2.
@@ -996,7 +1028,9 @@ def cluster_blocks(vector):
     vector = np.asarray(vector, dtype=np.float64)
     sizes = np.array(ci.compute_data_vector_cluster_sizes()).astype(int)
     starts = np.array(ci.compute_data_vector_cluster_starts()).astype(int)
-    # block order of the joint vector: ss, gs, gg, cg, N, cc, cs
+    # block order of the joint vector: ss, gs, gg, cg, N, cc, cs. The dict
+    # comprehension maps each block name (enumerate gives its index i) to
+    # the slice of vector that starts at starts[i] and holds sizes[i] entries.
     block = {name: vector[starts[i]:starts[i] + sizes[i]]
              for i, name in enumerate(("ss", "gs", "gg", "cg", "N", "cc", "cs"))}
 
@@ -1016,6 +1050,8 @@ def cluster_blocks(vector):
     # cs block: [(cluster z, source) pair][richness bin][theta]
     cs = np.full((ntheta, nrichness, ncluster, nsource), np.nan)
     rows = block["cs"].reshape(len(cs_pairs), nrichness, ntheta)
+    # n counts the pairs; (ni, ns_) = (cluster z bin, source bin) of pair n;
+    # rows[n].T turns [richness][theta] into [theta][richness]
     for n, (ni, ns_) in enumerate(cs_pairs):
         cs[:, :, ni, ns_] = rows[n].T
 

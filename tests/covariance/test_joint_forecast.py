@@ -1,8 +1,17 @@
 """Check the full cluster forecast layout on inexpensive physical grids.
 
+The joint 6x2pt + N forecast (covariance/des_cluster_joint_covariance.py)
+returns the Gaussian (G), super-sample (SSC) and connected non-Gaussian
+(cNG) parts of the covariance of the joint vector ss, gs, gg, cg, N, cc,
+cs, and their total. With 5 angular bins instead of 20 the vector has
+140 two-point rows x 5 bins + 12 counts = 712 entries.
+
 These grids test assembly, normalization, archive contents and deterministic
 threading. They do not establish numerical convergence for DES inference.
 The independent full-resolution component comparison is separate.
+
+Run from the cocoa/Cocoa folder: python -m pytest
+projects/des_cluster/tests/covariance/test_joint_forecast.py
 """
 
 import json
@@ -23,7 +32,18 @@ from cosmolike_notebook_utils.covariance.transform_cluster import localize_covar
 
 
 def test_joint_model_rejects_partial_gaussian_extensions():
-    """Galaxy-only physics must not silently label a joint cluster forecast."""
+    """Galaxy-only physics must not silently label a joint cluster forecast.
+
+    The joint forecast supports only Limber spectra without intrinsic
+    alignment; asking for non-Limber spectra or NLA must raise ValueError
+    with a message naming the joint selected-cluster forecast.
+
+    Arguments:
+      none.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+    """
     for gaussian in ({"nonlimber": True, "ia": "none"},
                      {"nonlimber": False, "ia": "NLA", "A1": 0.6}):
         with pytest.raises(ValueError, match="joint selected-cluster"):
@@ -31,7 +51,37 @@ def test_joint_model_rejects_partial_gaussian_extensions():
 
 
 def test_joint_forecast_threads_localization_and_archive(tmp_path):
-    """All components repeat and Y transforms every count and two-point cross."""
+    """All components repeat and Y transforms every count and two-point cross.
+
+    Steps, each a set of assertions:
+      1. Without the Y localization, the notebook route and the
+         command-line route (backend=ci.covariance) agree exactly, and
+         every component repeats bit for bit at 1 and 8 OpenMP threads.
+      2. The counts have Gaussian (Poisson) variance equal to their mean,
+         zero Gaussian covariance with the two-point entries, all-zero cNG
+         rows, and a nonzero SSC covariance with the two-point entries; the
+         forecast's mean counts match the likelihood's N_cluster_tomo to
+         2e-6 (computed along a different integration route).
+      3. With the Y localization, every component equals
+         localize_covariance applied to the untransformed one, bit for
+         bit; the 48 last-bin rows are zero, leaving 712 - 48 = 664 valid
+         entries; the mean vector transforms as T gamma_t; and the total
+         restricted to the valid entries is positive definite (Cholesky of
+         its correlation matrix).
+      4. The saved .npz archive reads back without pickle (no executable
+         Python objects) and records the settings and the omitted terms.
+
+    Arguments:
+      tmp_path = pytest's built-in fixture: a fresh temporary directory
+                 (a pathlib.Path) for the archive.
+
+    Returns:
+      nothing; a failed assertion fails the test.
+
+    Side effects:
+      runs CAMB and replaces the state and OpenMP thread count of the
+      compiled library.
+    """
     settings = survey.configuration(accuracy_boost=1, ytransform=False)
     settings.update({
         'theta_edges_arcmin': np.geomspace(2.5, 250.0, 6),
@@ -72,6 +122,8 @@ def test_joint_forecast_threads_localization_and_archive(tmp_path):
     np.testing.assert_array_equal(result['gaussian'][np.ix_(counts, spectra)], 0.0)
     np.testing.assert_array_equal(result['cng'][counts], 0.0)
     assert np.any(result['ssc'][np.ix_(counts, spectra)] != 0.0)
+    # N_cluster_tomo returns [richness, cluster z]; .T.ravel() lists it in
+    # the vector order, cluster z bin then richness bin (richness fastest)
     np.testing.assert_allclose(result['mean_counts'],
                                np.asarray(ci.N_cluster_tomo()).T.ravel(), rtol=2.e-6)
 
@@ -90,6 +142,8 @@ def test_joint_forecast_threads_localization_and_archive(tmp_path):
     for name in ('gaussian', 'ssc', 'cng'):
         expected = localize_covariance(interface=ci, covariance=result[name],
                                         indices=positions, operator=operator)
+        # rebuild the matrix from its upper triangle (diagonal included) and
+        # the mirror of the strict upper triangle, so it is exactly symmetric
         expected = np.triu(expected)+np.triu(expected, k=1).T
         np.testing.assert_array_equal(localized[name].view(np.uint64),
                                       expected.view(np.uint64))

@@ -10,14 +10,23 @@ the joint Gaussian covariance
     delta chi2 = (d_setting - d_high)^T C^-1 (d_setting - d_high)
 
 on two masks: the production CL+3x2pt mask and the most aggressive
-positive-definite mask (small scales visible, SKILL.md "Accuracy tests
-must see the small scales"). The cosmolike time of one full evaluation
-(cosmology tables rebuilt) is reported next to it. Target: the fastest
-setting with delta chi2 < 0.2 (Vivian's whole-code budget).
+positive-definite mask (small scales visible: a scale-cut mask hides the
+scales where numerical errors are largest, so a sweep scored only under it
+would rate the settings too well). The cosmolike time of one full
+evaluation (cosmology tables rebuilt) is reported next to it. Target: the
+fastest setting with delta chi2 < 0.2, the accuracy budget of the whole
+code.
+
+The reference tables come from the cache of compare_reference.py (its
+--cache-dir; run that script first). Two environment variables restrict a
+run: KNOB_SWEEP_ONLY = comma-separated labels of SETTINGS to run (the
+"high" setting is always needed for the scores), KNOB_SWEEP_PROBE = the
+probe name passed to the library (default 4x2pt_N).
 
 Usage (cocoa environment active, from Cocoa/):
     OMP_NUM_THREADS=4 python projects/des_cluster/tests/validation/knob_sweep.py \\
-        --cache-dir <compare_reference cache> --cov projects/des_cluster/data/des_cluster_y6_cov.npy
+        --cache-dir <compare_reference cache> \\
+        --cov projects/des_cluster/data/des_cluster_y6_cov.npy
 """
 
 import argparse
@@ -32,7 +41,10 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-# (label, accuracyboost, integration_accuracy, lmax)
+# (label, accuracyboost, integration_accuracy, lmax). "high" is the
+# reference every other setting is scored against; "default" is the
+# likelihood default of the sweep's base configuration; each other row
+# moves one knob ("hdi" = integration_accuracy).
 SETTINGS = [
     ("high",           2.0, 2, 100000),
     ("default",        1.0, 0,  75000),
@@ -46,7 +58,28 @@ SETTINGS = [
 
 def child(label, boost, hdi, lmax, cache_dir, out, threads):
     """One setting: init, feed the reference cosmology, time one full
-    evaluation, write the joint data vector."""
+    evaluation, write the joint data vector.
+
+    Runs in a child process. The library is initialized with
+    compare_reference.init_c at the setting's accuracy, receives the
+    matched reference's cosmology tables and the fiducial nuisance
+    parameters, and computes the full joint vector under an all-ones mask.
+    A second evaluation after a small change of every ln P table
+    (lnP_shift = 1e-4) times the refill of every table.
+
+    Arguments:
+      label     = the setting's label (names the work folder).
+      boost     = accuracyboost.
+      hdi       = integration_accuracy.
+      lmax      = lmax of the C_ell tables.
+      cache_dir = the compare_reference cache folder.
+      out       = output .npy path of the data vector.
+      threads   = OpenMP threads of the library.
+
+    Returns:
+      nothing; writes out (the vector) and out + ".json" (the two timings
+      in seconds, and the block sizes and starts).
+    """
     import compare_reference as cr
     cr.PROBE = os.environ.get("KNOB_SWEEP_PROBE", cr.PROBE)
     cfg = cr.load_config()
@@ -84,9 +117,21 @@ def child(label, boost, hdi, lmax, cache_dir, out, threads):
 def row_pd_mask(cr, C, prod, cfg, layout):
     """Small scales visible: re-admit the masked theta bins of each cluster
     row (block, pair, richness) as a group while the correlation matrix of
-    the kept set stays positive definite (smallest eigenvalue >= the skill's
-    threshold); the last theta bin of every cs row stays masked (the Y
-    transform's null row). One eigen-decomposition per row, not per point."""
+    the kept set stays positive definite (smallest eigenvalue >=
+    compare_reference.MIN_CORR_EIG = 1e-4); the last theta bin of every cs
+    row stays masked (the Y transform's null row: zero by construction).
+    One eigen-decomposition per row, not per point.
+
+    Arguments:
+      cr     = the compare_reference module.
+      C      = joint covariance matrix.
+      prod   = production 0/1 mask.
+      cfg    = compare_reference.load_config() output.
+      layout = dict with the block "sizes" and "starts" of the joint vector.
+
+    Returns:
+      the widened 0/1 mask.
+    """
     ds = cfg["dataset"]
     nt = int(ds["n_theta"])
     sizes, starts = layout["sizes"], layout["starts"]
@@ -110,6 +155,20 @@ def row_pd_mask(cr, C, prod, cfg, layout):
 
 
 def read_cov(path, n):
+    """Read the joint covariance from a .npy packed triangle or a text file.
+
+    The .npy file holds the upper triangle with the diagonal, row by row:
+    np.triu_indices(n) lists those (row, column) positions in the same
+    order, and writing through cov.T (a transposed view of cov) copies them
+    into the lower triangle. A text file holds "i j value" lines.
+
+    Arguments:
+      path = covariance file path.
+      n    = data-vector length.
+
+    Returns:
+      the full symmetric [n, n] covariance.
+    """
     cov = np.zeros((n, n))
     if path.endswith(".npy"):
         # the packed upper triangle, row by row (scripts/make_synthetic_data.py)
@@ -125,6 +184,15 @@ def read_cov(path, n):
 
 
 def main():
+    """Run every setting in a child process, then print the delta chi2 table.
+
+    Arguments:
+      none; reads the command line (and, with --child, acts as one child).
+
+    Returns:
+      nothing; prints one row per setting: delta chi2 under the production
+      and the widened mask, and the first and refill times.
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache-dir", required=True)
     ap.add_argument("--cov", required=True, help="joint covariance (.npy packed upper triangle, or text i j cov)")
@@ -142,6 +210,7 @@ def main():
     outdir = os.path.join(a.cache_dir, "knob_sweep")
     os.makedirs(outdir, exist_ok=True)
     dvs, times = {}, {}
+    # the settings whose label is listed in KNOB_SWEEP_ONLY (all when unset)
     only = os.environ.get("KNOB_SWEEP_ONLY")
     settings = [x for x in SETTINGS if (not only) or x[0] in only.split(",")]
     for label, boost, hdi, lmax in settings:
@@ -159,6 +228,7 @@ def main():
     aggressive = row_pd_mask(cr, C, prod, cfg, times["high"])
     print("%-14s %12s %12s %10s %10s" % ("setting", "dchi2 prod", "dchi2 aggr",
                                          "t first", "t refill"))
+    # label, *_ keeps the first element of each setting and discards the rest
     for label, *_ in settings:
         d = dvs[label] - dvs["high"]
         c_prod, _ = cr.chi2(d, C, prod == 1)

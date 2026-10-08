@@ -7,6 +7,11 @@ Run from Cocoa/ (cocoa environment, start_cocoa.sh sourced):
 One CAMB run is shared by the whole module (about 1-2 minutes in total).
 Convergence tests compare the default quadratures with finer ones; the
 counts are compared with the DES Y3 catalog totals as a printout only.
+
+The reference itself is checked against independent evaluations: scipy
+quad integrals, scipy and mpmath Legendre functions, closed forms of
+power laws, and finer quadratures. pytest collects every function whose
+name starts with test_; the -s option shows their printouts.
 """
 
 import os
@@ -32,13 +37,30 @@ from ref_covariance import band_matrices                          # noqa: E402
 
 @pytest.fixture(scope="module")
 def ref():
+    """The reference at the Table I fiducial with its real-space statistics.
+
+    A pytest fixture: a test that names ref as an argument receives this
+    object, and scope="module" builds it once for all the tests of this
+    file (one CAMB run).
+
+    Returns:
+      a ClusterReference with real_space() already computed.
+    """
     r = ClusterReference()
     r.real_space()
     return r
 
 
 def scaled_diff(a, b, axis=-1):
-    """max |a - b| / max |b| along `axis` (per spectrum), maximized over the rest."""
+    """max |a - b| / max |b| along `axis` (per spectrum), maximized over the rest.
+
+    Arguments:
+      a, b = arrays of one shape; b is the reference.
+      axis = the axis along which one spectrum or statistic runs.
+
+    Returns:
+      a float.
+    """
     return float(np.max(np.max(np.abs(a - b), axis=axis) / np.max(np.abs(b), axis=axis)))
 
 
@@ -46,6 +68,14 @@ def scaled_diff(a, b, axis=-1):
 # halo model conventions
 # ----------------------------------------------------------------------
 def test_tinker_alpha_normalization():
+    """The normalized Tinker amplitude alpha(a) of halo.c and its consistency relation.
+
+    alpha(a) is fixed by int b(nu) f(nu) dnu = 1 (matter is unbiased with
+    respect to itself). Checked: the values 0.3684 at z = 0 and 0.2520 at
+    z >= 3 (a = 0.25) quoted in halo.c, the relation itself with an
+    independent scipy quad over panels in nu at four scale factors (to
+    1e-8), and the tabulated alpha against its exact solution (to 1e-9).
+    """
     # the HMF_ALPHA_NORMALIZED amplitude (halo.c's fnu):
     # halo.c header: alpha = 0.3684 at z = 0, 0.2520 for z >= 3
     assert abs(tinker_alpha(1.0) - 0.3684) < 1e-4
@@ -63,6 +93,17 @@ def test_tinker_alpha_normalization():
 
 
 def test_hmf_alpha_modes(ref):
+    """Both Tinker amplitude modes share the mass-function shape.
+
+    Switching the mode changes dn/dlnM by alpha(a)/0.368 at every mass
+    (a capped at 0.25, z = 3), and that ratio matches the values quoted in
+    structs_cluster.h at z = 0.2 ... 0.6 to 5e-4. The test switches the
+    mode on the shared fixture object and restores it in the finally block,
+    which runs even when an assertion fails.
+
+    Arguments:
+      ref = the module fixture.
+    """
     # default = HMF_ALPHA_FIXED (alpha = 0.368 at every z, DES / lighthouse)
     assert ref.settings["hmf_alpha_mode"] == HMF_ALPHA_FIXED
     assert ref.halo.hmf_alpha_mode == HMF_ALPHA_FIXED
@@ -87,12 +128,31 @@ def test_hmf_alpha_modes(ref):
 
 
 def test_sigma2_table_and_slope(ref):
+    """The sigma^2(M) table and its slope against direct integration.
+
+    sigma^2(M) = int dlnk k^3 P_cb(k)/(2 pi^2) W(kR)^2 at z = 0, with the
+    top-hat window W(x) = 3 (sin x - x cos x)/x^3 and R = (3M/(4 pi rho))^(1/3)
+    for the cold dark matter + baryon spectrum, integrated with scipy quad
+    over 40 panels in ln k between 1e-6 and 1e4 h/Mpc (to 2e-6), and
+    dln sigma^2/dlnM against a central finite difference (to 1e-5).
+
+    Arguments:
+      ref = the module fixture.
+    """
     sig = ref.halo.sig
     cosmo = ref.cosmo
     for M in (3.3e12, 2.2e14, 7.0e15):
         R = (3 * M / (4 * np.pi * sig.rho)) ** (1 / 3)
 
         def f(lnk):
+            """Integrand of sigma^2 in ln k: k^3 P_cb(k)/(2 pi^2) W(kR)^2.
+
+            Arguments:
+              lnk = ln of the wavenumber in h/Mpc, a float.
+
+            Returns:
+              a float.
+            """
             k = np.exp(lnk)
             x = k * R
             W = 3 * (np.sin(x) - x * np.cos(x)) / x**3
@@ -111,6 +171,17 @@ def test_sigma2_table_and_slope(ref):
 # MOR and mass integrals
 # ----------------------------------------------------------------------
 def test_p_lambda_erf_vs_quad(ref):
+    """P(richness bin | M, z) from the error function against direct quadrature.
+
+    The lognormal richness density integrated over each richness bin with
+    scipy quad must equal the closed erf form to 1e-10 at 12 random (M, z)
+    (fixed seed). The MOR variance adds its Poisson term only when the
+    mean <ln lambda> is positive: at M = 1e11 M_sun/h (mean below zero) the
+    scatter equals sigma_int exactly.
+
+    Arguments:
+      ref = the module fixture.
+    """
     cl = ref.cluster
     rng = np.random.default_rng(1)
     for _ in range(12):
@@ -130,6 +201,14 @@ def test_p_lambda_erf_vs_quad(ref):
 
 
 def test_mass_integral_convergence(ref):
+    """Finer mass quadrature leaves n_A, b_A and P^1h unchanged.
+
+    Panels of 0.1 in ln M with 12 nodes against the default 0.25 with 8:
+    n_A and b_A agree to 1e-8, the one-halo power to 5e-5.
+
+    Arguments:
+      ref = the module fixture (its CAMB run is reused).
+    """
     z = np.linspace(0.12, 0.75, 43)
     fine = ClusterReference(settings=dict(mass_panel_width=0.1, mass_order=12), cosmo=ref.cosmo)
     n0, b0 = ref.nA_bA(z)
@@ -142,6 +221,14 @@ def test_mass_integral_convergence(ref):
 
 
 def test_mass_range(ref):
+    """The default mass range [1e12, 1e16] M_sun/h holds all the counts.
+
+    A wider and a narrower range change the counts by less than 1e-6
+    (n_A and b_A changes are printed).
+
+    Arguments:
+      ref = the module fixture (its CAMB run is reused).
+    """
     N0 = ref.counts()
     z = np.linspace(0.12, 0.75, 22)
     n0, b0 = ref.nA_bA(z)
@@ -155,6 +242,17 @@ def test_mass_range(ref):
 
 
 def test_counts_and_kernel_quadrature(ref):
+    """Count and kernel quadratures are converged and normalized.
+
+    Finer redshift panels change the counts by less than 1e-9; in both
+    kernel modes every normalized kernel q integrates to 1 over its support
+    (trapezoid rule on 40001 points, to 1e-6), and the magnification
+    efficiency g of each kernel tends to 1 next to the observer (z = 1e-4,
+    to 1e-3), as a lensing efficiency of a normalized distribution must.
+
+    Arguments:
+      ref = the module fixture.
+    """
     cl = ref.cluster
     N0 = cl.counts()
     N1 = cl.counts(z_panel=0.002, order=12)
@@ -171,6 +269,14 @@ def test_counts_and_kernel_quadrature(ref):
 
 
 def test_counts_vs_y3_printout(ref):
+    """Print the counts next to the DES Y3 redMaPPer totals (no assertion).
+
+    The catalog totals 5632, 6308 and 4551 per redshift bin are those of
+    the 4143 deg^2 footprint, scaled to the reference area.
+
+    Arguments:
+      ref = the module fixture.
+    """
     N = ref.counts()
     y3 = np.array([5632.0, 6308.0, 4551.0]) * ref.cluster.area_deg2 / 4143.0
     print("\n  N_iA (rows z_lambda [0.2,0.4) [0.4,0.55) [0.55,0.65); columns lambda [20,30,45,60,500)):")
@@ -183,6 +289,15 @@ def test_counts_vs_y3_printout(ref):
 # Limber spectra and projections
 # ----------------------------------------------------------------------
 def test_limber_convergence(ref):
+    """Finer Limber quadrature and denser multipoles leave the projections unchanged.
+
+    Smaller redshift panels with more nodes change gamma_t, w_cc and w_cg
+    by less than 1e-6 (max |diff|/max|signal|); a denser multipole
+    sampling, exact up to l = 60, by less than 1e-5.
+
+    Arguments:
+      ref = the module fixture (its CAMB run is reused).
+    """
     rs0 = ref.real_space()
     keys = ("gamma_t", "w_cc", "w_cg")
     for settings, tol in ((dict(z_panel=0.005, z_order=10), 1e-6),
@@ -194,6 +309,13 @@ def test_limber_convergence(ref):
 
 
 def test_legendre_polynomials():
+    """The Legendre recursion table stays accurate up to l = 75000.
+
+    P_l(cos theta) at four angles between 2.5 and 250 arcmin against
+    scipy's eval_legendre (l <= 2000, to 1e-12) and against mpmath with 40
+    significant digits at l = 30000 and 75000 (to 1e-10), where an
+    unstable recursion would have lost all digits.
+    """
     x = np.cos(np.array([2.5, 11.0, 70.0, 250.0]) * np.pi / 180 / 60)
     P = legendre_table(x, 75001)
     for l in (0, 1, 2, 7, 150, 2000):
@@ -207,7 +329,14 @@ def test_legendre_polynomials():
 
 
 def test_projection_vs_bruteforce():
-    """Power-law C_l: analytic bin-averaged kernels vs direct averaging over the bin."""
+    """Power-law C_l: analytic bin-averaged kernels vs direct averaging over the bin.
+
+    For C_l = 1e-5 (l + 10)^-1.5, w and gamma_t of each of 20 bins from
+    the analytic kernels must equal the average over the bin, in
+    x = cos(theta), of the Legendre sums (P_l for w, the associated P_l^2
+    with 1/(l(l+1)) for gamma_t) taken with 96 Gauss-Legendre points: to
+    1e-9 for w and 1e-8 for gamma_t.
+    """
     lmax = 3000
     edges = theta_edges(20, 2.5, 250.0)
     Pw, Pg = projection_kernels(edges, lmax)
@@ -230,6 +359,11 @@ def test_projection_vs_bruteforce():
 
 
 def test_cl_spline_reproduces_integer_nodes(ref):
+    """Below l_exact every integer l is a node, so the spline returns it exactly.
+
+    Arguments:
+      ref = the module fixture.
+    """
     sp = ref.spectra()
     ells = sp["ells"]
     ci = cl_on_integers(ells, sp["C_cc"][0, 0, 0, 0], 30)
@@ -240,6 +374,16 @@ def test_cl_spline_reproduces_integer_nodes(ref):
 # Y transform and selection
 # ----------------------------------------------------------------------
 def test_y_transform():
+    """The Y transform matrix T: null last row, stencils and power-law accuracy.
+
+    T maps gamma_t to Y(theta) = int from ln theta to ln theta_max of
+    [2 gamma + d gamma/d ln theta]. Its last row is zero (Y(theta_max) = 0
+    by definition) and its rank is ntheta - 1 = 19. The derivative D uses
+    a one-sided 5-point stencil at the first node and a centered 9-point
+    stencil inside. For gamma = theta^-alpha the closed form is
+    Y = (2 - alpha)/alpha (theta^-alpha - theta_N^-alpha); T reproduces it
+    to 2e-2 with 20 bins and 3e-4 with 200 (discretization error).
+    """
     S, D, T = y_transform_matrices(20, np.log(100.0) / 20)
     assert np.all(T[-1] == 0.0) and np.linalg.matrix_rank(T) == 19
     assert np.allclose(D[0, :5] * np.log(100.0) / 20, [-25 / 12, 4, -3, 4 / 3, -1 / 4])
@@ -257,6 +401,16 @@ def test_y_transform():
 
 
 def test_selection_factor(ref):
+    """The selection factor of Eq. 23 against its formula.
+
+    At the fiducial (redshift power 0) B = s0 + s1 exp(-theta chi/s2) with
+    chi the comoving distance to the bin midpoint (to 1e-14). At theta = 0
+    with z_mid = 0.45 the redshift factor ((1 + z_mid)/1.45)^s3 is 1, so
+    B = s0 + s1 = 1.3 for any s3.
+
+    Arguments:
+      ref = the module fixture.
+    """
     B = ref.selection()
     th = ref.theta_sel()
     zmid = 0.5 * (ref.cluster.zc_edges[:-1] + ref.cluster.zc_edges[1:])
@@ -271,6 +425,16 @@ def test_selection_factor(ref):
 # covariance plumbing and the Limber diagnostic
 # ----------------------------------------------------------------------
 def test_band_matrices_equal_direct_sum(ref):
+    """The covariance band matrices equal the direct sum over multipoles.
+
+    For a smooth positive G(l) given on the multipole nodes, the
+    w x gamma_t band matrix applied to G must equal
+    sum_l Pw_i(l) Pg_j(l) G(l)/(2l + 1) with G splined onto every integer
+    l < 5000 (to 1e-10).
+
+    Arguments:
+      ref = the module fixture.
+    """
     sp = ref.spectra()
     ells = sp["ells"][sp["ells"] <= 5000]
     lmax = 5000
@@ -286,6 +450,15 @@ def test_band_matrices_equal_direct_sum(ref):
 
 
 def test_wcc_limber_diagnostic(ref):
+    """At l = 50 the Limber C_cc agrees with the exact one to 3%.
+
+    The exact (spherical Bessel) and Limber linear spectra of the density
+    leg of w_cc (cluster bin 0, richness bins 0 x 0) are compared at l = 5
+    (printed) and l = 50 (asserted).
+
+    Arguments:
+      ref = the module fixture.
+    """
     d = ref.wcc_nonlimber_check(ells=(5, 50))
     print("\n  C_cc exact/Limber (linear, density leg, bin 0, lambda 0x0): "
           + ", ".join(f"l={int(l)}: {r:.4f}" for l, r in zip(d["ells"], d["ratio_exact_limber_lin"])))

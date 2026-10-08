@@ -1,7 +1,9 @@
 #!/usr/bin/env python
-"""Validation of the C cluster port (cosmolike_core *_cluster files and the
-des_cluster bindings) against the independent Python reference
-(tests/reference), milestones M0/M1 of PORT_PLAN.md section 5.
+"""Compare the compiled cluster code with the independent Python reference.
+
+The compiled code is the cluster part of cosmolike_core (the *_cluster
+files) and the des_cluster bindings; the reference is the pure-Python model
+of tests/reference. PORT_PLAN.md, section 5, records the results.
 
 Run from Cocoa/ in the cocoa environment (start_cocoa.sh sourced):
 
@@ -14,7 +16,10 @@ Run from Cocoa/ in the cocoa environment (start_cocoa.sh sourced):
 What it does
 ------------
 1. REFERENCE (cached in --cache-dir, keyed on the configuration and the
-   reference sources): the Python reference at the Table I fiducial of
+   reference sources: config_hash covers the bytes of every
+   tests/reference/*.py file except the test_ files, so any edit there,
+   comments included, recomputes the reference): the Python reference at
+   the Table I fiducial of
    2503.13631 (reference_cluster.FIDUCIAL; CAMB with Omega_nu h^2 =
    0.00083, three degenerate massive neutrinos), its SETTINGS (not its
    physics) aligned to the likelihood:
@@ -48,10 +53,10 @@ What it does
                  accuracyboost 1), the reference a cubic spline in z: the
                  whole-pipeline number (inputs included).
      diagnostic  = matched, but deliberately truncating the reference's
-                 source n(z) at the unshifted file edge. This reproduces
-                 a historical assumption corrected in core 84c54c9.
-                 Differences in this diagnostic are expected: the current
-                 core includes the photo-z-shifted tail.
+                 source n(z) at the unshifted file edge, an assumption the
+                 C code does not make: its lensing efficiency integrates
+                 the photo-z-shifted tail of the source n(z). Differences
+                 in this diagnostic are expected; they measure that tail.
      nuisance    = matched at nonzero NLA and shear calibration, retaining
                  the full shifted source support on both sides.
 2. C PIPELINE through cosmolike_des_cluster_interface WITHOUT cobaya: the
@@ -67,8 +72,9 @@ What it does
    cached C_l tables; the selection factor and T; and the
    cluster blocks of the joint data vector, scored with delta^T C^-1 delta
    per block under the Y6 scale cuts AND with no cuts (the most
-   aggressive positive-definite mask when the uncut covariance is not;
-   cosmolike-dev SKILL.md "Accuracy tests must see the small scales").
+   aggressive positive-definite mask when the uncut covariance is not).
+   The uncut score matters because scale cuts hide the small scales,
+   where numerical differences are largest.
 4. DETERMINISM (fresh subprocesses): the uncut cluster data vector at
    OMP_NUM_THREADS = 1 and 8 bitwise identical, and bitwise identical
    again after moving to another point and back.
@@ -82,6 +88,10 @@ What it does
 
 Targets: tables 1e-4 (max |diff|/max|signal| per row), delta^T C^-1 delta
 < 0.01 per block (whole-code budget 0.2).
+
+Steps 4 and 5 need a library whose state no earlier step touched, so they
+start child processes of this same script (the hidden --emit-dv and
+--lighthouse-child options).
 """
 
 import argparse
@@ -106,12 +116,21 @@ if REFDIR not in sys.path:
     sys.path.insert(0, REFDIR)
 
 COVERH0 = 2997.92458                  # c/H0 in Mpc/h (the library's unit)
+# the likelihood whose settings and dataset the comparison copies: CL+GC
 YAML = os.path.join(LIKDIR, "combo_4x2pt_N.yaml")
 DATASET = os.path.join(DATA, "des_cluster_y6_4x2ptN.dataset")
 PROBE = "4x2pt_N"
+# multipoles of the Limber C_ell comparison, from the largest scales to
+# l = 5e4, beyond the smallest angles of the data vector
 ELL_TEST = np.array([2.0, 10.0, 100.0, 1000.0, 1.0e4, 5.0e4])
+# block order of the joint vector, and its four cluster blocks
 BLOCKS = ("ss", "gs", "gg", "cg", "N", "cc", "cs")
 CLUSTER_BLOCKS = ("N", "cs", "cc", "cg")
+# targets (module docstring): max |diff|/max|signal| per table row; Delta
+# chi2 per cluster block; Delta chi2 of all cluster blocks together (0.2,
+# the accuracy budget of the whole code). MIN_CORR_EIG = the smallest
+# correlation-matrix eigenvalue still treated as positive definite when a
+# mask is widened.
 TABLE_TOL = 1e-4
 CHI2_TOL = 0.01
 CHI2_BUDGET = 0.2
@@ -128,10 +147,21 @@ REFERENCE_EXPORT_VERSION = 2          # bump when build_reference changes (cache
 # configuration: the likelihood yaml and the dataset
 # ============================================================================
 def load_yaml(path):
-    """The likelihood yaml, ignoring cobaya tags (!defaults)."""
+    """The likelihood yaml, ignoring cobaya tags (!defaults).
+
+    A subclass of yaml.SafeLoader maps every tag that starts with "!"
+    (the !defaults lists of parameter files) to None instead of failing.
+
+    Arguments:
+      path = path of a likelihood yaml file.
+
+    Returns:
+      the parsed yaml, a dict.
+    """
     import yaml
 
     class Loader(yaml.SafeLoader):
+        """yaml.SafeLoader that reads every "!" tag as None."""
         pass
 
     Loader.add_multi_constructor("!", lambda loader, suffix, node: None)
@@ -142,12 +172,27 @@ def load_yaml(path):
 def load_config(hmf_alpha_mode=None, omnuh2=None):
     """The dataset and the likelihood keys; hmf_alpha_mode (0/1) overrides
     the yaml's cluster_hmf_alpha_mode on both sides; omnuh2 (None = Table I)
-    moves Omega_nu h^2 of the reference point."""
+    moves Omega_nu h^2 of the reference point.
+
+    Arguments:
+      hmf_alpha_mode = None (the yaml's value), 0 or 1.
+      omnuh2         = None (Table I, 0.00083) or Omega_nu h^2 of the point.
+
+    Returns:
+      dict(dataset=..., likelihood=..., point=...): the .dataset entries
+      (file names joined to data/), the likelihood options the C side
+      needs, and the changes of the reference point to Table I.
+    """
     from getdist import IniFile
     y = load_yaml(YAML)
     ini = IniFile(DATASET)
 
     def lst(key, tp):
+        """Read a comma- or space-separated .dataset entry as a list of tp.
+
+        Arguments:
+          key = the entry name; tp = the conversion of each piece.
+        """
         return [tp(x) for x in ini.string(key).replace(",", " ").split()]
 
     ds = dict(
@@ -183,12 +228,35 @@ def load_config(hmf_alpha_mode=None, omnuh2=None):
 
 def source_file_zmax(path):
     """zmax_all of an n(z) file as the core loader sets it (the last z plus
-    one step: the right edge of the last Z_LOW cell)."""
+    one step: the right edge of the last Z_LOW cell).
+
+    Arguments:
+      path = n(z) file whose first column holds left bin edges (Z_LOW).
+
+    Returns:
+      the right edge of the last bin, a float.
+    """
     z = np.loadtxt(path)[:, 0]
     return float(z[-1] + (z[-1] - z[0]) / (z.size - 1.0))
 
 
 def reference_settings(cfg, variant="matched"):
+    """Settings of the Python reference, aligned with the likelihood.
+
+    The cluster kernel is read from the table file (photoz "table"); the
+    galaxy n(z), lmax, area, edges and binning come from the dataset and
+    the yaml; the halo field is cold dark matter + baryons. The production
+    variant reads ln P_NL with a cubic in z, the others linearly, as
+    cosmolike does; the diagnostic variant also truncates the source n(z)
+    at the edge of its file.
+
+    Arguments:
+      cfg     = load_config() output.
+      variant = one of VARIANTS.
+
+    Returns:
+      the settings dict of reference_cluster.ClusterReference.
+    """
     ds, lk = cfg["dataset"], cfg["likelihood"]
     s = dict(
         photoz="table", phi_table_file=ds["nz_cluster_file"],
@@ -201,16 +269,27 @@ def reference_settings(cfg, variant="matched"):
         hmf_matter="cb",
         hmf_alpha_mode=int(lk["cluster_hmf_alpha_mode"]),
         pk_nl_z_order=(3 if variant == "production" else 1))
-    # Keep the old truncation as an explicitly historical diagnostic.
-    # Applying it to the nuisance check would compare different models:
-    # g_tomo now integrates the full photo-z-shifted source support.
+    # Only the diagnostic variant truncates the source n(z) at the unshifted
+    # file edge. Applying it to the nuisance check would compare different
+    # models: the C code's g_tomo integrates the full photo-z-shifted source
+    # support.
     if variant == "diagnostic":
         s["source_g_zmax"] = source_file_zmax(ds["nz_source_file"])
     return s
 
 
 def likelihood_grids(accuracyboost):
-    """z_interp_1D, z_interp_2D, log10k_interp_2D (1/Mpc) of the likelihood."""
+    """z_interp_1D, z_interp_2D, log10k_interp_2D (1/Mpc) of the likelihood.
+
+    The same formulas as _cosmolike_prototype_base.initialize (whose
+    comments explain the grids).
+
+    Arguments:
+      accuracyboost = the likelihood's accuracyboost.
+
+    Returns:
+      (z1, z2, log10k): numpy arrays of the three grids.
+    """
     tmp = int(1000 + 250 * accuracyboost)
     z1 = np.concatenate((np.linspace(0.0, 3.0, max(100, int(0.80 * tmp)), endpoint=False),
                          np.linspace(3.0, 50.1, max(100, int(0.40 * tmp)), endpoint=False),
@@ -226,6 +305,20 @@ def likelihood_grids(accuracyboost):
 # step 1: the Python reference (cached)
 # ============================================================================
 def config_hash(cfg, variant):
+    """Return the cache key of a reference variant: 16 hex digits of a SHA-256.
+
+    The key covers the configuration, the variant, REFERENCE_EXPORT_VERSION,
+    and the bytes of the three n(z) files and of every tests/reference/*.py
+    file except the test_ files, so a change of any of those (comments
+    included) selects a new cache file.
+
+    Arguments:
+      cfg     = load_config() output.
+      variant = one of VARIANTS.
+
+    Returns:
+      a 16-character string.
+    """
     s = json.dumps(cfg, sort_keys=True) + variant + str(REFERENCE_EXPORT_VERSION)
     for f in (cfg["dataset"]["nz_cluster_file"], cfg["dataset"]["nz_source_file"],
               cfg["dataset"]["nz_lens_file"]):
@@ -240,7 +333,14 @@ def config_hash(cfg, variant):
 
 def cluster_support(nz_cluster_file):
     """zmin/zmax per bin: the zero nodes bracketing the nonzero values (the
-    interface convention, generic_interface_cluster.cpp set_cluster_zdist)."""
+    interface convention, generic_interface_cluster.cpp set_cluster_zdist).
+
+    Arguments:
+      nz_cluster_file = the cluster kernel table (z, then <phi_i|z> per bin).
+
+    Returns:
+      float array [nbin, 2] of (zmin, zmax).
+    """
     tab = np.loadtxt(nz_cluster_file)
     z = tab[:, 0]
     out = []
@@ -252,7 +352,15 @@ def cluster_support(nz_cluster_file):
 
 def cluster_a_nodes(support, n_a):
     """The a nodes of halo_cluster.c's tables (Ntable.halo_na_lens nodes
-    uniform in a over every bin's support)."""
+    uniform in a over every bin's support).
+
+    Arguments:
+      support = cluster_support() output.
+      n_a     = number of nodes.
+
+    Returns:
+      float array [n_a] of scale factors.
+    """
     a_lo = 1.0 / (1.0 + support[:, 1].max())
     a_hi = 1.0 / (1.0 + support[:, 0].min())
     return np.linspace(a_lo, a_hi, n_a)
@@ -260,7 +368,19 @@ def cluster_a_nodes(support, n_a):
 
 def cosmology_inputs(cosmo, cfg, variant):
     """The ci.set_cosmology arrays in the likelihood's units (h/Mpc,
-    (Mpc/h)^3, Mpc/h), on the grids of the variant."""
+    (Mpc/h)^3, Mpc/h), on the grids of the variant.
+
+    Arguments:
+      cosmo   = the reference's cosmology (CAMB tables, ref_cosmology.py).
+      cfg     = load_config() output.
+      variant = one of VARIANTS: "production" uses the likelihood grids,
+                the others the CAMB z nodes and a dense log10 k grid.
+
+    Returns:
+      dict of cin_* entries: the arguments of ci.set_cosmology (grids, ln P
+      tables, growth, distances) plus Omega_m, Omega_b, H0, mnu and
+      Omega_nu h^2.
+    """
     lk = cfg["likelihood"]
     z1, z2, lk10 = likelihood_grids(lk["accuracyboost"])
     h = cosmo.h
@@ -275,6 +395,12 @@ def cosmology_inputs(cosmo, cfg, variant):
     ZMAX_TAB = cosmo.z_pk[-1]
 
     def lnP_grid(kind):
+        """ln P of kind "lin", "cb" or "nl" on (z_2D, k_h), Fortran-flattened.
+
+        Arguments:
+          kind = "lin" (total matter, linear), "cb" (cold dark matter +
+                 baryons, linear) or "nl" (total matter, nonlinear).
+        """
         zz, kk = np.meshgrid(z_2D, k_h, indexing="ij")       # (nz, nk)
         lnp = cosmo.lnP(kk, np.minimum(zz, ZMAX_TAB), kind)
         # beyond the CAMB table (z > 4, never inside a cluster kernel):
@@ -296,6 +422,26 @@ def cosmology_inputs(cosmo, cfg, variant):
 
 
 def build_reference(cfg, variant, path, verbose=True):
+    """Compute one variant of the Python reference and save it as .npz.
+
+    Runs reference_cluster.ClusterReference at the Table I fiducial (with
+    the configuration's and the variant's changes), then evaluates the
+    quantities compared in step 3 on grids that differ from the C tables'
+    own nodes, so the comparison also tests the C table reads: kernels,
+    n_A and b_A at the a nodes of the C tables and between them, the
+    one-halo P_cm, the Limber spectra at ELL_TEST, and the cosmology tables
+    for ci.set_cosmology. The matched and production variants also store
+    the Gaussian covariance.
+
+    Arguments:
+      cfg     = load_config() output.
+      variant = one of VARIANTS.
+      path    = output .npz path.
+      verbose = True prints progress.
+
+    Returns:
+      nothing; writes path.
+    """
     from reference_cluster import ClusterReference
     from ref_limber import LimberModel
 
@@ -358,6 +504,16 @@ def build_reference(cfg, variant, path, verbose=True):
 
 
 def load_reference(args, cfg, variant):
+    """Return a reference variant, computing it when it is not cached.
+
+    Arguments:
+      args    = parsed command line (cache_dir, recompute_reference).
+      cfg     = load_config() output.
+      variant = one of VARIANTS.
+
+    Returns:
+      (R, path): the arrays of the .npz file as a dict, and its path.
+    """
     path = os.path.join(args.cache_dir, f"reference_{variant}_{config_hash(cfg, variant)}.npz")
     if args.recompute_reference or not os.path.exists(path):
         build_reference(cfg, variant, path)
@@ -369,7 +525,15 @@ def load_reference(args, cfg, variant):
 # ============================================================================
 def write_dummy_data(workdir, ndata):
     """Zero data vector and unit diagonal covariance (the interface needs
-    files; only the theory vector is used here)."""
+    files; only the theory vector is used here).
+
+    Arguments:
+      workdir = folder for the two files (created when missing).
+      ndata   = data-vector length.
+
+    Returns:
+      (dvf, covf): paths of the data-vector and covariance files.
+    """
     os.makedirs(workdir, exist_ok=True)
     dvf = os.path.join(workdir, "zero.datavector")
     covf = os.path.join(workdir, "diag.cov")
@@ -380,13 +544,40 @@ def write_dummy_data(workdir, ndata):
 
 
 def write_mask(workdir, name, mask):
+    """Write a mask file ("index 0/1" per line) and return its path.
+
+    Arguments:
+      workdir = output folder.
+      name    = file name.
+      mask    = integer array of 0 and 1, one entry per data-vector entry.
+
+    Returns:
+      the path of the written file.
+    """
     f = os.path.join(workdir, name)
     np.savetxt(f, np.column_stack([np.arange(mask.size), mask]), fmt="%d %d")
     return f
 
 
 def init_c(cfg, workdir, threads, nz_cluster_file=None):
-    """The init chain of _cosmolike_prototype_base.initialize (probe 4x2pt_N)."""
+    """The init chain of _cosmolike_prototype_base.initialize (probe 4x2pt_N).
+
+    The data, mask and covariance are dummy files (write_dummy_data) with
+    the production mask: only the theory vector is compared.
+
+    Arguments:
+      cfg             = load_config() output.
+      workdir         = folder of the dummy files.
+      threads         = OpenMP threads of the library.
+      nz_cluster_file = None (the dataset's cluster kernel table) or another
+                        table file (the lighthouse check uses a top hat).
+
+    Returns:
+      (ci, info): the compiled module and dict(dvf, covf, ndata).
+
+    Side effects:
+      sets the global state of the compiled library; writes the dummy files.
+    """
     import cosmolike_des_cluster_interface as ci
     ds, lk = cfg["dataset"], cfg["likelihood"]
     ci.set_omp_threads(threads)
@@ -438,7 +629,21 @@ def set_cosmology_c(ci, R, lnP_shift=0.0):
     """ci.set_cosmology with the reference tables (interface units):
     Omega_nu h^2 and the linear P_cb go along always, as the likelihood
     sends them. The lighthouse has exactly zero neutrino density,
-    where its total spectrum is also the cb spectrum."""
+    where its total spectrum is also the cb spectrum.
+
+    Arguments:
+      ci        = the compiled module.
+      R         = a reference dict holding the cin_* tables.
+      lnP_shift = added to every ln P table: a uniform change of amplitude
+                  that moves to a nearby cosmology (0 keeps the reference).
+
+    Raises:
+      ValueError when R has massive neutrinos but no P_cb table.
+
+    Side effects:
+      sets the cosmology of the library (its cosmology-dependent tables
+      are rebuilt at their next use).
+    """
     if "cin_lnPL_cb" in R:
         lnPL_cb = R["cin_lnPL_cb"] + lnP_shift
     else:
@@ -453,7 +658,20 @@ def set_cosmology_c(ci, R, lnP_shift=0.0):
 
 
 def set_nuisance_c(ci, cfg, P, mor_shift=0.0):
-    """Nuisance parameters at the reference point P (reference names)."""
+    """Nuisance parameters at the reference point P (reference names).
+
+    Arguments:
+      ci        = the compiled module.
+      cfg       = load_config() output.
+      P         = dict with the reference names (reference_cluster.FIDUCIAL):
+                  lens_b1, lens_bmag, lens_dz, lens_stretch, shear_m,
+                  source_dz, IA_A1, IA_eta1, lnlambda0, A, sigma_int, B and
+                  sel_s0 ... sel_s3.
+      mor_shift = added to ln lambda_0 (moves the mass-observable relation).
+
+    Side effects:
+      sets the nuisance state of the library.
+    """
     ds = cfg["dataset"]
     nl, ns = int(ds["lens_ntomo"]), int(ds["source_ntomo"])
     ci.set_point_mass(PMV=np.zeros(nl))
@@ -474,13 +692,33 @@ def set_nuisance_c(ci, cfg, P, mor_shift=0.0):
 
 
 def c_block_slices(ci):
+    """Return {block name: slice of the joint vector} from the library.
+
+    The dict comprehension pairs each name of BLOCKS (enumerate gives its
+    index n) with the slice that starts at starts[n] and holds sizes[n]
+    entries.
+
+    Arguments:
+      ci = the compiled module, initialized.
+
+    Returns:
+      dict {block name: slice}.
+    """
     sizes = np.array(ci.compute_data_vector_cluster_sizes())
     starts = np.array(ci.compute_data_vector_cluster_starts())
     return {b: slice(int(starts[n]), int(starts[n] + sizes[n])) for n, b in enumerate(BLOCKS)}
 
 
 def cluster_uncut_mask(ci, cfg):
-    """The production mask with every cluster entry switched on."""
+    """The production mask with every cluster entry switched on.
+
+    Arguments:
+      ci  = the compiled module, initialized.
+      cfg = load_config() output.
+
+    Returns:
+      integer array of 0 and 1 over the joint vector.
+    """
     m = np.loadtxt(cfg["dataset"]["mask_file"])[:, 1].astype(int)
     sl = c_block_slices(ci)
     for b in CLUSTER_BLOCKS:
@@ -490,7 +728,27 @@ def cluster_uncut_mask(ci, cfg):
 
 def c_evaluate(ci, cfg, R, info, workdir, full=True):
     """Every C output of the comparison, at the reference point, from the
-    cosmology tables of R."""
+    cosmology tables of R.
+
+    Arguments:
+      ci      = the compiled module, initialized by init_c.
+      cfg     = load_config() output.
+      R       = a reference dict (load_reference).
+      info    = the dict of init_c (dummy data and covariance files).
+      workdir = folder for the uncut mask file.
+      full    = True also evaluates the kernels, n_A, b_A, P_cm 1h, counts,
+                T and the selection factor; False only the spectra, the
+                real-space statistics and the data vectors.
+
+    Returns:
+      dict C of numpy arrays and pair lists: the C outputs in the pair
+      order of the data vector, the data vector with the production mask
+      (dv_cut, mask_cut) and with every cluster entry (dv_all, mask_all),
+      and the block slices.
+
+    Side effects:
+      reloads the library's data and mask twice and writes uncut.mask.
+    """
     ds = cfg["dataset"]
     nzc = int(ds["cluster_ntomo"])
     nA = len(ds["richness_edges"]) - 1
@@ -560,7 +818,30 @@ def c_evaluate(ci, cfg, R, info, workdir, full=True):
 # comparison helpers
 # ============================================================================
 def compare(rows, name, c, r, labels=None, rel_floor=1e-12, tol=TABLE_TOL, note=""):
-    """max relative and max |diff|/max|signal| (per row = last axis)."""
+    """max relative and max |diff|/max|signal| (per row = last axis).
+
+    Two measures of the difference between the C values c and the
+    reference r: the largest relative difference |c - r|/|r| over entries
+    with |r| above rel_floor times max|r| (smaller entries would turn
+    rounding into huge ratios), and, per row (the last axis), the largest
+    |c - r| divided by the largest |r| of that row. The largest row value
+    is compared with tol.
+
+    Arguments:
+      rows      = list the result row is appended to.
+      name      = quantity name printed in the table.
+      c, r      = C values and reference values, arrays of one shape.
+      labels    = None, or a function turning an index tuple into a text.
+      rel_floor = relative floor of |r| for the relative measure.
+      tol       = target of the row-scaled measure (status "ok" or "MISS").
+      note      = text printed after the row.
+
+    Returns:
+      the appended row, a dict.
+
+    Raises:
+      AssertionError when c and r differ in shape.
+    """
     c = np.asarray(c, dtype=float)
     r = np.asarray(r, dtype=float)
     assert c.shape == r.shape, (name, c.shape, r.shape)
@@ -578,6 +859,11 @@ def compare(rows, name, c, r, labels=None, rel_floor=1e-12, tol=TABLE_TOL, note=
     isc = np.unravel_index(irow * r2.shape[1] + int(np.argmax(d2[irow])), r.shape)
 
     def where(ix):
+        """Text of an index tuple: labels(ix), or the tuple itself.
+
+        Arguments:
+          ix = an index tuple into the compared arrays.
+        """
         if labels is None:
             return str(tuple(int(i) for i in ix))
         return labels(tuple(int(i) for i in ix))
@@ -590,6 +876,12 @@ def compare(rows, name, c, r, labels=None, rel_floor=1e-12, tol=TABLE_TOL, note=
 
 
 def print_table(rows, title):
+    """Print comparison rows (compare) and chi2 rows under a title.
+
+    Arguments:
+      rows  = list of row dicts; a row with a "chi2" key prints its chi2.
+      title = table title.
+    """
     print("\n" + title)
     print("-" * len(title))
     print(f"{'quantity':36s} {'n':>5s} {'max rel':>9s} {'at':30s} {'max|d|/max|s|':>13s} "
@@ -608,13 +900,35 @@ def print_table(rows, title):
 # covariance scoring
 # ============================================================================
 def min_corr_eig(C):
+    """Smallest eigenvalue of the correlation matrix C_ij/sqrt(C_ii C_jj).
+
+    The correlation matrix has a unit diagonal, so its eigenvalues measure
+    how close C is to singular independently of the units of each entry.
+
+    Arguments:
+      C = a symmetric covariance matrix.
+
+    Returns:
+      a float.
+    """
     d = np.sqrt(np.diag(C))
     return float(np.linalg.eigvalsh(C / np.outer(d, d)).min())
 
 
 def aggressive_pd_mask(C, base, candidates, threshold=MIN_CORR_EIG):
     """Re-admit candidate points (in the given order) while the correlation
-    matrix of the kept set keeps its smallest eigenvalue >= threshold."""
+    matrix of the kept set keeps its smallest eigenvalue >= threshold.
+
+    Arguments:
+      C          = the covariance matrix of the joint vector.
+      base       = 0/1 array, the points kept from the start.
+      candidates = indices to try, one at a time, in order.
+      threshold  = smallest accepted correlation eigenvalue.
+
+    Returns:
+      (mask, added): the widened 0/1 mask and the list of re-admitted
+      indices.
+    """
     keep = list(np.nonzero(base)[0])
     added = []
     for p in candidates:
@@ -628,6 +942,24 @@ def aggressive_pd_mask(C, base, candidates, threshold=MIN_CORR_EIG):
 
 
 def chi2(delta, C, sel):
+    """Return delta^T C^-1 delta over the selected entries.
+
+    With the Cholesky factor L of the selected covariance (C = L L^T), the
+    solution y of L y = delta gives chi2 = y . y, without forming C^-1.
+
+    Arguments:
+      delta = difference vector over the joint vector.
+      C     = covariance matrix of the joint vector.
+      sel   = 0/1 array selecting the entries.
+
+    Returns:
+      (chi2, n): a float and the number of selected entries; (0, 0) for an
+      empty selection.
+
+    Raises:
+      numpy.linalg.LinAlgError when the selected covariance is not
+      positive definite.
+    """
     idx = np.nonzero(sel)[0]
     if idx.size == 0:
         return 0.0, 0
@@ -639,7 +971,22 @@ def chi2(delta, C, sel):
 
 def reference_in_c_layout(C, R, cfg):
     """The reference data vector and covariance (N, cs, cc, cg) mapped to
-    the joint C layout (ss, gs, gg, cg, N, cc, cs); -1 = not a cluster entry."""
+    the joint C layout (ss, gs, gg, cg, N, cc, cs); -1 = not a cluster entry.
+
+    perm[j] is the reference index of joint entry j (-1 for galaxy
+    entries); it follows the C pair tables, so a different pair order on
+    the two sides is handled.
+
+    Arguments:
+      C   = c_evaluate output (pair tables, slices, dv_all).
+      R   = a reference dict (data_vector, dv_start and, when present, cov).
+      cfg = load_config() output.
+
+    Returns:
+      (ref_full, cov_full): the reference vector in the joint layout (zero
+      outside the cluster blocks) and the covariance in that layout, or
+      None when R has no covariance.
+    """
     ds = cfg["dataset"]
     nzc, ns, nt = int(ds["cluster_ntomo"]), int(ds["source_ntomo"]), int(ds["n_theta"])
     nA = len(ds["richness_edges"]) - 1
@@ -682,7 +1029,23 @@ def compare_all(C, R, cfg, full=True, blocks=CLUSTER_BLOCKS, cov_full=None, pd_c
     """Comparison rows of C against the reference R (and chi2 rows).
     shear_m: the point's shear calibration; the reference's gamma_t carries
     (1 + m_s), w_gammat_cluster_tomo does not (the interface applies it on
-    the data vector)."""
+    the data vector).
+
+    Arguments:
+      C        = c_evaluate output.
+      R        = a reference dict.
+      cfg      = load_config() output.
+      full     = True also compares the quantities c_evaluate computes only
+                 with full=True.
+      blocks   = the cluster blocks to compare.
+      cov_full = None (the covariance stored in R) or a joint covariance.
+      pd_cache = dict reused across calls for the widened masks per block.
+      shear_m  = None, or the shear calibration of the point.
+
+    Returns:
+      (rows, chi): the list of row dicts and a dict of chi2 values per
+      block (empty without a covariance).
+    """
     rows = []
     ds = cfg["dataset"]
     nzc = int(ds["cluster_ntomo"])
@@ -702,6 +1065,8 @@ def compare_all(C, R, cfg, full=True, blocks=CLUSTER_BLOCKS, cov_full=None, pd_c
                 labels=lambda ix: f"bin {ix[0]} z={zg[ix[1]]:.4f}")
         for tag in ("nodes", "mid"):
             a = R["val_a_" + tag]
+            # the outer lambda is called at once with a and returns the inner
+            # one: a labeling function that reads this a
             lab = (lambda aa: (lambda ix: f"lambda {ix[0]} z={1 / aa[ix[1]] - 1:.4f}"))(a)
             compare(rows, f"ncl_richness (a {tag})", C["nA_" + tag], R["val_nA_" + tag], labels=lab)
             compare(rows, f"bcl_richness (a {tag})", C["bA_" + tag], R["val_bA_" + tag], labels=lab)
@@ -717,6 +1082,8 @@ def compare_all(C, R, cfg, full=True, blocks=CLUSTER_BLOCKS, cov_full=None, pd_c
     Ccc_ref = np.array([[R["val_C_cc"][i, A, i, B] for (A, B) in pairs_cc] for i in range(nzc)])
     Ccg_ref = np.array([[R["val_C_cg"][i, A, lens_bins.index(g)] for A in range(nA)]
                         for (i, g) in pairs_cg])
+    # each lab_* takes the multipole grid e and returns a function that
+    # turns an index tuple into a readable label
     lab_cs = lambda e: (lambda ix: f"zc{pairs_cs[ix[0]][0]} zs{pairs_cs[ix[0]][1]} l{ix[1]} ell={e[ix[2]]:g}")
     lab_cc = lambda e: (lambda ix: f"zc{ix[0]} l{pairs_cc[ix[1]]} ell={e[ix[2]]:g}")
     lab_cg = lambda e: (lambda ix: f"zc{pairs_cg[ix[0]][0]} l{ix[1]} ell={e[ix[2]]:g}")
@@ -735,6 +1102,8 @@ def compare_all(C, R, cfg, full=True, blocks=CLUSTER_BLOCKS, cov_full=None, pd_c
         compare(rows, "w_gammat_cluster_tomo (gamma_t)", gt_c, gt_ref, labels=lab_t,
                 note=("" if shear_m is None else "x (1 + m_s)"))
         T = R["T"]
+        # Sigma[p, a, t] = sum_u T[t, u] gamma_t[p, a, u]: T acts on the
+        # angular axis of every (pair, richness) row
         Sig = np.einsum("tu,pau->pat", T, gt_c)
         Sig_ref = np.einsum("tu,pau->pat", T, gt_ref)
         compare(rows, "Sigma = T gamma_t (theta < N-1)", Sig[..., :-1], Sig_ref[..., :-1],
@@ -820,7 +1189,18 @@ def compare_all(C, R, cfg, full=True, blocks=CLUSTER_BLOCKS, cov_full=None, pd_c
 # ============================================================================
 def emit_dv(cfg, R, workdir, threads, out):
     """Uncut cluster data vector at the fiducial; then a detour to another
-    point (cosmology and MOR) and back, in the same process."""
+    point (cosmology and MOR) and back, in the same process.
+
+    Arguments:
+      cfg     = load_config() output.
+      R       = the matched reference dict.
+      workdir = folder of the dummy files.
+      threads = OpenMP threads of the library.
+      out     = output .npz path.
+
+    Returns:
+      nothing; writes dv0 (fiducial), dv1 (detour) and dv2 (back) to out.
+    """
     from reference_cluster import FIDUCIAL
     P = dict(FIDUCIAL)
     ci, info = init_c(cfg, workdir, threads)
@@ -840,7 +1220,14 @@ def emit_dv(cfg, R, workdir, threads, out):
 
 def mode_args(args):
     """The --hmf-alpha-mode and --omnuh2 overrides,
-    passed on to the child processes."""
+    passed on to the child processes.
+
+    Arguments:
+      args = parsed command line.
+
+    Returns:
+      a list of command-line words (empty without overrides).
+    """
     out = []
     if args.hmf_alpha_mode is not None:
         out += ["--hmf-alpha-mode", str(args.hmf_alpha_mode)]
@@ -850,6 +1237,21 @@ def mode_args(args):
 
 
 def run_determinism(args):
+    """Step 4: compare the data vectors of two child processes, 1 and 8 threads.
+
+    Each child (--emit-dv) computes the uncut vector at the fiducial, at a
+    detour point and back at the fiducial. Equality is bitwise
+    (np.array_equal of float64 values): different thread counts must give
+    the same vector, the detour must change it, and coming back must
+    restore it exactly.
+
+    Arguments:
+      args = parsed command line.
+
+    Returns:
+      dict of the checks (booleans) and the largest absolute difference
+      between 1 and 8 threads.
+    """
     outs = {}
     for n in (1, 8):
         f = os.path.join(args.cache_dir, f"dv_omp{n}.npz")
@@ -880,7 +1282,25 @@ def run_determinism(args):
 def lighthouse_inputs(cfg, workdir):
     """Lighthouse's own cosmology on the likelihood grids and a top-hat
     kernel table; returns the C inputs, the kernel file, lighthouse's
-    arrays and configuration."""
+    arrays and configuration.
+
+    lighthouse is the repository of the original CosmoLike cluster code;
+    its outputs (tests/lighthouse_reference/outputs) give the background
+    (flat, no radiation), the growth D/D0 on z <= 3 and the z = 0 linear
+    P(k). The C side receives that P(k) times D^2 as both the linear and
+    the nonlinear spectrum, with power-law extrapolation in k beyond the
+    table, and a top-hat kernel table written by
+    scripts/make_cluster_zdist.py --tophat (lighthouse selects clusters by
+    true redshift).
+
+    Arguments:
+      cfg     = load_config() output.
+      workdir = folder for the top-hat kernel file.
+
+    Returns:
+      (R, th, L, conf): the cin_* dict for set_cosmology_c, the kernel file
+      path, lighthouse's arrays (np.load result) and its configuration.
+    """
     from scipy.interpolate import CubicSpline
     from scipy.integrate import cumulative_trapezoid
     L = np.load(os.path.join(LHDIR, "outputs", "lighthouse_reference_main.npz"))
@@ -925,6 +1345,22 @@ def lighthouse_inputs(cfg, workdir):
 
 
 def run_lighthouse_child(cfg, workdir, threads, out):
+    """Child of step 5: the C cluster quantities at lighthouse's inputs.
+
+    Computes n_A(z), b_A(z) and the counts with lighthouse's cosmology,
+    mass-observable relation and a top-hat kernel, and the counts
+    integrated from lighthouse's own densities; in hmf_alpha_mode 1 the
+    lighthouse densities are also rescaled by alpha(z)/0.368.
+
+    Arguments:
+      cfg     = load_config() output.
+      workdir = folder of the dummy and kernel files.
+      threads = OpenMP threads of the library.
+      out     = output .npz path.
+
+    Returns:
+      nothing; writes the arrays to out.
+    """
     from ref_halo import tinker_amplitude, TINKER_ALPHA_FIXED
     from scipy.interpolate import CubicSpline
     mode = int(cfg["likelihood"]["cluster_hmf_alpha_mode"])
@@ -941,6 +1377,8 @@ def run_lighthouse_child(cfg, workdir, threads, out):
     zz = L["clz_z"]
     a = 1.0 / (1.0 + zz)
     ok = (zz >= 0.2) & (zz <= 0.65)
+    # ncl_richness at each a inside the cluster range 0.2 <= z <= 0.65,
+    # 0 outside (zip pairs each a with its ok flag)
     n_c = np.array([[ci.ncl_richness(x, A) if o else 0.0 for x, o in zip(a, ok)]
                     for A in range(nA)])            # (c/H0)^-3, as lighthouse
     b_c = np.array([[ci.bcl_richness(x, A) if o else 0.0 for x, o in zip(a, ok)]
@@ -977,6 +1415,17 @@ def run_lighthouse_child(cfg, workdir, threads, out):
 
 
 def run_lighthouse(args):
+    """Step 5: run the lighthouse child and print the ratio table.
+
+    Each row is the largest |C/lighthouse - 1| of one quantity, over the
+    interior redshifts for n_A and b_A.
+
+    Arguments:
+      args = parsed command line.
+
+    Returns:
+      dict {row name: max |ratio - 1|}.
+    """
     f = os.path.join(args.cache_dir, "lighthouse_c.npz")
     cmd = [sys.executable, os.path.abspath(__file__), "--cache-dir", args.cache_dir,
            "--lighthouse-child", f, "--threads", str(args.threads)] + mode_args(args)
@@ -990,6 +1439,11 @@ def run_lighthouse(args):
     rows = []
 
     def row(name, c, r):
+        """Append (name, max |c/r - 1|, index of that maximum) to rows.
+
+        Arguments:
+          name = row name; c, r = C values and lighthouse values.
+        """
         rel = np.abs(c / r - 1)
         i = np.unravel_index(np.argmax(rel), rel.shape)
         rows.append((name, float(rel.max()), tuple(int(x) for x in i)))
@@ -1038,6 +1492,19 @@ def run_lighthouse(args):
 
 # ============================================================================
 def main(argv=None):
+    """Parse the command line and run the validation or one child step.
+
+    The hidden options --emit-dv and --lighthouse-child turn this script
+    into the child process of step 4 or 5. The working folder of this
+    process (dummy data files) is removed at the end, also after an error
+    (the finally block).
+
+    Arguments:
+      argv = None (the command line) or a list of command-line words.
+
+    Returns:
+      nothing.
+    """
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--cache-dir", default=os.environ.get(
         "DES_CLUSTER_VALIDATION_CACHE", os.path.join(tempfile.gettempdir(), "des_cluster_validation")))
@@ -1074,7 +1541,19 @@ def main(argv=None):
 
 
 def run_validation(args, cfg, R, path, workdir):
-    """Steps 2-5 of the module docstring; prints the tables."""
+    """Steps 2-5 of the module docstring; prints the tables.
+
+    Arguments:
+      args    = parsed command line.
+      cfg     = load_config() output.
+      R       = the matched reference dict.
+      path    = its cache file path (printed).
+      workdir = folder of the dummy files.
+
+    Returns:
+      nothing; prints the tables, saves c_results_matched.npz in the cache
+      folder and, with --json, writes every row to that file.
+    """
     from reference_cluster import FIDUCIAL
     print(f"[validation] reference (matched) {path}")
     print(f"[validation] Tinker amplitude: hmf_alpha_mode = "

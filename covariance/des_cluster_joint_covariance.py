@@ -1,10 +1,18 @@
-"""DES cluster 6x2pt+N settings for the shared limited-model forecast.
+"""DES cluster 6x2pt + N settings for the shared covariance forecast.
 
-The selected populations have three observed-redshift bins and four
-richness bins. Along with six galaxy and four source bins, twenty angular
-bins give 2800 two-point entries plus 12 counts. The common generator
-documents its biased-tracer cNG and SSC-only count-cross approximations;
-this example does not reproduce the project's supplied covariance.
+The joint vector holds, in the likelihood order ss, gs, gg, cg, N, cc, cs,
+the galaxy and shear blocks of des_cluster_covariance.py plus the cluster
+blocks: cluster x galaxy clustering, counts, cluster clustering and
+cluster lensing. The clusters are selected in three observed-redshift bins
+and four richness bins (richness lambda, the number of red member galaxies,
+is the mass proxy). With six lens and four source bins and twenty angular
+bins this gives 2800 two-point entries plus 12 counts (2812).
+
+The forecast is a limited model, documented by the shared generator
+(cosmolike_notebook_utils.covariance.forecast_cluster): the cNG term treats
+clusters as linearly biased tracers of matter, and the counts correlate
+with the two-point blocks only through SSC. It therefore does not
+reproduce the covariance shipped with the likelihood.
 """
 
 from pathlib import Path
@@ -19,12 +27,26 @@ def configuration(accuracy_boost=None, ytransform=True, gaussian=None,
                   **accuracy_overrides):
     """Return DES physical choices and one resolved covariance accuracy boost.
 
+    Starts from the galaxy/shear settings of des_cluster_covariance.py and
+    adds the cluster entries. The Y localization (Park, Rozo & Krause 2021)
+    replaces gamma_t of each cluster-lensing row by Y(R) = Sigma(R) -
+    Sigma(R_max), a fixed linear combination of the angular bins that
+    removes the dependence on the mass inside the smallest radius; the
+    likelihood's mean data vector uses it.
+
     Arguments:
         accuracy_boost = None uses the YAML; 1, 2, 4 or 8 refines tables/cutoffs.
-        accuracy_overrides = internal refinement controls from default.yaml.
         ytransform = whether to localize cluster lensing as the DES mean does.
+        gaussian = optional Gaussian model mapping; None means
+            {"nonlimber": False, "ia": "none"}, the only choice this joint
+            forecast accepts.
+        accuracy_overrides = internal refinement controls from default.yaml
+            (every other keyword argument of the call).
     Returns:
         Settings mapping with the project YAML baseline and explicit model limits.
+    Raises:
+        ValueError when gaussian asks for non-Limber spectra or intrinsic
+        alignment.
     """
     if gaussian is None:
         gaussian = {"nonlimber": False, "ia": "none"}
@@ -45,7 +67,15 @@ def configuration(accuracy_boost=None, ytransform=True, gaussian=None,
         'cluster_lnm_bounds': np.log(np.array([1.e12, 1.e16])),
         'cluster_ytransform': ytransform,
         'cg_lens_bin': [0, 1, 2],
-        # Include selection support and catalog-bin edges in the radial rule.
+        # cluster_mor = ln lambda_0, A_lambda, sigma_int, B_lambda (Table I
+        # fiducials); cluster_lnm_bounds = ln of the cluster mass range
+        # 1e12 to 1e16 M_sun/h; cg_lens_bin[i] = the lens bin (zero-based)
+        # paired with cluster bin i in cg.
+        # Include selection support and catalog-bin edges in the radial rule:
+        # the radial quadrature panels end at the support of the selection
+        # kernels (z = 0.1565 to 0.7095, the range of des_y6_cluster.nz) and
+        # at the cluster bin edges 0.2, 0.4, 0.55, 0.65, so no kink of the
+        # integrand falls inside a panel.
         'a_edges': 1.0/(1.0+np.array([3.1, 2., 1.5, 1., .7095, .65,
                                      .55, .4, .2, .1565, .1, 1.e-5])),
     })
@@ -55,15 +85,23 @@ def configuration(accuracy_boost=None, ytransform=True, gaussian=None,
 def initialize(interface, settings):
     """Initialize the forecast without reading a likelihood covariance or mask.
 
+    The angular edges are checked first: the mean Y operator needs at least
+    five logarithmic angular bins (equal steps in ln theta).
+
     Arguments:
         interface = imported cosmolike_des_cluster_interface.
         settings = configuration() output, optionally with explicit refinements.
     Returns:
         CAMB input tables for saving beside the forecast.
+    Raises:
+        FileNotFoundError when the cluster redshift file is missing;
+        ValueError when the angular edges are not at least six finite,
+        positive, increasing, logarithmically spaced values.
     Side effects:
         Replaces the core cosmology and galaxy/source/cluster state. Sets
         zero IA, magnification, RSD and environmental selection correction.
-        Cluster windows are abundance-weighted and the MOR is lognormal.
+        Cluster windows are abundance-weighted (kernel_mode 1) and the MOR
+        is lognormal.
     """
     project = Path(__file__).resolve().parents[1]
     cluster_file = project/settings['cluster_file']
@@ -109,12 +147,16 @@ def compute(interface, settings, progress=None, backend=None):
 
     Arguments:
         interface = project initialized with these settings.
-        settings = configuration() output; progress = optional stage/time callback.
+        settings = configuration() output.
+        progress = optional callback receiving (stage, elapsed_seconds).
         backend = None for notebook wrappers, interface.covariance for CLI.
     Returns:
         Separate G/SSC/cNG/total matrices, layout, mean signals and model limits.
         Apply valid_indices before a positivity check when Y is enabled:
-        its 48 known final-bin null modes remain in the full returned layout.
+        the last angular bin of each of the 48 cluster-lensing rows (3
+        cluster z bins x 4 richness bins x 4 source bins) is Sigma(R_max) -
+        Sigma(R_max) = 0 by construction, so those 48 entries have zero
+        variance and stay in the full returned layout.
         Physical scale cuts and inference convergence are separate steps.
     """
     return compute_forecast(

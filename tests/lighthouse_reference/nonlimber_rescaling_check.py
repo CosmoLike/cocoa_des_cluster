@@ -8,6 +8,12 @@ for the others. Here the non-Limber C_ell is recomputed from scratch for a few
 the memo), and compared with the memoized value used in the data vector.
 
     python nonlimber_rescaling_check.py   (fresh process; ~1 min)
+
+lighthouse is the repository of the original CosmoLike cluster code; lh.py
+of this folder loads its prebuilt library. The script writes
+outputs/nonlimber_rescaling_check.npz (C_ell for l = 0 ... 300 and the
+projected w(theta) of both paths) and prints memo/fresh - 1 for w(theta)
+and for C_ell at selected multipoles.
 """
 import os
 import sys
@@ -18,10 +24,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import lh  # noqa: E402
 
+# multipoles 0 ... LMAX - 1 of the C_ell arrays and of the Legendre sums
+# that project them onto the angular bins
 LMAX = 100000
 cfg = lh.CONFIG
 NT = cfg["ntheta"]
 
+# one full data vector first, so every table is filled as in the main run
 ndata = lh.init_all(Ystatistics=1)
 dv = np.zeros(ndata)
 lh.theory_wrapper(lh.cosmo_struct(), lh.nuisance_struct(), dv.ctypes.data_as(lh.PD))
@@ -30,17 +39,44 @@ Cl = np.zeros(LMAX)
 
 
 def cc(nz, l1, l2):
+    """Return the w_cc C_ell of richness bins (l1, l2) in cluster z bin nz.
+
+    The C function fills Cl in place: non-Limber (FFTLog) from l = 0 until
+    it agrees with Limber to tolerance = 0.01 (dev = 0.1 is the starting
+    deviation that enters that loop), Limber above. Its memo keeps the
+    non-Limber part of the first richness pair of a redshift bin.
+
+    Arguments:
+      nz     = cluster redshift bin (zero-based).
+      l1, l2 = richness bins (zero-based).
+
+    Returns:
+      a copy of Cl, float array [LMAX].
+    """
     Cl[:] = 0.0
     lh.C_cc_mix_tab(0, LMAX, nz, nz, l1, l2, Cl.ctypes.data_as(lh.PD), 0.1, 0.01)
     return Cl.copy()
 
 
 def cg(zc, zg, il):
+    """Return the w_cg C_ell of richness bin il, cluster bin zc, lens bin zg.
+
+    Same rules as cc above.
+
+    Arguments:
+      zc = cluster redshift bin, zg = lens bin, il = richness bin (all
+           zero-based).
+
+    Returns:
+      a copy of Cl, float array [LMAX].
+    """
     Cl[:] = 0.0
     lh.C_cg_mix_tab(0, LMAX, zc, zg, il, Cl.ctypes.data_as(lh.PD), 0.1, 0.01)
     return Cl.copy()
 
 
+# out collects every array for np.savez_compressed; W[:, 1:] @ C[1:] is the
+# bin-averaged Legendre projection of a C_ell onto the angular bins (l >= 1)
 out = {}
 # w_cc: memoized path (as in the data vector: (nz,0,0) first, then others rescaled)
 for (l1, l2) in [(1, 1), (3, 3), (0, 3), (1, 2)]:
