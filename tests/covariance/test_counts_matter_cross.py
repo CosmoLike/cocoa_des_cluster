@@ -29,6 +29,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+from abort_check import assert_aborts
 import pytest
 from scipy.special import roots_legendre
 from scipy.stats import poisson
@@ -235,8 +236,9 @@ def test_bad_projection_inputs():
     distance, a quadrature weight array one node short, I11 with 2 instead
     of 3 wavenumbers, a negative linear power, a transfer with 2 instead of
     3 wavenumbers, a NaN window, and moments whose J02 triangle holds 5
-    instead of 6 entries. Each must raise ValueError (pytest.raises fails
-    the test when it does not).
+    instead of 6 entries. Each must be refused: assert_aborts runs the call in a
+    forked child and requires a nonzero exit status
+    (abort_check.py explains both refusal paths).
 
     Arguments:
       none.
@@ -257,5 +259,6 @@ def test_bad_projection_inputs():
     ):
         malformed = dict(values)
         malformed[key] = bad
-        with pytest.raises(ValueError):
+        def attempt():
             count_matter_cross(**malformed)
+        assert_aborts(attempt)

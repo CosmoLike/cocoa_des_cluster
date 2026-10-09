@@ -34,6 +34,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+from abort_check import assert_aborts
 import pytest
 from scipy.special import roots_legendre
 
@@ -263,8 +264,9 @@ def test_zero_response_and_validation():
     the valid inputs: zero or more than full-sky area (4 pi sr), a zero
     distance, a negative density, a density with one node missing, a NaN
     response, a zero quadrature weight, a negative background variance,
-    and a two-point response with 8 nodes instead of 9. Each must raise
-    ValueError (pytest.raises fails the test when it does not).
+    and a two-point response with 8 nodes instead of 9. Each must be refused: assert_aborts runs the call in a
+    forked child and requires a nonzero exit status
+    (abort_check.py explains both refusal paths).
 
     Arguments:
       none.
@@ -291,5 +293,6 @@ def test_zero_response_and_validation():
     ):
         malformed = dict(inputs)
         malformed[key] = bad
-        with pytest.raises(ValueError):
+        def attempt():
             count_statistics(interface=ci, **malformed)
+        assert_aborts(attempt)

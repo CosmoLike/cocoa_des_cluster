@@ -29,6 +29,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+from abort_check import assert_aborts
 import pytest
 from scipy.special import roots_legendre
 
@@ -277,8 +278,9 @@ def test_sample_domain_guards(initialized):
     (outside a < 1), NaN scale factors, negative wavenumbers, a k table
     with 2 instead of 4 redshift rows, masses beyond the sigma table
     (ln M + 100), zero quadrature weights, and 4 weights for 3 masses.
-    Each must raise ValueError (pytest.raises fails the test when it
-    does not).
+    Each must be refused: assert_aborts runs the call in a
+    forked child and requires a nonzero exit status
+    (abort_check.py explains both refusal paths).
 
     Arguments:
       initialized = the module fixture (forecast and cluster model set).
@@ -296,5 +298,6 @@ def test_sample_domain_guards(initialized):
                              ('dlnm', np.ones(shape=4))):
         bad = dict(values)
         bad[key] = replacement
-        with pytest.raises(ValueError):
+        def attempt():
             ci.covariance_cluster_halo_samples(**bad)
+        assert_aborts(attempt)

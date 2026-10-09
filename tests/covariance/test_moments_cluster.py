@@ -28,6 +28,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+from abort_check import assert_aborts
 import pytest
 from scipy.special import roots_legendre
 
@@ -218,8 +219,9 @@ def test_empty_selection_and_input_guards():
     Each malformed case replaces one input of a copy of the valid inputs:
     a negative weight, no selection category, a weight without the state
     axis, a bias with the wrong number of masses, a NaN bias, a profile
-    with the wrong number of states or masses, an infinite profile. Each
-    must raise ValueError (pytest.raises fails the test when it does not).
+    with the wrong number of states or masses, an infinite profile. Each must be refused: assert_aborts runs the call in a
+    forked child and requires a nonzero exit status
+    (abort_check.py explains both refusal paths).
 
     Arguments:
       none.
@@ -246,8 +248,9 @@ def test_empty_selection_and_input_guards():
     ):
         malformed = dict(values)
         malformed[key] = bad
-        with pytest.raises(ValueError):
+        def attempt():
             ci.covariance_cluster_moments(**malformed)
+        assert_aborts(attempt)
 
 
 @pytest.mark.parametrize('layout', ['fortran', 'sliced', 'readonly'])

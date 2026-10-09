@@ -29,6 +29,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+from abort_check import assert_aborts
 import pytest
 from scipy.special import roots_legendre
 
@@ -231,8 +232,9 @@ def test_invalid_inputs_raise_before_c():
     below 2, a zero distance, negative radial weights, a power table with 2
     instead of 3 multipoles, a profile with 8 instead of 9 nodes, a NaN
     bias, a richness index past the two profiles, and nlens = 4 for 3 base
-    fields. Each must raise ValueError (pytest.raises fails the test when
-    it does not).
+    fields. Each must be refused: assert_aborts runs the call in a
+    forked child and requires a nonzero exit status
+    (abort_check.py explains both refusal paths).
 
     Arguments:
       none.
@@ -253,5 +255,6 @@ def test_invalid_inputs_raise_before_c():
     ):
         malformed = dict(values)
         malformed[key] = bad
-        with pytest.raises(ValueError):
+        def attempt():
             ci.covariance_cluster_spectra(**malformed)
+        assert_aborts(attempt)
