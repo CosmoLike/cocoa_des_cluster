@@ -95,3 +95,5 @@ python ./projects/des_cluster/EXAMPLE_EMUL2_MINIMIZE1.py --check
 ```bash
 python ./projects/des_cluster/EXAMPLE_EMUL2_MINIMIZE2.py --check
 ```
+
+The [histogram n(z) reconstruction comparison](data_vector/README.md#nz-reconstruction) tests the optional `photoz_histogram_akima` YAML key at its tested practical integration accuracy, reports the model-vector Δχ², and plots both reconstructed curves and their original-bin area changes.
