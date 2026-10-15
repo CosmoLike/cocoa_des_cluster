@@ -377,7 +377,7 @@ To run every other test while skipping these:
 The [manual study](../studies/README.md) compares the original cubic with
 fixed 3-, 5- and 7-point histogram preparation followed by Akima. It measures
 sensitivity to the interpretation of the input histogram, rather than
-agreement with a frozen output vector. It is **not collected by pytest**.
+agreement with a frozen output vector. It is **excluded from ordinary pytest discovery**.
 The study also compares the original reconstruction at default numerical
 settings with its refined calculation, using the same physical inputs.
 
