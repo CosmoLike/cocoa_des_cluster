@@ -13,11 +13,9 @@
 11. [Files](#des_cluster_data_files)
 12. [Regenerating the data](#des_cluster_data_scripts)
 13. [Unit tests and validation tools](#des_cluster_unit_tests)
-14. [Validation tools](#des_cluster_validation)
-15. [Timing](#des_cluster_timing)
-16. [Status and known limitations](#des_cluster_status)
-17. [Computing covariances](#computing_covariances)
-18. [Appendix: Which accuracy settings are available?](#accuracy)
+14. [Status and known limitations](#des_cluster_status)
+15. [Computing covariances](#computing_covariances)
+16. [Appendix: Which accuracy settings are available?](#accuracy)
 
 
 # The des_cluster project <a name="des_cluster_overview"></a>
@@ -768,68 +766,11 @@ It reads the emulator and sampler blocks from the projects des_y3 and desy1xplan
 
 # Unit tests and validation tools <a name="des_cluster_unit_tests"></a>
 
-The `tests/` folder holds unit tests for the likelihoods of this project
-(the two cluster combinations and the three galaxy-only likelihoods):
-they compare each likelihood against stored reference
-values, check for race conditions from OpenMP threading, check that
-every cached table is rebuilt when one of its parameters moves, and
-measure the numerical error of the default accuracy settings. Every
-test except `test_neutrino_cb.py` reads nothing from the live project;
-[tests/README.md](tests/README.md) maps the test sectors and the
-order in which to read them, and the
-[data-vector test guide](tests/data_vector/README.md) describes every
-test, the tests' own data snapshot, and how to refresh it.
-
-The steps below assume the Conda cocoa environment is active
-(`conda activate cocoa`), the shell is bash, and the current folder is
-the cocoa main folder `cocoa/Cocoa`.
-
-**Step :one:**: activate the private Python environment by sourcing
-the script `start_cocoa.sh`
-
-    source start_cocoa.sh
-
-**Step :two:**: run the tests of this project
-
-    python -m pytest ./projects/des_cluster/tests/data_vector
-
-## Validation tools <a name="des_cluster_validation"></a>
-
-An unqualified pytest run collects only `tests/data_vector`, and pytest never descends into the three validation folders below; each is run on its own.
-
-- `tests/reference/` holds an independent Python reference model of the cluster observables and of the joint Gaussian covariance, with its own tests:
-
-      python -m pytest ./projects/des_cluster/tests/reference
-
-- `tests/validation/compare_reference.py` compares the compiled code with the Python reference, quantity by quantity (selection kernels, number density and bias per richness bin, one-halo power spectrum, counts, Limber spectra, real-space statistics, and the cluster blocks of the data vector), and checks that the data vector is bitwise identical at 1 and 8 OpenMP threads:
-
-      python ./projects/des_cluster/tests/validation/compare_reference.py --threads 4
-
-  [PORT_PLAN.md](PORT_PLAN.md) records the result: every cluster quantity matches the reference to $2\times10^{-5}$ or better, except cluster lensing, which differs by $10^{-3}$ in the tail of the lowest source bins behind the highest cluster bin; on the cluster-lensing block this amounts to $\Delta\chi^2 = 3.4\times10^{-5}$ with the scale cuts and $2.0\times10^{-4}$ without them.
-
-- `tests/validation/knob_sweep.py` measures the accuracy settings one at a time with the small scales visible (the source of the `integration_accuracy` numbers above). It reuses the cache of `compare_reference.py`:
-
-      OMP_NUM_THREADS=4 python ./projects/des_cluster/tests/validation/knob_sweep.py \
-        --cache-dir <compare_reference cache> --cov ./projects/des_cluster/data/des_cluster_y6_cov.npy
-
-- `tests/lighthouse_reference/` holds data vectors and intermediate quantities computed with the original CosmoLike cluster code (the `lighthouse` repository), kept for comparison. Its [README](tests/lighthouse_reference/README.md) documents the configuration and lists where that code deviates from the model of the paper. The port follows the paper, apart from the choices documented in this README (the volume-only cluster kernel by default, the cluster-lensing pairs kept and masked, Limber-only $w_{cc}$ and $w_{cg}$), so this comparison is a sanity check at the percent level: `compare_reference.py` measures counts that agree to 2.4% and a cluster bias that agrees to 0.8% ([PORT_PLAN.md](PORT_PLAN.md), section 7; the original code integrates with a relative tolerance of $10^{-2}$).
-
-## Timing <a name="des_cluster_timing"></a>
-
-`tests/validation/time_cosmolike.py` times the data vector per probe set: after one warm-up, every timed evaluation moves every sampled parameter, so no table is served from a cache, and the timer of the likelihood is read apart from the timer of CAMB.
-
-    OMP_NUM_THREADS=8 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
-      python ./projects/des_cluster/tests/validation/time_cosmolike.py
-
-`tests/validation/time_lighthouse.py` times the original CosmoLike cluster code in the same way; it needs the prebuilt library of that code, which is not part of Cocoa.
-
-Published timings are maintained in
-[Cocoa's main README](https://github.com/CosmoLike/cocoa#overview).
-[PORT_PLAN.md](PORT_PLAN.md) retains the historical port measurements.
-
-The MCMC examples put CAMB-dependent cosmological parameters in the slowest
-block. The [hybrid examples](#des_cluster_examples_emul2) replace CAMB with
-an emulator while keeping the CosmoLike data-vector calculation.
+The `tests/` folder compares likelihood predictions against stored reference
+values, checks for race conditions from OpenMP threading, and measures the
+numerical error of the default accuracy settings.
+[tests/README.md](tests/README.md) describes the checks, how to run them,
+the input data snapshots, and how to refresh them.
 
 # Status and known limitations <a name="des_cluster_status"></a>
 
@@ -853,78 +794,11 @@ The port is complete for the model described above: the two likelihoods run, the
 
 # Computing covariances <a name="computing_covariances"></a>
 
-> [!WARNING]
-> **CLI for production; notebook wrappers for exploration.**
->
-> Run production and HPC covariance calculations from YAML through the
-> `_interface` bindings. Notebook `_wrapper` APIs expose intermediate
-> quantities for exploration; copying and rearranging their arrays adds
-> overhead. Both routes call the same C kernels.
->
-> For timing measurements, see
-> [Cocoa's main README](https://github.com/CosmoLike/cocoa#overview).
-
-The production CLI saves G, SSC, cNG and total before scale cuts. It reads
-[the joint cluster evaluate YAML](EXAMPLE_EVALUATE_COVARIANCE.yaml) and calls the shared C kernels.
-This is a joint Limber 6×2pt + counts forecast, with the approximations
-listed in the [covariance guide](covariance/README.md#joint).
-
-These steps assume Cocoa and this project are installed, the Cocoa Conda environment
-is active, the shell is Bash, and the current folder is `cocoa/Cocoa/`.
-
-**Step :one:**: enable this project in `set_installation_options.sh` by commenting out
-`export IGNORE_COSMOLIKE_DES_CLUSTER_CODE=1` before activation.
-
-**Step :two:**: activate Cocoa.
-
-```bash
-source start_cocoa.sh
-```
-
-**Step :three:**: enable covariance generation.
-
-```bash
-unset IGNORE_COSMOLIKE_DES_CLUSTER_COVARIANCE
-```
-
-**Step :four:**: compile the project.
-
-```bash
-source ./projects/des_cluster/scripts/compile_des_cluster.sh
-```
-
-**Step :five:**: Select the number of OpenMP cores (below, we set it to 8).
-
-  - Linux
-
-        export OMP_NUM_THREADS=8; export OMP_PROC_BIND=close; \
-        export OMP_PLACES=cores; export OMP_DYNAMIC=FALSE; \
-        export OPENBLAS_NUM_THREADS=1; export MKL_NUM_THREADS=1
-
-  - macOS (arm)
-
-        export OMP_NUM_THREADS=8; export OMP_PROC_BIND=disabled; \
-        export OMP_PLACES=cores; export OMP_DYNAMIC=FALSE; \
-        export OPENBLAS_NUM_THREADS=1; export MKL_NUM_THREADS=1
-
-**Step :six:**: compute the fixed YAML cosmology.
-
-```bash
-python ./projects/des_cluster/covariance/compute_covariance.py ./projects/des_cluster/EXAMPLE_EVALUATE_COVARIANCE.yaml
-```
-
-Use `--output PATH` for a separate output or `--overwrite` to replace an
-existing computed archive. Paths are relative to `cocoa/Cocoa/`. Threads
-come only from `OMP_NUM_THREADS`, never from the YAML; the runner fixes BLAS
-to one thread. Ordinary likelihoods read their supplied covariance and do
-not generate a new one.
-
-Cobaya's YAML reader supplies the familiar `theory`, `params` and
-`sampler: evaluate` syntax. This runner evaluates one fixed cosmology and
-does not run MCMC. See the [covariance guide](covariance/README.md) for output
-ordering, physics, Gaussian non-Limber/IA limits, plots and test commands,
-and the [accuracy FAQ](#accuracy) for the separate numerical controls.
-
+The covariance tools compute Gaussian (G), super-sample (SSC), connected
+non-Gaussian (cNG) and total matrices before scale cuts. The example is a
+joint Limber 6×2pt + counts forecast.
+[covariance/README.md](covariance/README.md) explains compilation, the production
+CLI, exploratory notebooks, accuracy settings and output files.
 
 # Appendix <a name="appendix"></a>
 
