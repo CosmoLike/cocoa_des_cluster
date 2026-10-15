@@ -38,8 +38,6 @@ and TATT, and their tests cover both.
     5. [The photo-z convention checks](#photoz_conventions)
     6. [The cold dark matter + baryon halo field](#neutrino_cb)
     7. [Accuracy checks](#accuracy_checks)
-    8. [Histogram reconstruction comparison](#nz-reconstruction)
-    9. [Three-, five- and seven-point Akima](#nz-akima-factor)
 3. [Appendix](#appendix)
     1. [FAQ: Do the tests keep their own data?](#frozen_copy)
     2. [FAQ: Why is the reference $\chi^2$ near zero?](#synthetic_vectors)
@@ -369,18 +367,6 @@ To run the accuracy checks on their own:
 To run every other test while skipping these:
 
     python -m pytest ./projects/des_cluster/tests/data_vector --ignore ./projects/des_cluster/tests/data_vector/test_accuracy.py
-
-<a name="nz-reconstruction"></a>
-<a name="nz-akima-factor"></a>
-### Optional n(z) reconstruction study
-
-The [manual study](../studies/README.md) compares the original cubic with
-fixed 3-, 5- and 7-point histogram preparation followed by Akima. It measures
-sensitivity to the interpretation of the input histogram, rather than
-agreement with a frozen output vector. It is **excluded from ordinary pytest discovery**.
-The study also compares the original reconstruction at default numerical
-settings with its refined calculation, using the same physical inputs.
-
 
 ## :interrobang: FAQ: Do the tests keep their own data? <a name="frozen_copy"></a>
 
