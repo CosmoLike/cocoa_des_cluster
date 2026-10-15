@@ -200,6 +200,8 @@ _CONFIG = {
     "bias_model": [0, 0, 0, 1, 0],
     # n(z) photo-z conventions: interpolation 0 = cspline, 1 = linear,
     # 2+ = Steffen monotone; z column 0 = Z_LOW, 1 = Z_MID
+    "photoz_histogram_akima": 0,
+    "photoz_histogram_akima_factor": 3,  # 3, 5 or 7; independent of accuracy
     "photoz_interpolation_type": 0,
     "photoz_zmid_convention": 0,
     # C-FAST-PT internal (convolution) grid / output grid; 1.0 = equal
@@ -247,6 +249,9 @@ def configure(**overrides):
     Raises:
       KeyError naming the unknown keyword and the valid names.
     """
+    if overrides.get("photoz_histogram_akima", 0) not in (0, 1):
+        raise ValueError("photoz_histogram_akima must be 0 or 1")
+
     for name, value in overrides.items():
         if name not in _CONFIG:
             raise KeyError(
@@ -346,6 +351,9 @@ def init_cosmolike(CLprobe="6x2pt_N", with_data=False, lmax=None):
                     _DATASET["theta_min_arcmin"],
                     _DATASET["theta_max_arcmin"])
     ci.set_log_level_info()
+    ci.init_photoz_histogram_akima(
+        enabled=int(_CONFIG["photoz_histogram_akima"]),
+        preparation_factor=int(_CONFIG["photoz_histogram_akima_factor"]))
     ci.init_photoz_conventions(
         interpolation_type=int(_CONFIG["photoz_interpolation_type"]),
         zmid_convention=int(_CONFIG["photoz_zmid_convention"]))
@@ -599,6 +607,9 @@ def _set_state(omegam, omegab, H0, ns, As_1e9, w, w0pwa, mnu,
     ci.init_accuracy_boost(
         accuracy_boost=CLAccuracyBoost,
         integration_accuracy=int(CLIntegrationAccuracy))
+    ci.init_photoz_histogram_akima(
+        enabled=int(_CONFIG["photoz_histogram_akima"]),
+        preparation_factor=int(_CONFIG["photoz_histogram_akima_factor"]))
     ci.init_photoz_conventions(
         interpolation_type=int(_CONFIG["photoz_interpolation_type"]),
         zmid_convention=int(_CONFIG["photoz_zmid_convention"]))

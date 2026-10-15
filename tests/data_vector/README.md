@@ -368,8 +368,6 @@ To run every other test while skipping these:
 
     python -m pytest ./projects/des_cluster/tests/data_vector --ignore ./projects/des_cluster/tests/data_vector/test_accuracy.py
 
-# Appendix <a name="appendix"></a>
-
 ## :interrobang: FAQ: Do the tests keep their own data? <a name="frozen_copy"></a>
 
 Every test except `test_neutrino_cb.py` reads nothing from the live

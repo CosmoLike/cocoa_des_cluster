@@ -1,0 +1,219 @@
+{
+  "project": "des_cluster",
+  "example": "example2",
+  "point": {
+    "As_1e9": 2.19,
+    "DES_A1_1": 0.0,
+    "DES_A1_2": 0.0,
+    "DES_B1_1": 1.42,
+    "DES_B1_2": 1.66,
+    "DES_B1_3": 1.7,
+    "DES_B1_4": 1.62,
+    "DES_B1_5": 1.78,
+    "DES_B1_6": 1.75,
+    "DES_CL_A_LAMBDA": 0.943,
+    "DES_CL_BS1": 1.1,
+    "DES_CL_BS2": 0.2,
+    "DES_CL_B_LAMBDA": 0.207,
+    "DES_CL_LNLAMBDA0": 4.26,
+    "DES_CL_R0": 30.0,
+    "DES_CL_SIGMA_INT": 0.15,
+    "DES_DZ_L1": 0.005,
+    "DES_DZ_L2": 0.003,
+    "DES_DZ_L3": 0.001,
+    "DES_DZ_L4": -0.002,
+    "DES_DZ_L5": 0.001,
+    "DES_DZ_L6": 0.008,
+    "DES_DZ_S1": 0.034,
+    "DES_DZ_S2": 0.028,
+    "DES_DZ_S3": 0.011,
+    "DES_DZ_S4": -0.01,
+    "DES_M1": 0.0,
+    "DES_M2": 0.0,
+    "DES_M3": 0.0,
+    "DES_M4": 0.0,
+    "DES_PM1": 0.0,
+    "DES_PM2": 0.0,
+    "DES_PM3": 0.0,
+    "DES_PM4": 0.0,
+    "DES_PM5": 0.0,
+    "DES_PM6": 0.0,
+    "H0": 69.0,
+    "mnu": 0.07719273818983689,
+    "ns": 0.96859,
+    "omegab": 0.048,
+    "omegam": 0.3,
+    "w": -1.0,
+    "w0pwa": -1.0
+  },
+  "input_files": {
+    "source_file": {
+      "name": "des_y6_source.nz",
+      "sha256": "31d9d1c4b6d4cc4aead17f3238c389f5e90555e38555bade2a953350252b423b"
+    },
+    "lens_file": {
+      "name": "des_y6_maglim.nz",
+      "sha256": "e058a31cb355fbb1b8067266adedcdc96c8156f9d53dc1c57548609a3252a372"
+    },
+    "cov_file": {
+      "name": "des_cluster_y6_cov.npy",
+      "sha256": "042a450ed2ec96a627b8b44827f1e71366fbeff2db2a4e89ae1dc448c96a4083"
+    },
+    "mask_file": {
+      "name": "des_cluster_y6_6x2ptN.mask",
+      "sha256": "ef526b6a4ecb7f7bdcdf9905a091bc2560f83eeba436119a40edd50047990e1b"
+    },
+    "data_vector_file": {
+      "name": "des_cluster_y6.datavector",
+      "sha256": "00b9ae52b40dc2e8b04056f1260afffa932255b74827e42c43ea2927e9ec92e2"
+    }
+  },
+  "accuracyboost": 1.0,
+  "physical_covariance": true,
+  "reference_integration_accuracy": 6,
+  "pairwise_delta_chi2": {
+    "original_to_three": 0.4816718647428655,
+    "original_to_five": 0.6585372493092365,
+    "original_to_seven": 0.8011377392347463,
+    "three_to_five": 0.063901983668514,
+    "three_to_seven": 0.15503905696600256,
+    "five_to_seven": 0.02143141541582969
+  },
+  "practical_levels": {
+    "three": 4,
+    "five": 4,
+    "seven": 4
+  },
+  "quadrature_scans": {
+    "five": [
+      {
+        "integration_accuracy": 5,
+        "five_numerical_delta_chi2": 0.00037909843696344776,
+        "distance_to_refined_three": 0.06420399383530173,
+        "three_to_five_at_level5": 0.06440370902808507,
+        "model_displacement_refinement_delta_chi2": 0.0005881258519656247
+      },
+      {
+        "integration_accuracy": 0,
+        "five_numerical_delta_chi2": 4.228735779030097,
+        "distance_to_refined_three": 4.400014647669506
+      },
+      {
+        "integration_accuracy": 1,
+        "five_numerical_delta_chi2": 1.8541995419336432,
+        "distance_to_refined_three": 1.9077502706765164
+      },
+      {
+        "integration_accuracy": 2,
+        "five_numerical_delta_chi2": 0.8754830646641641,
+        "distance_to_refined_three": 0.9587118058630617
+      },
+      {
+        "integration_accuracy": 3,
+        "five_numerical_delta_chi2": 0.05589473581832989,
+        "distance_to_refined_three": 0.11268821425626667
+      },
+      {
+        "integration_accuracy": 4,
+        "five_numerical_delta_chi2": 0.039560666820632355,
+        "distance_to_refined_three": 0.09755115727969457
+      }
+    ],
+    "seven": [
+      {
+        "integration_accuracy": 5,
+        "seven_numerical_delta_chi2": 0.002804244177063326,
+        "distance_to_refined_three": 0.15721457957599602,
+        "three_to_seven_at_level5": 0.15808917192101318,
+        "model_displacement_refinement_delta_chi2": 0.003834861776108829
+      },
+      {
+        "integration_accuracy": 0,
+        "seven_numerical_delta_chi2": 5.356220950948273,
+        "distance_to_refined_three": 5.719801646030819
+      },
+      {
+        "integration_accuracy": 1,
+        "seven_numerical_delta_chi2": 1.8193066968224412,
+        "distance_to_refined_three": 1.9763018307573779
+      },
+      {
+        "integration_accuracy": 2,
+        "seven_numerical_delta_chi2": 1.0235652320350297,
+        "distance_to_refined_three": 1.198969484292613
+      },
+      {
+        "integration_accuracy": 3,
+        "seven_numerical_delta_chi2": 0.0837685991860766,
+        "distance_to_refined_three": 0.22799343877652722
+      },
+      {
+        "integration_accuracy": 4,
+        "seven_numerical_delta_chi2": 0.05655064559556941,
+        "distance_to_refined_three": 0.20420241159478714
+      }
+    ]
+  },
+  "budget_delta_chi2": 0.1,
+  "checks": {
+    "three_reference_bitwise_unchanged": true,
+    "roundtrips_3_5_3_and_3_7_3_bitwise": true,
+    "fresh_yaml_matches_live": true,
+    "inverse_covariance_unchanged": true
+  },
+  "initial_practical_levels": {
+    "three": 3,
+    "five": 3,
+    "seven": 3
+  },
+  "raised_accuracy": {
+    "integration_accuracy": 4,
+    "reference_integration_accuracy": 6,
+    "numerical_delta_chi2": {
+      "three": 0.009048424361795399,
+      "five": 0.039560666820632334,
+      "seven": 0.056550645595569285,
+      "original": 6.307205453196806e-05
+    },
+    "pairwise": {
+      "three_to_five": {
+        "raised_delta_chi2": 0.07535636350846248,
+        "reference_delta_chi2": 0.063901983668514,
+        "displacement_error_delta_chi2": 0.01483372592029725
+      },
+      "three_to_seven": {
+        "raised_delta_chi2": 0.18166772025817485,
+        "reference_delta_chi2": 0.15503905696600256,
+        "displacement_error_delta_chi2": 0.02984404567379845
+      },
+      "five_to_seven": {
+        "raised_delta_chi2": 0.026329828156191934,
+        "reference_delta_chi2": 0.02143141541582969,
+        "displacement_error_delta_chi2": 0.003691335144545198
+      },
+      "original_to_three": {
+        "raised_delta_chi2": 0.4993108820310232,
+        "reference_delta_chi2": 0.4816718647428655,
+        "displacement_error_delta_chi2": 0.009026976705718077
+      }
+    },
+    "tests": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "fresh_vectors_match_previous_scans_bitwise": true,
+    "three_vectors_agree_between_factor_tests_bitwise": true,
+    "vector_sha256": {
+      "5": "1f87a646194c15c6eaa646dbeed24d084e58c811c16c52a16dc1960aff611cef",
+      "7": "4ce65134b8e4e054581410458e71f04568db74a1bdcba95bd8c7047e6c11a9be"
+    },
+    "original_vector_source": {
+      "project": "des_cluster",
+      "level": 4,
+      "status": "passed",
+      "returncode": 0
+    }
+  }
+}
