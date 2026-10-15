@@ -1,0 +1,85 @@
+{
+  "project": "des_cluster",
+  "part": "defaults",
+  "point": {
+    "As_1e9": 2.19,
+    "DES_A1_1": 0.0,
+    "DES_A1_2": 0.0,
+    "DES_B1_1": 1.42,
+    "DES_B1_2": 1.66,
+    "DES_B1_3": 1.7,
+    "DES_B1_4": 1.62,
+    "DES_B1_5": 1.78,
+    "DES_B1_6": 1.75,
+    "DES_CL_A_LAMBDA": 0.943,
+    "DES_CL_BS1": 1.1,
+    "DES_CL_BS2": 0.2,
+    "DES_CL_B_LAMBDA": 0.207,
+    "DES_CL_LNLAMBDA0": 4.26,
+    "DES_CL_R0": 30.0,
+    "DES_CL_SIGMA_INT": 0.15,
+    "DES_DZ_L1": 0.005,
+    "DES_DZ_L2": 0.003,
+    "DES_DZ_L3": 0.001,
+    "DES_DZ_L4": -0.002,
+    "DES_DZ_L5": 0.001,
+    "DES_DZ_L6": 0.008,
+    "DES_DZ_S1": 0.034,
+    "DES_DZ_S2": 0.028,
+    "DES_DZ_S3": 0.011,
+    "DES_DZ_S4": -0.01,
+    "DES_M1": 0.0,
+    "DES_M2": 0.0,
+    "DES_M3": 0.0,
+    "DES_M4": 0.0,
+    "DES_PM1": 0.0,
+    "DES_PM2": 0.0,
+    "DES_PM3": 0.0,
+    "DES_PM4": 0.0,
+    "DES_PM5": 0.0,
+    "DES_PM6": 0.0,
+    "H0": 69.0,
+    "mnu": 0.07719273818983689,
+    "ns": 0.96859,
+    "omegab": 0.048,
+    "omegam": 0.3,
+    "w": -1.0,
+    "w0pwa": -1.0
+  },
+  "input_files": {
+    "source_file": {
+      "name": "des_y6_source.nz",
+      "sha256": "31d9d1c4b6d4cc4aead17f3238c389f5e90555e38555bade2a953350252b423b"
+    },
+    "lens_file": {
+      "name": "des_y6_maglim.nz",
+      "sha256": "e058a31cb355fbb1b8067266adedcdc96c8156f9d53dc1c57548609a3252a372"
+    },
+    "cov_file": {
+      "name": "des_cluster_y6_cov.npy",
+      "sha256": "042a450ed2ec96a627b8b44827f1e71366fbeff2db2a4e89ae1dc448c96a4083"
+    },
+    "mask_file": {
+      "name": "des_cluster_y6_6x2ptN.mask",
+      "sha256": "ef526b6a4ecb7f7bdcdf9905a091bc2560f83eeba436119a40edd50047990e1b"
+    },
+    "data_vector_file": {
+      "name": "des_cluster_y6.datavector",
+      "sha256": "00b9ae52b40dc2e8b04056f1260afffa932255b74827e42c43ea2927e9ec92e2"
+    }
+  },
+  "accuracyboost": 1.0,
+  "integration_accuracy": 1,
+  "defaults_yaml_sha256": "7d2a9bed9441333de65e695b50c3d6c781b3b5c53cdf48f7314231ef2ff7e81f",
+  "interface_sha256": "fa0fee10715a418008a06fb0db0ba430e3d78eb15b1e3a5521b10ac7ec2a6c0a",
+  "study_sha256": "ec356f5fe96ce3c418449392057aba238f77378e798274e807d4f70ff95d821c",
+  "delta_chi2": {},
+  "elapsed_seconds": 3.5802423750283197,
+  "thread_environment": {
+    "OMP_NUM_THREADS": "8",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "inverse_covariance_sha256": "ba9ba7a9b4557715e32fc0c8bb9dc2d8f94d759d05a8a41613896173367230e9"
+}
