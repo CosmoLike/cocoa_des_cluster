@@ -20,30 +20,7 @@
 18. [Appendix: Which accuracy settings are available?](#accuracy)
 
 
-> [!Warning]
-> CosmoLike supports the optimized strict-IEEE default build and
-> `COSMOLIKE_DEBUG_MODE`. The compiler mode `COSMOLIKE_AGGRESSIVE_MODE`
-> is retired because its fast-math configuration produced incorrect
-> covariance inverses. Unset that variable before compiling.
-> Do not enable `-ffast-math`, `-Ofast`, `-funsafe-math-optimizations`,
-> `-fassociative-math`, `-ffinite-math-only`, `-freciprocal-math`,
-> `-fno-signed-zeros`, or `-fno-trapping-math` in CosmoLike builds.
-> This does not change Cocoa's separate `--aggressive` download option.
-
 # The des_cluster project <a name="des_cluster_overview"></a>
-
-> [!WARNING]
-> **CLI for production; notebook wrappers for exploration.**
->
-> Run production and HPC calculations from YAML through the optimized
-> `_interface` bindings. Notebook `_wrapper` APIs expose intermediate
-> quantities for exploration; copying and rearranging their arrays adds
-> overhead. Both routes call the same C kernels.
->
-> In a matched **LSST Y1 covariance** test on an M2 Pro with eight threads,
-> the CLI averaged **50.23 s** (three runs); one wrapper run took **173.38 s**.
-> The CLI was **3.45× faster**, with bitwise-identical covariance components.
-> See [the production covariance CLI](#computing_covariances).
 
 This project runs the DES Y6-style joint analysis of galaxy clusters, galaxy clustering, and weak lensing of [arXiv:2503.13631](https://arxiv.org/abs/2503.13631) in Cocoa. The cluster code is a port of the original CosmoLike cluster code ([arXiv:2008.10757](https://arxiv.org/abs/2008.10757)) into Cocoa's `cosmolike_core`, where it lives in the files ending in `_cluster`. The file [PORT_PLAN.md](PORT_PLAN.md) records the model, the design decisions, the validation, and the status of the port.
 
@@ -867,19 +844,13 @@ An unqualified pytest run collects only `tests/data_vector`, and pytest never de
 
 `tests/validation/time_lighthouse.py` times the original CosmoLike cluster code in the same way; it needs the prebuilt library of that code, which is not part of Cocoa.
 
-The table below is the one of [PORT_PLAN.md](PORT_PLAN.md) (section 7, "Timing, fresh machine"), in seconds per evaluation. **These are cosmolike-only times: CAMB is excluded.** The original code is single-threaded.
+Published timings are maintained in
+[Cocoa's main README](https://github.com/CosmoLike/cocoa#overview).
+[PORT_PLAN.md](PORT_PLAN.md) retains the historical port measurements.
 
-| probe set | original CosmoLike code (1 thread) | this code (4 threads) | this code (8 threads) | original / this code at 8 threads |
-|---|---|---|---|---|
-| 6x2pt + N | 22.64 | 0.152 | 0.108 | 210 |
-| 4x2pt + N | 21.46 | 0.131 | 0.084 | 255 |
-| 3x2pt | 2.02 | 0.098 | 0.068 | 30 |
-| cluster lensing | 19.15 | 0.047 | 0.033 | 580 |
-| $w_{cc}$ | 0.91 | 0.024 | 0.021 | 43 |
-| $w_{cg}$ | 0.85 | 0.023 | 0.019 | 45 |
-| N | 0.11 | 0.013 | 0.012 | 9 |
-
-On the same machine, CAMB takes 0.63 s at 8 threads and 1.2 s at 4 threads, 6 to 8 times the cosmolike time. This is why the MCMC examples with CAMB put the cosmological parameters in the slowest block, and why the hybrid examples of the section [Running Hybrid Cosmolike-ML emulators](#des_cluster_examples_emul2) spend nearly all their time in cosmolike.
+The MCMC examples put CAMB-dependent cosmological parameters in the slowest
+block. The [hybrid examples](#des_cluster_examples_emul2) replace CAMB with
+an emulator while keeping the CosmoLike data-vector calculation.
 
 # Status and known limitations <a name="des_cluster_status"></a>
 
@@ -902,6 +873,17 @@ The port is complete for the model described above: the two likelihoods run, the
 - **No response functions for the cluster blocks.** The data-vector plotting functions of `cosmolike_notebook_utils` have a cluster version (`plot_datavectors_cluster.py`); the response helpers (`plot_response.py`) do not.
 
 # Computing covariances <a name="computing_covariances"></a>
+
+> [!WARNING]
+> **CLI for production; notebook wrappers for exploration.**
+>
+> Run production and HPC covariance calculations from YAML through the
+> `_interface` bindings. Notebook `_wrapper` APIs expose intermediate
+> quantities for exploration; copying and rearranging their arrays adds
+> overhead. Both routes call the same C kernels.
+>
+> For timing measurements, see
+> [Cocoa's main README](https://github.com/CosmoLike/cocoa#overview).
 
 The production CLI saves G, SSC, cNG and total before scale cuts. It reads
 [the joint cluster evaluate YAML](EXAMPLE_EVALUATE_COVARIANCE.yaml) and calls the shared C kernels.
