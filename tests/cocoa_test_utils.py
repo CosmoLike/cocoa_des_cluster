@@ -196,28 +196,6 @@ EXAMPLES = {
 }
 
 
-def has_tatt(example):
-    """Tell whether one example carries a TATT variant.
-
-    The harness reads the TATT data vector of a configuration from
-    its "tatt_dataset" key, so that key IS the statement "this
-    example runs TATT": the galaxy-only examples carry it, the
-    cluster ones do not (the cluster lensing code has no TATT). The
-    generator asks before it evaluates a TATT reference; the test
-    modules of the cluster examples simply never request the variant.
-
-    Arguments:
-      example = a key of EXAMPLES.
-
-    Returns:
-      True when the example has a TATT variant.
-
-    Raises:
-      KeyError when example names no EXAMPLES entry.
-    """
-    return "tatt_dataset" in EXAMPLES[example]
-
-
 # ---- project-independent constants ------------------------------------------
 
 # These are identical in every project and live in the core module, where
@@ -276,6 +254,7 @@ _frozen_module = _H._frozen_module
 load_frozen_info = _H.load_frozen_info
 load_frozen_point = _H.load_frozen_point
 build_point = _H.build_point
+has_tatt = _H.has_tatt
 _single_model_chi2_impl = _H._single_model_chi2_impl
 _ten_in_a_row_impl = _H._ten_in_a_row_impl
 single_model_chi2 = _H.single_model_chi2
@@ -288,107 +267,16 @@ _run_isolated = _H._run_isolated
 
 # ---- one data set per process -----------------------------------------------
 
-# The cosmolike C layer keeps the data-vector dimensions in C globals
-# and aborts a process that initializes a second configuration with
-# different dimensions (cocoa_testing, WORKER ISOLATION). This suite
-# holds two data sets - the cluster examples (the 2812-entry joint
-# vector, six lens bins) and the galaxy-only examples (900 entries,
-# five lens bins) - and pytest imports every test module into ONE
-# process. The tests that go through single_model_chi2 and
-# ten_in_a_row_chi2 are covered by the harness's workers. The tests
-# that must build their models IN PROCESS are not: they read the full
-# data vector from the compiled interface, or need several model
-# builds to share the C caches (the cache ladders, the flag sweeps).
-# The cluster ladder (test_cache_consistency.py) keeps the pytest
-# process; every galaxy-only in-process test gets a process of its
-# own through the decorator below, so the two data sets never meet.
-# The variable marks the process that runs such a test's body.
-OWN_PROCESS_FLAG = "COCOA_TESTS_OWN_PROCESS"
+# The mechanism and its documentation live in cocoa_testing.py: a
+# process may initialize only one data-vector layout, and this suite
+# holds two - the cluster examples (the 2812-entry joint vector, six
+# lens bins) and the galaxy-only examples (900 entries, five lens
+# bins). The cluster ladder (test_cache_consistency.py) keeps the
+# pytest process; every galaxy-only in-process test runs under
+# @own_process(__file__), so the two layouts never meet.
+OWN_PROCESS_FLAG = _cct.OWN_PROCESS_FLAG
+own_process = _cct.own_process
 
-
-def own_process(test_file):
-    """Decorator: run one test method in a python process of its own.
-
-    Used as @own_process(__file__) on a unittest test method. In the
-    process pytest (or unittest discover) collected the test in, the
-    decorated method does not run its body: it starts a fresh python
-    on the test's own file, naming that one test on the command line
-    (unittest.main runs exactly the test it is given), and passes
-    when the child exits with code 0. The child carries
-    OWN_PROCESS_FLAG, so there the decorated method runs the body in
-    process, as written. The child's report streams to the same
-    terminal, so a failure prints its assertion there; the parent
-    only relays the verdict.
-
-    Arguments:
-      test_file = the path of the test module (__file__ in that
-                  module), the file the child process runs.
-
-    Returns:
-      the decorator to apply to the test method.
-
-    Raises:
-      nothing at decoration time; the decorated method fails with an
-      AssertionError naming the test when its process exits nonzero.
-    """
-    # functools.wraps copies the method's name and docstring onto the
-    # wrapper, so unittest and pytest still collect and report the
-    # test under its own name
-    import functools
-
-    def decorator(test_method):
-        """Return the replacement of test_method that runs it in a child process.
-
-        Arguments:
-          test_method = the unittest test method being decorated.
-
-        Returns:
-          wrapper, which keeps test_method's name and docstring.
-        """
-        @functools.wraps(test_method)
-        def wrapper(self):
-            """Run the test body here in the child, else start the child and check it.
-
-            functools.wraps replaces this docstring by the test method's.
-
-            Arguments:
-              self = the unittest.TestCase instance of the test.
-
-            Returns:
-              the body's result in the child process; nothing in the parent.
-
-            Raises:
-              AssertionError in the parent when the child exits nonzero.
-            """
-            # .get returns None when the variable is absent: only the
-            # child process, which carries the flag, runs the body
-            if os.environ.get(OWN_PROCESS_FLAG) == "1":
-                return test_method(self)
-            import subprocess
-
-            # "Class.method", the form unittest.main accepts as a
-            # command-line test name inside the file it runs
-            test_id = f"{type(self).__name__}.{self._testMethodName}"
-            # dict(os.environ) is a COPY of the environment: the
-            # edits below reach only the child process
-            environment = dict(os.environ)
-            environment[OWN_PROCESS_FLAG] = "1"
-            # OpenMP reads this at library load inside the fresh
-            # process (the test file sets it at its first line too)
-            environment["OMP_NUM_THREADS"] = REQUIRED_OMP_THREADS
-            print(f"  running {test_id} in its own process ...",
-                  flush=True)
-            # subprocess.run starts the child (sys.executable = this
-            # same python) and BLOCKS until it exits
-            completed = subprocess.run(
-                [sys.executable, os.path.abspath(test_file), test_id],
-                env=environment)
-            self.assertEqual(
-                completed.returncode, 0,
-                f"{test_id} failed in its own process (exit code "
-                f"{completed.returncode}); its report is printed above")
-        return wrapper
-    return decorator
 
 # ---- shared test-class factories (bound by the test files) ------------------
 example_suite = _cct_suites.example_suite
