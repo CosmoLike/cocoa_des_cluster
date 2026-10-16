@@ -25,6 +25,7 @@ Run from the cocoa/Cocoa folder: python -m pytest
 projects/des_cluster/tests/covariance/test_halo_samples_cluster.py
 """
 
+import os
 from pathlib import Path
 import sys
 
@@ -32,6 +33,15 @@ import numpy as np
 from abort_check import assert_aborts
 import pytest
 from scipy.special import roots_legendre
+
+# The halo checks are the fleet's opt-in tier (dozens of full mass
+# integrations): they run only when COCOA_HALO_SLOW=1 is set, the
+# same flag the halo-model suites of every project read. pytestmark
+# applies the mark to every test of this file.
+RUN_SLOW = os.environ.get("COCOA_HALO_SLOW", "0") == "1"
+pytestmark = pytest.mark.skipif(
+    not RUN_SLOW,
+    reason="slow halo-sample checks; set COCOA_HALO_SLOW=1 to run")
 
 project = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project/'interface'))
