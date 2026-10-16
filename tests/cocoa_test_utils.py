@@ -71,6 +71,9 @@ import cocoa_testing as _cct
 # test classes bound to this module; the project's test files assign
 # their return values to the module-level names pytest collects
 import cocoa_testing_suites as _cct_suites
+# cocoa_testing_freeze is the shared machinery behind the
+# maintainer tool generate_frozen_reference.py
+import cocoa_testing_freeze as _cct_freeze
 
 # ---- the project data ------------------------------------------------------
 
@@ -285,3 +288,4 @@ fastpt_reference_suite = _cct_suites.fastpt_reference_suite
 fastpt_sweep_suite = _cct_suites.fastpt_sweep_suite
 ee2_suite = _cct_suites.ee2_suite
 nonlinear_suite = _cct_suites.nonlinear_suite
+freeze_main = _cct_freeze.freeze_main
