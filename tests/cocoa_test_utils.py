@@ -392,3 +392,8 @@ def own_process(test_file):
 
 # ---- shared test-class factories (bound by the test files) ------------------
 example_suite = _cct_suites.example_suite
+accuracy_suite = _cct_suites.accuracy_suite
+fastpt_reference_suite = _cct_suites.fastpt_reference_suite
+fastpt_sweep_suite = _cct_suites.fastpt_sweep_suite
+ee2_suite = _cct_suites.ee2_suite
+nonlinear_suite = _cct_suites.nonlinear_suite
