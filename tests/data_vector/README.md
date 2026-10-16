@@ -116,12 +116,12 @@ lives under `frozen/`: one snapshot of configurations, data, and
 reference values, pinned together by the manifest. The
 [Appendix](#appendix) lists what this project's snapshot holds.
 
-This project deviates from the shared
-[test-file naming convention](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_naming)
-by design: its `EXAMPLE_EVALUATE` configurations lead with the cluster
-flagships, so `test_example1` and `test_example2` cover the 4x2pt + N
-and 6x2pt + N probes and cosmic shear is `test_example3`. The test
-files and the configurations they cover:
+This project follows the cluster-survey layout of the shared
+[test-file naming convention](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_naming):
+the examples lead with the cluster flagships, so `test_example1` and
+`test_example2` cover the 4x2pt + N and 6x2pt + N probes and cosmic
+shear is `test_example3`. The test files and the configurations they
+cover:
 
 | test | file | configuration | what it checks |
 |---|---|---|---|
