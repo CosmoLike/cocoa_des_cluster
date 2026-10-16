@@ -67,6 +67,10 @@ _CORE_DIR = os.path.abspath(os.path.join(
 if _CORE_DIR not in sys.path:
     sys.path.insert(0, _CORE_DIR)
 import cocoa_testing as _cct
+# cocoa_testing_suites holds the factories that build whole shared
+# test classes bound to this module; the project's test files assign
+# their return values to the module-level names pytest collects
+import cocoa_testing_suites as _cct_suites
 
 # ---- the project data ------------------------------------------------------
 
@@ -385,3 +389,6 @@ def own_process(test_file):
                 f"{completed.returncode}); its report is printed above")
         return wrapper
     return decorator
+
+# ---- shared test-class factories (bound by the test files) ------------------
+example_suite = _cct_suites.example_suite
