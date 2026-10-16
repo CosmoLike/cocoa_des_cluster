@@ -11,6 +11,15 @@ through leftover internal state or colliding OpenMP threads), and a
 stale cache (a table that is not rebuilt when one of the parameters it
 depends on moves).
 
+The mechanism of the check families this suite shares with the other
+projects - the frozen-reference and race contract, the accuracy
+settings and their cost order, the non-Limber, photo-z and
+cache-ladder constructions - is documented once in
+[the shared data-vector checks](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_checks)
+of the CosmoLike core. This file records what des_cluster runs and
+what it measured, and documents in full the checks the cluster probes
+add.
+
 They cover the two cluster combinations of arXiv 2503.13631 on the
 synthetic DES Y6-like data set, and the three galaxy-only likelihoods
 of this project on the DES Y3 placeholder data set:
@@ -39,7 +48,7 @@ and TATT, and their tests cover both.
     6. [The cold dark matter + baryon halo field](#neutrino_cb)
     7. [Accuracy checks](#accuracy_checks)
 3. [Appendix](#appendix)
-    1. [FAQ: Do the tests keep their own data?](#frozen_copy)
+    1. [FAQ: What does this project's snapshot hold?](#frozen_copy)
     2. [FAQ: Why is the reference $\chi^2$ near zero?](#synthetic_vectors)
     3. [FAQ: Why do some tests start a process of their own?](#own_process)
     4. [FAQ: How can maintainers refresh the snapshot?](#refreeze)
@@ -99,19 +108,20 @@ intrinsic-alignment model. The TATT variants set
     DES_BTA_1: 0.05
     DES_A2_2: -1.51541
 
-The two checks and their pass limits:
-
-| check | pass limit                                        | a failure means                    |
-|-------|---------------------------------------------------|------------------------------------|
-| $\Delta\chi^2$ | the recomputed $\chi^2$ must stay within 0.2 of the value stored in `frozen/reference_chi2.json` | code or data changed the numbers |
-| race condition | the fiducial evaluated on its own vs evaluated again after nine other cosmologies; the two $\chi^2$ values must agree within $10^{-4}$ | leftover state or an OpenMP race |
-
+The two checks and their pass limits are the shared frozen-reference
+and race contract
+([mechanism and pass limits](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_frozen)).
 Everything the tests compare against, except in `test_neutrino_cb.py`,
 lives under `frozen/`: one snapshot of configurations, data, and
 reference values, pinned together by the manifest. The
-[Appendix](#appendix) explains how the snapshot is protected.
+[Appendix](#appendix) lists what this project's snapshot holds.
 
-The test files and the configurations they cover:
+This project follows the cluster-survey layout of the shared
+[test-file naming convention](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_naming):
+the examples lead with the cluster flagships, so `test_example1` and
+`test_example2` cover the 4x2pt + N and 6x2pt + N probes and cosmic
+shear is `test_example3`. The test files and the configurations they
+cover:
 
 | test | file | configuration | what it checks |
 |---|---|---|---|
@@ -141,15 +151,14 @@ The test files and the configurations they cover:
 
 ### The sector-ladder cache check (`test_cache_consistency.py`) <a name="cache_ladder"></a>
 
-cosmolike caches every expensive stage behind its own key, and the
-cluster tables (the richness-weighted mass integrals, the one-halo
-lensing table, the cluster kernels, the Limber spectra of every
-cluster pair) are keyed on combinations of those keys: the cosmology,
-the mass-observable relation, the cluster redshift kernels, the photo-z
-shifts, the intrinsic alignment, the galaxy bias.
-A partial-invalidation bug - one sector's update path leaving a stale
-static another sector consumes - produces wrong data vectors only in
-MIXED update sequences, which the per-point checks never exercise.
+The shared ladder mechanism - why only MIXED update sequences expose
+a partial-invalidation bug, and the bitwise contract - is described in
+[the shared checks](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_cache_ladder).
+Here the cluster tables (the richness-weighted mass integrals, the
+one-halo lensing table, the cluster kernels, the Limber spectra of
+every cluster pair) are keyed on combinations of the sector keys: the
+cosmology, the mass-observable relation, the cluster redshift kernels,
+the photo-z shifts, the intrinsic alignment, the galaxy bias.
 
 The joint data vector has seven blocks: `ss` (cosmic shear), `gs`
 (galaxy-galaxy lensing), `gg` (galaxy clustering), `cg` (cluster x
@@ -226,30 +235,15 @@ The NLA ladder of the galaxy-only likelihoods is not repeated: the
 
 ### The non-Limber galaxy-galaxy lensing check (`test_nonlimber_ggl.py`) <a name="nonlimber_ggl"></a>
 
-The likelihood yaml key `adopt_limber_gs` chooses how the
-galaxy-galaxy lensing spectrum $C_\ell^{gs}$ is computed: `1` (the
-default) uses the Limber approximation at every multipole; `0` takes
-the multipoles below $\ell = 150$ from the exact projection, computed
-by cosmolike's `C_gs_tomo` with the split of Fang, Krause, Eifler &
-MacCrann (arXiv:1911.11947): an FFTLog integral of the linear power
-spectrum plus, in Limber, what linear theory misses. Galaxy-galaxy
-lensing defaults to Limber because its lensing kernel is broad; galaxy
+[Mechanism and assertions](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_nonlimber):
+in this project galaxy-galaxy lensing defaults to Limber
+(`adopt_limber_gs: 1`; the exact projection is cosmolike's
+`C_gs_tomo`), because its lensing kernel is broad; galaxy
 clustering has its own key, `adopt_limber_gg` (next section). Every
 likelihood of this project reads the two keys, the cluster
 combinations included, and these two checks are the only tests that
-flip them.
-
-The test evaluates the frozen 3x2pt fiducial with Limber,
-non-Limber, and Limber again in one process and reports
-$\Delta\chi^2 = \delta^T C^{-1} \delta$, with $\delta$ the data-vector
-difference and $C^{-1}$ the masked inverse covariance: the $\chi^2$ the
-Limber model would score against a data set generated with non-Limber
-galaxy-galaxy lensing. It also prints the contribution of each
-lens-source pair. The assertions are a dead-flag floor
-on $\Delta\chi^2$, a 5% band around the recorded $\Delta\chi^2$, that
-only galaxy-galaxy lensing entries change, a bit-identical round trip
-back to Limber, and, last, the frozen-reference check on the Limber
-evaluation.
+flip them. The test runs on the frozen 3x2pt fiducial and prints the
+contribution of each lens-source pair.
 
 > [!NOTE]
 > Both non-Limber checks pin $\Delta\chi^2$ to the value recorded in the
@@ -260,49 +254,21 @@ evaluation.
 
 ### The non-Limber galaxy clustering check (`test_nonlimber_gg.py`) <a name="nonlimber_gg"></a>
 
-The likelihood yaml key `adopt_limber_gg` chooses how the galaxy
-clustering spectrum $C_\ell^{gg}$ is computed: `0` takes the
-multipoles below $\ell = 150$ from the exact projection (cosmolike's
-`C_cl_tomo`, the same FFTLog split as the galaxy-galaxy lensing check
-above), `1` uses the Limber approximation at every multipole; `0`
-(non-Limber) is this project's default, in the cluster combinations
-too. The lens galaxy redshift distributions are narrow, so the Limber
-approximation fails at low $\ell$ for the clustering auto spectra.
-
-The test evaluates the frozen 3x2pt fiducial with the default, the
-other setting, and the default again in one process and reports
-$\Delta\chi^2 = \delta^T C^{-1} \delta$, with $\delta$ the non-Limber
-minus the Limber data vector, and the contribution of each lens bin.
-The assertions are a dead-flag floor on $\Delta\chi^2$, a 5% band
-around the recorded $\Delta\chi^2$, that only clustering entries
-change, a bit-identical round trip back to the default, and, last, the
-frozen-reference check on the default evaluation.
+[Mechanism and assertions](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_nonlimber):
+galaxy clustering defaults to non-Limber (`adopt_limber_gg: 0`; the
+exact projection is cosmolike's `C_cl_tomo`) in this project, in the
+cluster combinations too. The test runs on the
+frozen 3x2pt fiducial and prints the contribution of each lens bin;
+the measured value is pinned in the note above.
 
 ### The photo-z convention checks (`test_photoz_conventions.py`) <a name="photoz_conventions"></a>
 
-The likelihood exposes two runtime knobs for how the n(z) table files
-become the smooth distributions the Limber integrals consume, both
-declared in the likelihood yamls and both defaulting to 0, cosmolike's
-own default: `photoz_interpolation_type` (0 = cubic spline,
-1 = linear, 2+ = Steffen monotone, which cannot overshoot below zero
-around a sharp feature in the table) and `photoz_zmid_convention`
-(0 = the z column of the n(z) file holds Z_LOW left bin edges, so
-the tabulated value belongs at the cell center z + dz/2; 1 = the
-column holds Z_MID sample points). The two z-column readings differ
-by a rigid dz/2 shift of every distribution. Every likelihood of
-this project reads the two keys, and this check is the only test
-that moves them.
-
-The test evaluates the frozen cosmic-shear fiducial under five
-settings in one process - the default, each alternative, and the
-default again - and measures every alternative against the default:
-$\Delta\chi^2 = \delta^T C^{-1} \delta$, with $\delta$ the
-data-vector difference and $C^{-1}$ the masked inverse covariance.
-The assertions are a dead-flag floor on each alternative (a stale
-n(z) cache would give exactly zero), the frozen-reference check on
-the default, and a round trip back to the default that reproduces the
-printed data vector (9 significant digits) entry for entry (a cache
-that fails to rebuild on the way back would fail loudly).
+[Mechanism](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_photoz):
+the frozen cosmic-shear fiducial under the default, each alternative
+convention, and the default again. Every likelihood of this project
+reads the two photo-z keys, and this check is the only test that
+moves them; the round trip back to the default must reproduce the
+first printed data vector (9 significant digits) entry for entry.
 
 ### The cold dark matter + baryon halo field (`test_neutrino_cb.py`) <a name="neutrino_cb"></a>
 
@@ -332,18 +298,27 @@ the frozen configuration at its frozen point with every numerical
 setting pushed far beyond the defaults at once, and report the
 $\Delta\chi^2$ between the high-accuracy evaluation and the stored
 default-settings reference: the numerical error of the defaults.
-There is no pass/fail. The settings:
+There is no pass/fail. The
+[shared accuracy checks](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_accuracy)
+document the setting meanings and the cost order for settling them;
+this project's pushed values:
 
-| setting | raised to | what it controls |
-|---------|-----------|------------------|
-| `accuracyboost` (cosmolike) | 3 | sizes of cosmolike's internal lookup tables, including the dyadic z grid of the power-spectrum tables |
-| `internal_accuracyboost` (cosmolike) | 2 | density of the C-FAST-PT convolution grid relative to the output table the likelihood interpolates |
-| `integration_accuracy` (cosmolike) | 10 | order of cosmolike's fixed Gauss-Legendre quadratures and of the cluster mass integrals (the default is 1 in the cluster combinations and 0 in the galaxy-only likelihoods; 3 and above select the largest tables) |
-| `lmax` (cosmolike) | 200000 | highest multipole of the internal harmonic-space $C_\ell$ tables that cosmolike transforms into the real-space correlation functions; arcminute scales need very high $\ell$ |
-| `kmax_boltzmann` (cosmolike) | 40 | the k cutoff of the power spectrum the likelihood requests from CAMB |
-| `AccuracyBoost` (CAMB) | 2 | CAMB's overall accuracy multiplier: denser sampling in every internal CAMB grid, the most expensive setting |
-| `k_per_logint` (CAMB) | 50 | k samples CAMB computes per logarithmic interval of the transfer functions |
-| `kmax` (CAMB) | 50 | highest k of CAMB's matter power spectrum; one physical cutoff with `kmax_boltzmann`, seen from the CAMB side |
+| setting | raised to |
+|---------|-----------|
+| `accuracyboost` (cosmolike) | 3 |
+| `internal_accuracyboost` (cosmolike) | 2 |
+| `integration_accuracy` (cosmolike) | 10 |
+| `lmax` (cosmolike) | 200000 |
+| `kmax_boltzmann` (cosmolike) | 40 |
+| `AccuracyBoost` (CAMB) | 2 |
+| `k_per_logint` (CAMB) | 50 |
+| `kmax` (CAMB) | 50 |
+
+In this project `integration_accuracy` departs from the shared
+meaning: it sets the order of cosmolike's fixed Gauss-Legendre
+quadratures and of the cluster mass integrals (the default is 1 in
+the cluster combinations and 0 in the galaxy-only likelihoods; 3 and
+above select the largest tables).
 
 `accuracyboost` stays at 3: the likelihood files warn against values
 above 3, which have not been measured on the cluster combinations, and
@@ -368,7 +343,9 @@ To run every other test while skipping these:
 
     python -m pytest ./projects/des_cluster/tests/data_vector --ignore ./projects/des_cluster/tests/data_vector/test_accuracy.py
 
-## :interrobang: FAQ: Do the tests keep their own data? <a name="frozen_copy"></a>
+## Appendix <a name="appendix"></a>
+
+## :interrobang: FAQ: What does this project's snapshot hold? <a name="frozen_copy"></a>
 
 Every test except `test_neutrino_cb.py` reads nothing from the live
 project: not the project's `data/` folder, not the `EXAMPLE_EVALUATE`
@@ -396,9 +373,9 @@ The files of the project's `data/` folder that no example reads stay out of the 
 inputs, and the table of observed redMaPPer counts; `DATA_IGNORE` in
 `generate_frozen_reference.py` lists them).
 
-`manifest_sha256.json` stores a SHA-256 hash (a fingerprint that
-changes when any byte changes) of every file under `frozen/`. Every
-test except `test_neutrino_cb.py` verifies the manifest first and
+`manifest_sha256.json` pins every byte of the snapshot
+([the shared protection mechanism](https://github.com/CosmoLike/cocoa-cosmolike-core/blob/main/README.md#dv_frozen));
+every test except `test_neutrino_cb.py` verifies the manifest first and
 refuses to run when a file under `frozen/` was edited, naming the file.
 
 ## :interrobang: FAQ: Why is the reference $\chi^2$ near zero? <a name="synthetic_vectors"></a>
