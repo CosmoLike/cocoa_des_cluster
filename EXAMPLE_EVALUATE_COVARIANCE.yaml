@@ -40,8 +40,12 @@ covariance:
   integration_accuracy: 0
   # Gaussian spectra only; SSC/cNG keep their existing model.
   gaussian:
-    nonlimber: false
+    # non-Limber with redshift-space distortions below nonlimber_lmax for
+    # every pair with a galaxy or cluster leg, as the likelihood's w_gg,
+    # w_cc and w_cg; false gives the Limber forecast
+    nonlimber: true
+    rsd: true
+    # The joint selected-cluster model still requires zero IA.
     ia: none
-    # The joint selected-cluster model still requires Limber and zero IA.
 
 output: ./projects/des_cluster/covariance/production_covariance.npz

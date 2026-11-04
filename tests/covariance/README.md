@@ -57,7 +57,8 @@ the shell is Bash and the current folder is `cocoa/Cocoa`.
 | Cluster-lensing localization | Check exact angular polynomials, every joint cross block, known last-bin null modes and bitwise 1/2/4/8-thread propagation. |
 | Physical halo samples | Compare the covariance mass samples with scalar halo readers and the fixed-amplitude Tinker formula, including both HMF modes and the redshift-fit boundary; check the selected-profile response by perturbing one shell's halo abundance. |
 | Joint survey preparation | Check the DES count insertion, richness ordering, absolute versus normalized windows and every field spectrum across memory-block boundaries. |
-| Joint forecast | Check all six two-point families and counts, identical notebook and CLI results, one/eight-thread repeatability, Y propagation, defined null modes, positivity, saved model limits, and the rejection of non-Limber or intrinsic-alignment Gaussian requests. |
+| Joint forecast | Check all six two-point families and counts, identical notebook and CLI results, one/eight-thread repeatability, Y propagation, defined null modes, positivity, saved model limits (non-Limber with RSD by default), and the rejection of intrinsic-alignment Gaussian requests and of RSD without non-Limber spectra. |
+| Non-Limber cluster spectra | Compare the FFTLog correction of a cluster auto spectrum, with and without RSD, with direct spherical-Bessel sums; require the galaxy and source rows to equal the galaxy forecast's correction; check that the Gaussian model changes G only (SSC, cNG and the counts unchanged) and that the total stays positive definite. |
 
 The [shared component tests](https://github.com/CosmoLike/cocoa_lsst_y1/blob/main/tests/covariance/README.md)
 contain independent algebra and projection references. This project check

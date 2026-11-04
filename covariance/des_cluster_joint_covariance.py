@@ -11,8 +11,10 @@ bins this gives 2800 two-point entries plus 12 counts (2812).
 The forecast is a limited model, documented by the shared generator
 (cosmolike_notebook_utils.covariance.forecast_cluster): the cNG term treats
 clusters as linearly biased tracers of matter, and the counts correlate
-with the two-point blocks only through SSC. It therefore does not
-reproduce the covariance shipped with the likelihood.
+with the two-point blocks only through SSC. Its Gaussian spectra are, by
+default, non-Limber with redshift-space distortions at low multipoles, as
+the likelihood's clustering spectra are. It does not reproduce the
+covariance shipped with the likelihood.
 """
 
 from pathlib import Path
@@ -38,26 +40,29 @@ def configuration(accuracy_boost=None, ytransform=True, gaussian=None,
         accuracy_boost = None uses the YAML; 1, 2, 4 or 8 refines tables/cutoffs.
         ytransform = whether to localize cluster lensing as the DES mean does.
         gaussian = optional Gaussian model mapping; None means
-            {"nonlimber": False, "ia": "none"}, the only choice this joint
-            forecast accepts.
+            {"nonlimber": True, "rsd": True, "ia": "none"}: below
+            nonlimber_lmax every pair with a galaxy or cluster leg is
+            non-Limber with redshift-space distortions, as the
+            likelihood's w_gg, w_cc and w_cg are below its l = 150
+            (cluster_adopt_limber_cc/cg = 0, adopt_limber_gg = 0).
+            {"nonlimber": False, "ia": "none"} gives the Limber forecast.
         accuracy_overrides = internal refinement controls from default.yaml
             (every other keyword argument of the call).
     Returns:
         Settings mapping with the project YAML baseline and explicit model limits.
     Raises:
-        ValueError when gaussian asks for non-Limber spectra or intrinsic
-        alignment.
+        ValueError when gaussian asks for intrinsic alignment.
     """
     if gaussian is None:
-        gaussian = {"nonlimber": False, "ia": "none"}
+        gaussian = {"nonlimber": True, "rsd": True, "ia": "none"}
     settings = galaxy_survey.configuration(
         accuracy_boost=accuracy_boost, gaussian=gaussian, **accuracy_overrides,
     )
     model = settings["gaussian"]
-    if model["nonlimber"] or model["ia"] != "none":
+    if model["ia"] != "none":
         raise ValueError("joint selected-cluster covariance still requires "
-                         "gaussian.nonlimber=false and gaussian.ia=none; "
-                         "use the galaxy/shear adapter for Gaussian NL/IA")
+                         "gaussian.ia=none; use the galaxy/shear adapter "
+                         "for Gaussian IA")
     settings.update({
         'cluster_file': 'data/des_y6_cluster.nz',
         'cluster_richness_edges': np.array([20., 30., 45., 60., 500.]),

@@ -893,7 +893,10 @@ The port is complete for the model described above: the two likelihoods run, the
 
 The covariance tools compute Gaussian (G), super-sample (SSC), connected
 non-Gaussian (cNG) and total matrices before scale cuts. The example is a
-joint Limber 6×2pt + counts forecast.
+joint 6×2pt + counts forecast whose Gaussian spectra are non-Limber with
+redshift-space distortions at low multipoles for every pair with a galaxy
+or cluster leg, as the likelihood's clustering spectra are; SSC and cNG
+are Limber.
 [covariance/README.md](covariance/README.md) explains compilation, the production
 CLI, exploratory notebooks, accuracy settings and output files.
 

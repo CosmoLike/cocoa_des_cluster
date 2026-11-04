@@ -34,9 +34,11 @@ from cosmolike_notebook_utils.covariance.transform_cluster import localize_covar
 def test_joint_model_rejects_partial_gaussian_extensions():
     """Galaxy-only physics must not silently label a joint cluster forecast.
 
-    The joint forecast supports only Limber spectra without intrinsic
-    alignment; asking for non-Limber spectra or NLA must raise ValueError
-    with a message naming the joint selected-cluster forecast.
+    The joint forecast has no Gaussian intrinsic alignment: asking for NLA
+    must raise ValueError with a message naming the joint selected-cluster
+    forecast. RSD without non-Limber spectra must raise too (the Kaiser
+    term lives in the exact projection). Non-Limber spectra, with or
+    without RSD, and the default (non-Limber with RSD) are accepted.
 
     Arguments:
       none.
@@ -44,10 +46,15 @@ def test_joint_model_rejects_partial_gaussian_extensions():
     Returns:
       nothing; a failed assertion fails the test.
     """
+    with pytest.raises(ValueError, match="joint selected-cluster"):
+        survey.configuration(gaussian={"nonlimber": False, "ia": "NLA", "A1": 0.6})
+    with pytest.raises(ValueError, match="needs gaussian.nonlimber"):
+        survey.configuration(gaussian={"nonlimber": False, "rsd": True, "ia": "none"})
     for gaussian in ({"nonlimber": True, "ia": "none"},
-                     {"nonlimber": False, "ia": "NLA", "A1": 0.6}):
-        with pytest.raises(ValueError, match="joint selected-cluster"):
-            survey.configuration(gaussian=gaussian)
+                     {"nonlimber": True, "rsd": True, "ia": "none"}, None):
+        model = survey.configuration(gaussian=gaussian)["gaussian"]
+        assert model["nonlimber"] is True
+    assert survey.configuration()["gaussian"]["rsd"] is True
 
 
 def test_joint_forecast_threads_localization_and_archive(tmp_path):
@@ -172,4 +179,6 @@ def test_joint_forecast_threads_localization_and_archive(tmp_path):
         assert saved_settings['count_cross_model'] == 'SSC only'
         missing = saved_settings['omitted_terms']
         assert 'non-SSC count-spectrum cross covariance' in missing
+        assert 'all-pairs non-Limber corrections' not in missing
+        assert saved_settings['gaussian']['rsd'] is True
         assert saved_settings['cluster_ytransform'] is True
