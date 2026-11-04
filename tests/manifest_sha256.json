@@ -1,18 +1,18 @@
 {
   "_comment": "SHA-256 of every file under tests/frozen/; verified by every test before evaluating anything.",
   "files": {
-    "frozen/EXAMPLE_EVALUATE1.yaml": "9bf9bbbd56eec28f2a2958ffe0d77a29e39190567f9ea72e639c5d3a43c9fef7",
-    "frozen/EXAMPLE_EVALUATE2.yaml": "c7a88accfa3d11148e25d4f6f58fdb58452294f0d8d0a030d603955c183a7b45",
+    "frozen/EXAMPLE_EVALUATE1.yaml": "f98532e3ebd7cbaf18003248a5d6f3b256815fd5a8bf1c7885631449524ced92",
+    "frozen/EXAMPLE_EVALUATE2.yaml": "173995ab4643e3768b89359dc2e70f3a8d5ed615b0998f469537c8caf98787d2",
     "frozen/EXAMPLE_EVALUATE3.yaml": "5a493009ab4d9fd865f7650ec87d75e64f85810ae575f5d129b7cec64439e83c",
     "frozen/EXAMPLE_EVALUATE4.yaml": "8a06929e3b155014381abc6db3d2b18fc55faf2de12045de197f2341b784c03c",
     "frozen/data/3x2pt_baseline.mask": "a50d8afdc25810391cb737990683bf933c7391650720e195af17b68039a3806d",
-    "frozen/data/des_cluster_y6.dataset": "82c2c2028b109f82bf040b15763638c3d450e82d3b0a2313f41dfff5588c416d",
-    "frozen/data/des_cluster_y6.datavector": "00b9ae52b40dc2e8b04056f1260afffa932255b74827e42c43ea2927e9ec92e2",
+    "frozen/data/des_cluster_y6.dataset": "e0678b01b46947dd3a1882cc0507e131f88ffead9a60ba2471d3b4d78a8ceb61",
+    "frozen/data/des_cluster_y6.datavector": "655558ddff7fa0d0f1a4a3b810835f5b020e0678b718160dd7dd52dd303fb7fd",
     "frozen/data/des_cluster_y6_4x2ptN.dataset": "827d19777d184bb35ce37a73cee55bacc9057dbdee04f175d1dd262580e1b96c",
     "frozen/data/des_cluster_y6_4x2ptN.mask": "233d38698967a9710ec9982c986edc492e9b84b02aa775491d184f0d4b43a9c4",
     "frozen/data/des_cluster_y6_6x2ptN.dataset": "b72aec74de2504793dbf16dc078a816ee3dd1a0aee169f209baf446e7bbbebba",
     "frozen/data/des_cluster_y6_6x2ptN.mask": "ef526b6a4ecb7f7bdcdf9905a091bc2560f83eeba436119a40edd50047990e1b",
-    "frozen/data/des_cluster_y6_cov.npy": "042a450ed2ec96a627b8b44827f1e71366fbeff2db2a4e89ae1dc448c96a4083",
+    "frozen/data/des_cluster_y6_cov.npy": "e4933d85e79ae84107af04fa05f5dc730462a34e24d1141c46c0b104bc03658a",
     "frozen/data/des_y3_cov_unblinded_final.txt": "0ae78cd8b95cf0055525bc19475a1d328eb850572d1c43e721a7cf41aa0830c0",
     "frozen/data/des_y3_lens.nz": "ac4e7995758fa6f812dc4c1744eac2edf936018c20020ed265f679d4befadc70",
     "frozen/data/des_y3_real.dataset": "35c9dbe28ffecad7a88ca3996fb09239a152361122a35048be250b79cdbfed02",
@@ -25,11 +25,11 @@
     "frozen/data/synthetic_des_y3.modelvector": "36cfcf0fabce4f21d0e9fd23f100572cf70c0928763cedf09c0225b74eac7a82",
     "frozen/data/tatt_des_y3.dataset": "440ec8fbdc9eaaf125d9639bca2d679a5876f733475327d8f2ca4d6c8f38c69b",
     "frozen/data/tatt_des_y3.modelvector": "be9ed85c95fcec686429d744d996261f0f37e4a5f0a826405872dc8ae71382e6",
-    "frozen/frozen_config_example1.py": "64a928eacd33de10411a7f3433f31f1b4b7ab43fb368903938dea266aa85244f",
-    "frozen/frozen_config_example2.py": "4fe63f9d42359c9817270d1430fbcfe4cf80dbece1202ee9435f13ee8860c0b6",
-    "frozen/frozen_config_example3.py": "8f285b34c9b5b35f686025c937cb3a367f31c9aec7204eaed1513bd7e36c80f7",
-    "frozen/frozen_config_example4.py": "e30364b4ee3ac6f3da36898f19f70c451313375901d83f4f1fbf2751d8280b01",
-    "frozen/frozen_config_example4_2x2pt.py": "82f0d5bf0225713ce73c0e070b76a710864d1a263bf0fd07051be0361cc0875b",
-    "frozen/reference_chi2.json": "c202d81d9d842246e5e72aad8c8a2c57ca533699bab4b9014380c6b2f19658a5"
+    "frozen/frozen_config_example1.py": "5734500b77965ee96365d58bc0ff25241e6069f2819fb857876485e43a4cd414",
+    "frozen/frozen_config_example2.py": "9e2dc868e2149eccc3d1bf11d4f752aec3e330abc63be52a336f051601385bc2",
+    "frozen/frozen_config_example3.py": "092dd7620a97c302171facf55c6352e39b0a9ac579abbfd87d3bd3c8d86b5b3a",
+    "frozen/frozen_config_example4.py": "85b1b008ea7c33c52ddee42e89425c917a9154b2cbbca8262077c06b2b8e37cb",
+    "frozen/frozen_config_example4_2x2pt.py": "90d5ded0f85129f7fe9b0bd135421fef6a6c638278b74b2ced4c7ccbe555e09d",
+    "frozen/reference_chi2.json": "5345d3bf5384db61e37e9b45660749f7580e53f374a3acd2c8dec3301f0e85f3"
   }
 }

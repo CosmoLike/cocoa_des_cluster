@@ -384,9 +384,8 @@ refuses to run when a file under `frozen/` was edited, naming the file.
 
 Every reference test evaluates against a data vector that is, or is
 close to, the model at the test's own point: the galaxy-only
-references sit at $\chi^2 < 10^{-12}$, and the cluster ones at
-$\chi^2 = 0.151$ (`example1`) and $\chi^2 = 0.152$ (`example2`), near
-the minimum of the $\chi^2$.
+references sit at $\chi^2 < 10^{-12}$, and the cluster ones
+(`example1`, `example2`) at $\chi^2 = 0$, the minimum of the $\chi^2$.
 
 That is what a $\chi^2$ comparison needs. Away from the minimum the
 $\chi^2$ responds linearly to tiny numerical changes, and a harmless
@@ -398,9 +397,10 @@ The cluster combinations get such a vector from the project itself:
 the shipped data vector is synthetic. `scripts/make_synthetic_data.py`
 wrote the model, at the fiducial point of the examples (Table I of
 arXiv 2503.13631), into `data/des_cluster_y6.datavector`, and the
-frozen copy of that file serves `example1` and `example2`. That vector
-predates the halo model's cb variance at each redshift, so the present
-model scores the $\chi^2$ values above against it.
+frozen copy of that file serves `example1` and `example2`. The vector
+was last regenerated on 2026-11-04 with the current model (the halo
+model's cb variance at each redshift, non-Limber $w_{cc}$ and $w_{cg}$),
+so the examples reproduce it exactly.
 
 The galaxy-only likelihoods do not: the data vector of the DES Y3
 placeholder is the real measurement, and the point of their examples

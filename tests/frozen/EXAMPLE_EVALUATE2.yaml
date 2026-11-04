@@ -43,9 +43,11 @@ likelihood:
     cluster_magnification: -2.0
     # Tinker 2010 amplitude: 0 = 0.368 at every z (what DES ran), 1 = alpha(z)
     cluster_hmf_alpha_mode: 0
-    # w_cc and w_cg: 1 = Limber at every multipole, 0 = non-Limber
-    cluster_adopt_limber_cc: 1
-    cluster_adopt_limber_cg: 1
+    # w_cc and w_cg: 0 = non-Limber with redshift-space distortions below
+    # l = 150, as lighthouse and the DES analyses compute them; 1 = Limber
+    # at every multipole
+    cluster_adopt_limber_cc: 0
+    cluster_adopt_limber_cg: 0
 
 params:
   As_1e9:

@@ -160,7 +160,7 @@ The examples numbered `1` run 4x2pt + N, and the examples numbered `2` run 6x2pt
          mpirun -n 1 --oversubscribe \
           cobaya-run ./projects/des_cluster/EXAMPLE_EVALUATE1.yaml -f
 
-  `EXAMPLE_EVALUATE1.yaml` and `EXAMPLE_EVALUATE2.yaml` evaluate the likelihood at the point of the synthetic data vector (Table I of arXiv:2503.13631), so they return a $\chi^2$ near zero: the frozen copies of these examples in the unit tests record $\chi^2 = 0.151$ and $\chi^2 = 0.152$, because the data vector predates the cb variance at each redshift of the halo model (see [Cluster options](#des_cluster_options)).
+  `EXAMPLE_EVALUATE1.yaml` and `EXAMPLE_EVALUATE2.yaml` evaluate the likelihood at the point of the synthetic data vector (Table I of arXiv:2503.13631), so they return $\chi^2 = 0$: the data vector is the model at that point, and the frozen copies of these examples in the unit tests record exactly 0.
 
 - **MCMC (Metropolis-Hastings Algorithm)**:
 
