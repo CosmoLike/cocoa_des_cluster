@@ -4,7 +4,8 @@ Run from Cocoa/ (cocoa environment, start_cocoa.sh sourced):
 
     python -m pytest ./projects/des_cluster/tests/reference -s
 
-One CAMB run is shared by the whole module (about 1-2 minutes in total).
+One CAMB run is shared by the whole module (about 5 minutes in total, 3
+of them in the two non-Limber tests).
 Convergence tests compare the default quadratures with finer ones; the
 counts are compared with the DES Y3 catalog totals as a printout only.
 
@@ -33,6 +34,14 @@ from ref_projection import (legendre_table, projection_kernels,   # noqa: E402
                             theta_edges, y_transform_matrices, selection_factor,
                             cl_on_integers)
 from ref_covariance import band_matrices                          # noqa: E402
+
+# test_fkem_density_piece: relative agreement of two quadratures of the
+# same exact-minus-Limber difference (measured 2026-11-04: 6e-13 at l = 5,
+# 3e-10 at l = 50)
+FKEM_RTOL = 1e-6
+# test_fkem_spline_between_nodes: spline error relative to the largest
+# correction (measured 2026-11-04: 1.6e-3 C_cc, 2.6e-3 C_cg, 1.6e-3 C_gg)
+FKEM_SPLINE_TOL = 5e-3
 
 
 @pytest.fixture(scope="module")
@@ -463,3 +472,59 @@ def test_wcc_limber_diagnostic(ref):
     print("\n  C_cc exact/Limber (linear, density leg, bin 0, lambda 0x0): "
           + ", ".join(f"l={int(l)}: {r:.4f}" for l, r in zip(d["ells"], d["ratio_exact_limber_lin"])))
     assert abs(d["ratio_exact_limber_lin"][-1] - 1) < 0.03
+
+
+def test_fkem_density_piece(ref):
+    """The density piece of the non-Limber correction equals an independent sum.
+
+    ref_nonlimber.fkem_corrections (the correction the synthetic covariance
+    adds below l = 150) with its redshift-space and magnification pieces
+    off must reproduce cl_exact_linear - cl_limber_linear of
+    wcc_nonlimber_check for C_cc (cluster bin 0, richness bins 0 x 0) at
+    l = 5 and 50. The two share the Bessel and power-spectrum routines but
+    not the kernels (ref_limber's against the cluster model's own), the
+    chi grid (1 Mpc/h to the top of every n(z) against 0.5 Mpc/h over the
+    cluster support) or the assembly of the fields, so the comparison
+    tests the bookkeeping of fkem_corrections: field order, Simpson
+    weights, growth and bias factors.
+
+    Arguments:
+      ref = the module fixture.
+    """
+    from ref_nonlimber import fkem_corrections
+    d = ref.wcc_nonlimber_check(ells=(5, 50))
+    c = fkem_corrections(ref.limber, ref.cosmo, [5, 50], rsd=False, magnification=False)
+    got = c["dC_cc"][0, 0, 0, 0]
+    want = d["C_exact_lin"] - d["C_limber_lin"]
+    print("\n  density-piece correction, fkem / independent - 1: "
+          + ", ".join(f"l={int(l)}: {g / w - 1:+.2e}" for l, g, w in zip(d["ells"], got, want)))
+    assert np.allclose(got, want, rtol=FKEM_RTOL, atol=0.0)
+
+
+def test_fkem_spline_between_nodes(ref):
+    """The spline of the non-Limber correction matches direct evaluations.
+
+    reference_cluster evaluates the correction on ref_nonlimber's
+    correction_nodes and splines it in ln l onto every integer multipole
+    (fkem_on_integers). For the targets l = 100..149, where the nodes are
+    farthest apart (every 4th multipole), the splined C_cc, C_cg and C_gg
+    corrections at three multipoles between nodes (102, 121, 147) must
+    equal direct evaluations to FKEM_SPLINE_TOL of the largest
+    |correction| of each spectrum over the targets. The cross-bin cluster
+    pairs, which vary fastest with l, set the error.
+
+    Arguments:
+      ref = the module fixture.
+    """
+    from ref_nonlimber import fkem_corrections, fkem_on_integers
+    targets = np.arange(100, 150)
+    splined = fkem_on_integers(ref.limber, ref.cosmo, targets)
+    probe = np.array([102, 121, 147])
+    direct = fkem_corrections(ref.limber, ref.cosmo, probe)
+    for key in ("dC_cc", "dC_cg", "dC_gg"):
+        at_probe = splined[key][..., np.searchsorted(targets, probe)]
+        scale = np.max(np.abs(splined[key]), axis=-1, keepdims=True) + 1e-300
+        error = float(np.max(np.abs(at_probe - direct[key]) / scale))
+        print(f"\n  {key}: spline vs direct between nodes, max |difference|/max|correction| "
+              f"= {error:.2e}")
+        assert error < FKEM_SPLINE_TOL

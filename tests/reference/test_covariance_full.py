@@ -4,10 +4,12 @@ Run from Cocoa/ (cocoa environment, start_cocoa.sh sourced):
 
     python -m pytest ./projects/des_cluster/tests/reference/test_covariance_full.py -s
 
-One reference model (CAMB, halo model and the Limber spectra of every
-field pair at the Table I fiducial, with the settings of
-scripts/make_synthetic_data.py) and one set of band matrices are shared by
-the module (about 3-4 minutes). The layout test builds the des_cluster
+One reference model (CAMB, halo model and the spectra of every field
+pair at the Table I fiducial, with the settings of
+scripts/make_synthetic_data.py: Limber, plus the non-Limber correction
+with redshift-space distortions of C_gg, C_cc and C_cg below l = 150 when
+the likelihood yaml computes them that way) and one set of band matrices
+are shared by the module. The layout test builds the des_cluster
 likelihood through cobaya in a subprocess (no evaluation).
 
   test_xi_kernels_vs_wigner        G+/- against quadrature of Wigner d^l_{2,+/-2}

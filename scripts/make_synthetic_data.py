@@ -42,7 +42,10 @@ because cosmolike keeps global state per process):
     data/des_cluster_y6.datavector (columns: index, value).
 (b) COVARIANCE. tests/reference/ref_covariance_full.py at the same point
     (the Python reference: CAMB, halo model, Limber spectra of every field
-    pair, Gaussian covariance of the joint layout, Y transform and the
+    pair, with the non-Limber correction and redshift-space distortions of
+    the clustering spectra gg, cc and cg below l = 150 when the likelihood
+    computes them that way (reference_settings), Gaussian covariance of the
+    joint layout, Y transform and the
     selection factor on the cs, cc, cg rows, counts Poisson + sample
     variance). Settings aligned to the dataset and the likelihood yaml
     (n(z) files, <phi_i|z> table, binning, area, lmax, kernel mode, C_c,
@@ -140,6 +143,14 @@ BLOCKS = ("ss", "gs", "gg", "cg", "N", "cc", "cs")
 # that zero test: a value above it means the likelihood evaluated a
 # different model, point or data file than the one written in (a).
 CHI2_TOL = 1e-6
+# Below this multipole the likelihood computes the clustering spectra
+# non-Limber with redshift-space distortions when its switches ask for it
+# (cosmolike_core limits.LMAX_NOLIMBER, structs.c; a fixed number, not
+# scaled by the accuracy boost). The covariance spectra follow the
+# likelihood's choice (reference_settings).
+NONLIMBER_LMAX = 150
+# the likelihood switches of the three clustering spectra (0 = non-Limber)
+LIMBER_SWITCHES = ("adopt_limber_gg", "cluster_adopt_limber_cc", "cluster_adopt_limber_cg")
 
 # ----------------------------------------------------------------------------
 # Table I of arXiv 2503.13631 (fiducial = prior mean where the prior is Gaussian)
@@ -300,6 +311,13 @@ def reference_settings(ds, lik):
     mass-function amplitude mode from the likelihood yaml. Every other
     setting keeps the reference default (DEFAULT_SETTINGS).
 
+    The clustering spectra C_gg, C_cc and C_cg follow the likelihood's
+    Limber switches (LIMBER_SWITCHES; an absent key means 0, the
+    likelihood's default): all 0 gives them the non-Limber correction with
+    redshift-space distortions below NONLIMBER_LMAX (nonlimber_lmax of the
+    reference, ref_nonlimber.fkem_corrections), all 1 keeps Limber at every
+    multipole. The reference has one switch for the three spectra.
+
     Arguments:
       ds = the dict of load_dataset.
       lik = the parsed likelihood yaml (load_yaml of
@@ -307,7 +325,14 @@ def reference_settings(ds, lik):
 
     Returns:
       dict of ClusterReference settings.
+
+    Raises:
+      ValueError when the three switches differ.
     """
+    switches = {key: int(lik.get(key, 0)) for key in LIMBER_SWITCHES}
+    if len(set(switches.values())) != 1:
+        raise ValueError(f"the reference needs one Limber choice for gg, cc and cg: {switches}")
+    nonlimber = switches["adopt_limber_gg"] == 0
     return dict(
         photoz="table", phi_table_file=ds["nz_cluster_file"],
         source_nz=ds["nz_source_file"], lens_nz=ds["nz_lens_file"],
@@ -319,7 +344,8 @@ def reference_settings(ds, lik):
         # Halos always use P_cb(k,z) and rho_cb, as in the likelihood.
         # The reference integrates the variance independently at each z.
         hmf_matter="cb",
-        hmf_alpha_mode=int(lik["cluster_hmf_alpha_mode"]))
+        hmf_alpha_mode=int(lik["cluster_hmf_alpha_mode"]),
+        nonlimber_lmax=NONLIMBER_LMAX if nonlimber else 0)
 
 
 # ============================================================================
@@ -766,12 +792,13 @@ def compute_covariance(settings, cg_lens_bins, selection_mode, cache_dir=None, c
 
 
 def reference_vector(ref, lay):
-    """The reference model in the joint layout (ss, gs, gg by Limber
-    projection of the reference spectra; the cluster blocks from
+    """The reference model in the joint layout (ss, gs, gg by projection
+    of the reference spectra; the cluster blocks from
     ClusterReference.data_vector).
 
-    For ss, gs and gg the Limber spectra are interpolated onto every
-    integer multipole (cl_on_integers) and projected with the bin-averaged
+    For ss, gs and gg the spectra (Limber; gg with the non-Limber
+    correction when the settings carry nonlimber_lmax > 0) are interpolated
+    onto every integer multipole (cl_on_integers) and projected with the bin-averaged
     full-sky kernels K (xi+, xi-, gamma_t, w); ss and gs are then
     multiplied by the shear calibrations (1 + m) of their source legs. The
     cluster blocks come in the reference's order

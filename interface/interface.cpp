@@ -1522,7 +1522,8 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       "Compute cluster clustering w_cc (real space) at all tomographic,"
       " richness and theta bins, before the selection bias: array (theta,"
       " richness bin 1, richness bin 2, cluster z bin); limber: 1 = Limber,"
-      " 0 = non-Limber (not implemented yet)",
+      " 0 = non-Limber with redshift-space distortions below"
+      " limits.LMAX_NOLIMBER",
       (py::arg("limber") = 1).none(false).noconvert(),
       py::return_value_policy::move
     );
@@ -1532,7 +1533,8 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       "Compute cluster x galaxy clustering w_cg (real space) at all"
       " tomographic, richness and theta bins, before the selection bias:"
       " array (theta, richness bin, cluster z bin, lens bin); limber:"
-      " 1 = Limber, 0 = non-Limber (not implemented yet)",
+      " 1 = Limber, 0 = non-Limber with redshift-space distortions below"
+      " limits.LMAX_NOLIMBER",
       (py::arg("limber") = 1).none(false).noconvert(),
       py::return_value_policy::move
     );
