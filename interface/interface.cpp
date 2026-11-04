@@ -1101,10 +1101,21 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
   m.def("set_cluster_zdist",
       &cosmolike_interface::set_cluster_zdist,
       "Set the cluster selection kernels <phi_i|z> (column 0 = z, column "
-      "i+1 = bin i) and the nominal z_lambda edges of each bin",
+      "i+1 = bin i) and the nominal z_lambda edges of each bin; "
+      "zmid_convention: 1 = the z are sample points (default), 0 = left "
+      "cell edges (the DES and lighthouse tables)",
       py::arg("nofz").none(false),
       py::arg("zbin_min").none(false),
-      py::arg("zbin_max").none(false)
+      py::arg("zbin_max").none(false),
+      py::arg("zmid_convention") = 1
+    );
+
+  m.def("set_cluster_area",
+      &cosmolike_interface::set_cluster_area,
+      "Set the survey area of the cluster sample as a function of redshift "
+      "(column 0 = z, column 1 = deg^2) for the counts; an array with zero "
+      "rows restores the constant survey area",
+      py::arg("area").none(false)
     );
 
   m.def("init_cluster_pairs",
@@ -1511,7 +1522,8 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       "Compute cluster clustering w_cc (real space) at all tomographic,"
       " richness and theta bins, before the selection bias: array (theta,"
       " richness bin 1, richness bin 2, cluster z bin); limber: 1 = Limber,"
-      " 0 = non-Limber (not implemented yet)",
+      " 0 = non-Limber with redshift-space distortions below"
+      " limits.LMAX_NOLIMBER",
       (py::arg("limber") = 1).none(false).noconvert(),
       py::return_value_policy::move
     );
@@ -1521,7 +1533,8 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       "Compute cluster x galaxy clustering w_cg (real space) at all"
       " tomographic, richness and theta bins, before the selection bias:"
       " array (theta, richness bin, cluster z bin, lens bin); limber:"
-      " 1 = Limber, 0 = non-Limber (not implemented yet)",
+      " 1 = Limber, 0 = non-Limber with redshift-space distortions below"
+      " limits.LMAX_NOLIMBER",
       (py::arg("limber") = 1).none(false).noconvert(),
       py::return_value_policy::move
     );

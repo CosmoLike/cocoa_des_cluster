@@ -754,6 +754,9 @@ def c_evaluate(ci, cfg, R, info, workdir, full=True):
     nA = len(ds["richness_edges"]) - 1
     C = {}
     ci.init_data_cluster(info["covf"], ds["mask_file"], info["dvf"])
+    # the Python reference projects w_cc and w_cg in Limber, so the data
+    # vectors compared with it must too (the likelihood default is non-Limber)
+    ci.init_cluster_adopt_limber(adopt_limber_cc=1, adopt_limber_cg=1)
     set_cosmology_c(ci, R)
     ci.cluster_warmup()
     # the pair tables of the interface, in the row order of the data

@@ -116,6 +116,11 @@ DEFAULT_SETTINGS = dict(
                                  # cluster.hmf_alpha_mode default), 1 = halo.c's alpha(z)
     ntheta=20, tmin_arcmin=2.5, tmax_arcmin=250.0, lmax=75000,
     l_exact=30, n_per_decade=60,
+    nonlimber_lmax=0,            # > 0: below this l, C_cc, C_cg and C_gg get the
+                                 # non-Limber correction with RSD (FKEM,
+                                 # ref_nonlimber.fkem_corrections), the
+                                 # likelihood's limits.LMAX_NOLIMBER = 150;
+                                 # 0 = Limber at every l
     z_panel=0.01, z_panel_far=0.02, z_order=8,
     mag_ell_prefactor=True, spin2_prefactor=True, include_1h=True, C_c=-2.0,
     theta_sel="area",            # "area" (2/3 (t1^3-t0^3)/(t1^2-t0^2)) or "log"
@@ -272,7 +277,10 @@ class ClusterReference:
         s = self.settings
         nuis = {k: self.params[k] for k in ("lens_b1", "lens_bmag", "lens_dz", "lens_stretch",
                                             "source_dz", "IA_A1", "IA_eta1")}
-        ells = default_ells(s["lmax"], s["l_exact"], s["n_per_decade"])
+        # every integer l below the non-Limber limit is a node, so the
+        # corrections sit on the multipoles the likelihood corrects
+        l_exact = max(s["l_exact"], s["nonlimber_lmax"])
+        ells = default_ells(s["lmax"], l_exact, s["n_per_decade"])
         return LimberModel(self.cosmo, self.cluster, self.nz_src, self.nz_lens, nuis,
                            kernel_mode=s["kernel_mode"], ells=ells, lens_bins=s["lens_bins"],
                            z_panel=s["z_panel"], z_panel_far=s["z_panel_far"], order=s["z_order"],
@@ -281,7 +289,14 @@ class ClusterReference:
                            include_1h=s["include_1h"], source_g_zmax=s["source_g_zmax"])
 
     def spectra(self, with_cov_spectra=True):
-        """Limber C_l of every cluster and galaxy probe (computed once, then kept).
+        """C_l of every cluster and galaxy probe (computed once, then kept).
+
+        Limber spectra (ref_limber); with settings["nonlimber_lmax"] > 0,
+        C_cc, C_cg and C_gg (when computed) below that multipole also get
+        the non-Limber correction with redshift-space distortions of the
+        likelihood (ref_nonlimber.fkem_corrections), at every integer node:
+        exact on ref_nonlimber.correction_nodes, splined in between
+        (fkem_on_integers).
 
         Arguments:
           with_cov_spectra = True also computes the extra spectra the
@@ -295,6 +310,18 @@ class ClusterReference:
             self.limber = self.limber_model()
             self._spectra = self.limber.compute(with_cov_spectra=with_cov_spectra)
             self._log("Limber spectra", t0)
+            lmax_nl = int(self.settings["nonlimber_lmax"])
+            if lmax_nl > 0:
+                from ref_nonlimber import fkem_on_integers
+                t0 = time.time()
+                sp = self._spectra
+                low = np.where(sp["ells"] < lmax_nl)[0]
+                corr = fkem_on_integers(self.limber, self.cosmo, sp["ells"][low])
+                sp["C_cc"][..., low] += corr["dC_cc"]
+                sp["C_cg"][..., low] += corr["dC_cg"]
+                if "C_gg" in sp:
+                    sp["C_gg"][..., low] += corr["dC_gg"]
+                self._log("non-Limber corrections", t0)
         return self._spectra
 
     def theta_sel(self):

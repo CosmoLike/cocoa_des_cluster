@@ -485,7 +485,7 @@ Reinitialize notebook inputs after changing the settings.
 | `window_accuracyboost` | `1` | Lensing-window interpolation refinement. |
 | `core_accuracyboost` | `1` | Shared core interpolation refinement for this calculation. |
 | `response_step` | `5e-05` | Half-width of the log-k response derivative; divided by the global boost. |
-| `nonlimber_lmax` | `1000` | Gaussian gg/gs non-Limber correction cutoff. |
+| `nonlimber_lmax` | `1000` | Gaussian non-Limber correction cutoff (gg, gs; in the joint forecast also cg, cc and cs). |
 | `nonlimber_accuracyboost` | `1` | Gaussian non-Limber distance-grid refinement. |
 
 | `integration_accuracy` | Ordinary nodes per panel | Wynn-tail nodes per panel |
@@ -564,9 +564,12 @@ CD therefore needs AC, BD, AD and BC spectra, even if those crossed pairs
 are excluded from the measured data vector. The example retains the
 complete field matrix before assembling the measured rows.
 
-The signal uses nonlinear matter power and Limber projection. Spherical
-spin operators average the resulting angular spectra over each angular
-bin. The signal covariance uses the $`f_{\rm sky}`$ approximation.
+The signal uses nonlinear matter power and Limber projection. In the
+joint forecast, every pair with a galaxy or cluster leg is non-Limber
+below `nonlimber_lmax`, with the redshift-space (Kaiser) term of each
+density field ([Choosing the Gaussian spectra](#gaussian_spectra)).
+Spherical spin operators average the resulting angular spectra over each
+angular bin. The signal covariance uses the $`f_{\rm sky}`$ approximation.
 
 Pure white noise extends to arbitrarily high multipoles. The calculation
 replaces that infinite sum with the analytic pair-noise expression using
@@ -633,15 +636,31 @@ all cross correlations in the assembled matrix.
 
 ## Choosing the Gaussian spectra <a name="gaussian_spectra"></a>
 
-The following options apply to `des_cluster_covariance.py`, the
-**galaxy/shear 3x2pt adapter**. The joint 6x2pt+N runner and its YAML use
-Limber and zero IA; selected-cluster non-Limber and IA spectra are not
-implemented, and the joint adapter rejects requests for them.
-
 The `gaussian` block selects the physics used in Gaussian covariance.
-`nonlimber: true` retains radial mode coupling for every galaxy–galaxy and
-galaxy–shear pair, including internal crosses excluded from the data vector.
-Shear–shear spectra remain Limber.
+`nonlimber: true` retains radial mode coupling for every pair with a
+galaxy leg (galaxy–galaxy and galaxy–shear) and, in the joint 6x2pt+N
+adapter, a cluster leg (cluster–galaxy, cluster–cluster and
+cluster–shear), including internal crosses excluded from the data vector.
+Shear–shear spectra remain Limber. Below `nonlimber_lmax` each such
+spectrum is the hybrid of [Fang et al.](https://arxiv.org/abs/1911.11947):
+the nonlinear Limber spectrum plus the exact (spherical Bessel)
+projection of the linear field minus its Limber projection, computed
+with FFTLog.
+
+`rsd: true` (joint adapter only) adds the linear redshift-space (Kaiser)
+term $`-\int W f D j_\ell''(k\chi) d\chi`$ to the exact projection of
+every galaxy and cluster field, with $`f = d\ln D/d\ln a`$. It needs
+`nonlimber: true`, since the term lives in the exact projection. Thin
+cluster redshift bins make it the largest non-Limber effect: the
+likelihood's $`w_{cc}`$ and $`w_{cg}`$ rise by up to 67% at 177 arcmin.
+
+The joint 6x2pt+N adapter (`des_cluster_joint_covariance.py`, its YAML
+and the notebook) defaults to `nonlimber: true`, `rsd: true`, `ia: none`,
+the clustering model of the likelihood (`adopt_limber_gg: 0`,
+`cluster_adopt_limber_cc: 0`, `cluster_adopt_limber_cg: 0`); it rejects
+intrinsic alignment. The galaxy/shear 3x2pt adapter
+(`des_cluster_covariance.py`) defaults to `nonlimber: true` without RSD,
+accepts the IA options below, and rejects `rsd: true`.
 
 For example, to include a constant NLA amplitude of 0.6 in every source bin:
 
@@ -657,8 +676,8 @@ covariance:
 ```
 
 This block describes a galaxy/shear runner. This project's
-`compute_covariance.py` runs the joint adapter, which rejects it with a
-`ValueError`; from Python, pass the same mapping to
+`compute_covariance.py` runs the joint adapter, which rejects the IA
+choice with a `ValueError`; from Python, pass the same mapping to
 `des_cluster_covariance.configuration(gaussian=...)`.
 
 This amplitude is an illustrative choice. A list supplies one amplitude
@@ -679,7 +698,7 @@ options change. They do not constitute a complete IA four-point model.
 
 In the notebook, the optional galaxy/shear companion cell accepts the same
 choices through `galaxy_survey` (`des_cluster_covariance`); the joint
-`survey.configuration` rejects them:
+`survey.configuration` rejects the IA choices:
 
 ```python
 settings = galaxy_survey.configuration(

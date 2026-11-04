@@ -160,7 +160,7 @@ The examples numbered `1` run 4x2pt + N, and the examples numbered `2` run 6x2pt
          mpirun -n 1 --oversubscribe \
           cobaya-run ./projects/des_cluster/EXAMPLE_EVALUATE1.yaml -f
 
-  `EXAMPLE_EVALUATE1.yaml` and `EXAMPLE_EVALUATE2.yaml` evaluate the likelihood at the point of the synthetic data vector (Table I of arXiv:2503.13631), so they return a $\chi^2$ near zero: the frozen copies of these examples in the unit tests record $\chi^2 = 0.151$ and $\chi^2 = 0.152$, because the data vector predates the cb variance at each redshift of the halo model (see [Cluster options](#des_cluster_options)).
+  `EXAMPLE_EVALUATE1.yaml` and `EXAMPLE_EVALUATE2.yaml` evaluate the likelihood at the point of the synthetic data vector (Table I of arXiv:2503.13631), so they return $\chi^2 = 0$: the data vector is the model at that point, and the frozen copies of these examples in the unit tests record exactly 0.
 
 - **MCMC (Metropolis-Hastings Algorithm)**:
 
@@ -653,7 +653,7 @@ forecast files, figures and refinement workflow.
 
 <a name="des_cluster_notebook"></a>
 
-The notebook `EXAMPLE_EVALUATE1.ipynb` computes the cluster observables at the fiducial point with the options of `EXAMPLE_EVALUATE1.yaml` (4x2pt + N) and compares them with the synthetic data where the scale cuts keep them. It covers, in this order: the cluster counts per richness and redshift bin; the halo-model ingredients (the probability of a richness bin given the halo mass, the number density and the bias of each richness bin, the redshift selection kernels, the one-halo cluster-matter power spectrum); cluster lensing, both as $\gamma_t$ and as the $\Sigma = Y\gamma_t$ statistic of the data vector; $w_{cc}$; $w_{cg}$; the Limber spectra $C_\ell^{cs}$, $C_\ell^{cc}$, and $C_\ell^{cg}$; the response of the counts and of $\gamma_t$ to the mass-observable relation; and the $\chi^2$ against the synthetic data vector.
+The notebook `EXAMPLE_EVALUATE1.ipynb` computes the cluster observables at the fiducial point with the options of `EXAMPLE_EVALUATE1.yaml` (4x2pt + N) and compares them with the synthetic data where the scale cuts keep them. It covers, in this order: the cluster counts per richness and redshift bin; the halo-model ingredients (the probability of a richness bin given the halo mass, the number density and the bias of each richness bin, the redshift selection kernels, the one-halo cluster-matter power spectrum); cluster lensing, both as $\gamma_t$ and as the $\Sigma = Y\gamma_t$ statistic of the data vector; $w_{cc}$; $w_{cg}$; the non-Limber $w_{cc}$ and $w_{cg}$ against their Limber versions; the Limber spectra $C_\ell^{cs}$, $C_\ell^{cc}$, and $C_\ell^{cg}$; the response of the counts and of $\gamma_t$ to the mass-observable relation; and the $\chi^2$ against the synthetic data vector.
 
 The notebook `EXAMPLE_EVALUATE2.ipynb` runs 6x2pt + N with the options of `EXAMPLE_EVALUATE2.yaml`, in the form of parameter sweeps. It computes a reference model at the fiducial point, then varies one parameter at a time (five values each) and shows every block as a ratio to the reference, with the curves colored by the parameter value. The sweeps cover $\Omega_m$ and $A_s$; two parameters of the mass-observable relation ($\ln\lambda_0$ and $\sigma_{\rm int}$); and two parameters of the selection bias ($b_{s2}$ and $r_0$). The $\Omega_m$ sweep also shows the 3x2pt blocks ($\xi_\pm$, galaxy-galaxy lensing, and $w(\theta)$).
 
@@ -725,7 +725,7 @@ The defaults of the two likelihoods are in `likelihood/combo_4x2pt_N.yaml` and `
 
 - The counts (eq. 16) use the Tinker mass function and halo bias (M200m) and a lognormal mass-observable relation (eqs. 18-19, pivot mass $5\times10^{14}\,M_\odot/h$).
 - The cluster-lensing spectrum is the sum of a two-halo term (richness-weighted cluster bias times the nonlinear matter power spectrum) and a one-halo NFW term (eq. 22). The data vector holds $\Sigma = Y\gamma_t$, the Y transform of eq. 15, which involves no critical surface density. The last angular bin of every cluster-lensing row vanishes by construction and is always masked.
-- $w_{cc}$ and $w_{cg}$ use a linear cluster bias times the nonlinear matter power spectrum.
+- $w_{cc}$ and $w_{cg}$ use a linear cluster bias times the nonlinear matter power spectrum. Below $\ell = 150$ they are computed without the Limber approximation and with redshift-space distortions, as the original CosmoLike code (`lighthouse`) and the DES analyses compute them (`cluster_adopt_limber_cc: 0`, `cluster_adopt_limber_cg: 0`).
 - The selection bias (eq. 23) multiplies the data vector: $\Sigma$ and $w_{cg}$ by $b_{s1} + b_{s2}\exp(-\theta\chi(\bar z)/r_0)$, and $w_{cc}$ by its square.
 - The real-space statistics are full-sky, bin-averaged Legendre projections.
 
@@ -739,13 +739,13 @@ The defaults of the two likelihoods are in `likelihood/combo_4x2pt_N.yaml` and `
 | `cluster_include_ia` | 1 | 1 = intrinsic alignment of the sources in the two-halo cluster-lensing term |
 | `cluster_magnification` | -2.0 | cluster magnification coefficient $C_c$ (eq. 28); 0 switches it off |
 | `cluster_hmf_alpha_mode` | 0 | amplitude of the Tinker 2010 mass function: 0 = 0.368 at every redshift (what DES ran); 1 = the redshift-dependent amplitude of `halo.c` (3-9% fewer clusters at z = 0.2-0.6) |
-| `cluster_adopt_limber_cc`, `cluster_adopt_limber_cg` | 1 | $w_{cc}$ and $w_{cg}$: 1 = Limber at every multipole. This is the only implemented value (see [Status and known limitations](#des_cluster_status)) |
+| `cluster_adopt_limber_cc`, `cluster_adopt_limber_cg` | 0 | $w_{cc}$ and $w_{cg}$: 0 = below $\ell = 150$, the exact projection of each cluster and lens field (spherical Bessel functions, by FFTLog) with its redshift-space distortion and magnification terms, joined to the Limber spectra through the method of Fang et al. (arXiv:1911.11947); 1 = Limber at every multipole. At the largest angles the two differ by up to 67% in the highest cluster redshift bin, where the bins are thinnest |
 
 All halo statistics use cold dark matter plus baryons (cb). Massive neutrinos free-stream out of halos, so the variance integrates CAMB's `delta_nonu` spectrum at the requested redshift, and the Lagrangian smoothing radius and mass-function density use $\rho_{cb}=\rho_{crit}(\Omega_m-\Omega_\nu)$. FFTLog tabulates $\sigma^2_{cb}(M,a)$ and its mass slope; no scale-independent growth factor is applied to a present-day variance. The Bhattacharya concentration uses $D_{cb}(M,a)=\sigma_{cb}(M,a)/\sigma_{cb}(M,1)$ in its $D^{1.15}$ factor. This is the adopted neutrino extension of that fit, which was not calibrated with massive neutrinos.
 
 The NFW truncation radius still defines an M200m halo relative to the total mean density. The lensing mass weight $M/\rho_m$, lensing kernels, and nonlinear matter spectra also retain total matter. The likelihood always supplies $\Omega_\nu h^2$ and the cb spectrum.
 
-The shipped synthetic data and covariance predate the evolving cb-variance calculation. Their measured change at the fiducial point is $|\Delta\chi^2|<0.152$ for the cluster combinations; the frozen tests record the current prediction against those same data.
+The shipped synthetic data and covariance were computed with this cb-variance calculation (regenerated on 2026-11-04), so the model reproduces the data vector at the fiducial point.
 
 The EMUL2 path has no separate cb spectrum and retains the approximation $P_{cb}=P_{lin}/(1-f_\nu)^2$, with $f_\nu=\Omega_\nu/\Omega_m$ and fixed neutrino mass 0.06 eV. This is the small-scale limit of the spectrum ratio; its counts error against a true cb-spectrum emulator has not been measured.
 
@@ -803,7 +803,7 @@ The fiducial cosmology of the synthetic data is `As_1e9` = 2.19, `ns` = 0.96859,
 
 # Synthetic data <a name="des_cluster_data"></a>
 
-The synthetic data set is Y6-like in the following sense: the lens and source redshift distributions are the n(z) files of the DES Y6 code comparison kept in the repository of the original CosmoLike cluster code (`lighthouse`), the binning and the scale cuts are those of arXiv:2503.13631, the parameters are those of its Table I, and the survey area is 4143 deg$^2$ (the DES Y3 cluster footprint of arXiv:2503.13632). The data vector is the model of this code at that point, without noise. The covariance is Gaussian: for the two-point blocks, the full-sky, bin-averaged Gaussian term with shape and shot noise (with the Y transform applied to the cluster-lensing rows); for the counts, Poisson plus sample variance. The cross-covariance between the counts and the two-point blocks is zero, and the covariance has no super-sample and no trispectrum term. The signal-to-noise of the data vector is 109 for 4x2pt + N and 157 for 6x2pt + N.
+The synthetic data set is Y6-like in the following sense: the lens and source redshift distributions are the n(z) files of the DES Y6 code comparison kept in the repository of the original CosmoLike cluster code (`lighthouse`), the binning and the scale cuts are those of arXiv:2503.13631, the parameters are those of its Table I, and the survey area is 4143 deg$^2$ (the DES Y3 cluster footprint of arXiv:2503.13632). The data vector is the model of this code at that point, without noise. The covariance is Gaussian: for the two-point blocks, the full-sky, bin-averaged Gaussian term with shape and shot noise (with the Y transform applied to the cluster-lensing rows); for the counts, Poisson plus sample variance. Its spectra are those of the likelihood: below $\ell = 150$ the clustering spectra of $w_{gg}$, $w_{cc}$ and $w_{cg}$ are non-Limber with redshift-space distortions (computed by the Python reference with spherical Bessel functions, not by FFTLog), and every other spectrum is Limber. The cross-covariance between the counts and the two-point blocks is zero, and the covariance has no super-sample and no trispectrum term. The signal-to-noise of the data vector is 110 for 4x2pt + N and 157 for 6x2pt + N. The files were last regenerated on 2026-11-04, with the cb variance of the halo model and the non-Limber $w_{cc}$ and $w_{cg}$; against the previous files (Limber $w_{cc}$ and $w_{cg}$) the data vector moved by $\Delta\chi^2 = 4.1$ under either mask.
 
 ## Files <a name="des_cluster_data_files"></a>
 
@@ -817,8 +817,13 @@ The files of `data/` that the cluster likelihoods read:
 | `des_cluster_y6_cov.npy` | the joint covariance: the upper triangle with the diagonal, row by row, as a binary float64 NumPy array (32 MB; cosmolike reads it directly, and `numpy.load` returns the packed triangle). Stored with Git LFS |
 | `des_cluster_y6_4x2ptN.mask`, `des_cluster_y6_6x2ptN.mask` | the scale-cut masks of the two combinations |
 | `des_y6_maglim.nz`, `des_y6_source.nz` | redshift distributions of the six MagLim lens bins and of the four source bins. The z column holds left bin edges (`photoz_zmid_convention: 0`) |
-| `des_y6_cluster.nz` | the selection kernels $\langle\phi_i\vert z\rangle$ of the three cluster redshift bins: the probability that a cluster at true redshift z lands in each $z_\lambda$ bin. It is a probability, not a normalized distribution, and it is sampled at z (no half-cell offset) |
+| `des_y6_cluster.nz` | the selection kernels $\langle\phi_i\vert z\rangle$ of the three cluster redshift bins: the probability that a cluster at true redshift z lands in each $z_\lambda$ bin. It is a probability, not a normalized distribution, and it is sampled at z (no half-cell offset): the dataset key `cluster_zmid_convention = 1`. A table that lists left cell edges instead, as the DES and `lighthouse` tables do, needs `cluster_zmid_convention = 0`, and each value then belongs half a cell higher |
 | `y3_redmapper_counts.txt` | the DES Y3 redMaPPer counts per redshift and richness bin, from the public Y3 catalog. The model does not read it: `make_synthetic_data.py` compares the model counts with it, and `make_cluster_mask.py` reads it for an optional cut on $w_{cc}$ that is off by default |
+
+Two dataset keys are optional:
+
+- `cluster_area_file`: a table of the survey area of the cluster sample (columns z and deg$^2$). A volume-limited cluster sample loses the parts of the footprint that are too shallow to detect clusters at redshift z, so its area falls at high z; with the key, the counts integrate that area. Without it, the counts use `survey_area_deg2` at every redshift, the setting of the synthetic data and of forecasts. In the Cardinal simulation of the DES Y6 analysis the area falls to 69% at z = 0.65 and 8% at z = 0.75, and the constant area overestimates the counts of the 0.55-0.65 bin by 15%.
+- `cluster_zmid_convention`: what the z column of `nz_cluster_file` means (default 1, sample points; 0, left cell edges), with the encoding of the galaxy `photoz_zmid_convention`.
 
 The remaining files (`des_y3_real.dataset`, `des_y3_unblinded_final.txt`, `des_y3_cov_unblinded_final.txt`, `des_y3_lens.nz`, `des_y3_source.nz`, `3x2pt_baseline.mask`, `ones.mask`, `pca.txt`, `baryons_logPkR.h5`) are a copy of the DES Y3 3x2pt data set of the project des_y3. The galaxy-only likelihoods of this project (`cosmic_shear`, `combo_3x2pt`, `combo_2x2pt`) point at it, as do their examples `EXAMPLE_EVALUATE3.yaml` (cosmic shear) and `EXAMPLE_EVALUATE4.yaml` (3x2pt) and their unit tests; the cluster likelihoods do not use it.
 
@@ -874,7 +879,7 @@ The port is complete for the model described above: the two likelihoods run, the
   [covariance notebook](#computing_covariances) computes a joint forecast
   with SSC and a biased-tracer cNG approximation. It does not replace the
   supplied likelihood covariance or include every discrete-halo term.
-- **$w_{cc}$ and $w_{cg}$ are Limber only.** The original CosmoLike code computes both without the Limber approximation. At the largest angular bin (225 arcmin), for the first cluster redshift bin and the lowest richness bin, the Limber result differs from the non-Limber one by about -13% for $w_{cc}$ and -16% for $w_{cg}$ ([tests/lighthouse_reference/README.md](tests/lighthouse_reference/README.md)). The keys `cluster_adopt_limber_cc` and `cluster_adopt_limber_cg` exist, but 1 is the only implemented value. Non-Limber $w_{cc}$ and $w_{cg}$ are the first physics item of the backlog.
+- **Non-Limber $w_{cc}$ and $w_{cg}$ differ from the original CosmoLike code in one approximation.** That code computes the non-Limber spectrum of the first richness pair of each cluster redshift bin and rescales it by a ratio of cluster biases at the bin midpoint for the other pairs; this code computes every pair from its own radial kernels. Against it, in the Cardinal setup of arXiv:2503.13631, the pair both codes compute exactly agrees to 0.2-1.0%, and the rescaled pairs differ by up to 7% for the richest pair of the highest redshift bin.
 - **Cluster lensing has NLA intrinsic alignment only.** There is no TATT in the cluster lensing code, and the examples run NLA in every block.
 - **Neutrinos in the halo mass function.** The cluster combinations use the cold dark matter + baryon prescription described in [Cluster options](#des_cluster_options) with one massive neutrino state in CAMB, while DES ran three degenerate ones; the two differ by up to 2.6% in the counts at the same $\Omega_\nu h^2$. One state is the convention of the Cosmolike projects. On the emulator path, whose matter power spectrum emulator has no neutrino input, the likelihood approximates the cb spectrum as $P_{lin}/(1 - f_\nu)^2$.
 - **Emulated Boltzmann inputs.** The emulators of the EMUL2 examples are fixed at a neutrino mass of 0.06 eV. At equal neutrino mass they differ from CAMB by $\Delta\chi^2 = 1.6$ on 6x2pt + N (the cluster counts differ by 1.5% in the median).
@@ -888,7 +893,10 @@ The port is complete for the model described above: the two likelihoods run, the
 
 The covariance tools compute Gaussian (G), super-sample (SSC), connected
 non-Gaussian (cNG) and total matrices before scale cuts. The example is a
-joint Limber 6×2pt + counts forecast.
+joint 6×2pt + counts forecast whose Gaussian spectra are non-Limber with
+redshift-space distortions at low multipoles for every pair with a galaxy
+or cluster leg, as the likelihood's clustering spectra are; SSC and cNG
+are Limber.
 [covariance/README.md](covariance/README.md) explains compilation, the production
 CLI, exploratory notebooks, accuracy settings and output files.
 
