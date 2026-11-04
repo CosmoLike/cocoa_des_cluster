@@ -1101,10 +1101,13 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
   m.def("set_cluster_zdist",
       &cosmolike_interface::set_cluster_zdist,
       "Set the cluster selection kernels <phi_i|z> (column 0 = z, column "
-      "i+1 = bin i) and the nominal z_lambda edges of each bin",
+      "i+1 = bin i) and the nominal z_lambda edges of each bin; "
+      "zmid_convention: 1 = the z are sample points (default), 0 = left "
+      "cell edges (the DES and lighthouse tables)",
       py::arg("nofz").none(false),
       py::arg("zbin_min").none(false),
-      py::arg("zbin_max").none(false)
+      py::arg("zbin_max").none(false),
+      py::arg("zmid_convention") = 1
     );
 
   m.def("set_cluster_area",

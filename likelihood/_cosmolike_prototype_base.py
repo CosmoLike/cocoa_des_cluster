@@ -515,8 +515,10 @@ class _cosmolike_prototype_base(DataSetLikelihood):
     Dataset keys: nz_cluster_file (z column, then <phi_i|z> of each cluster
     bin), cluster_ntomo, cluster_zbin_edges, richness_edges, survey_area_deg2,
     cg_lens_bins (one lens bin per cluster bin, -1 = no w_cg), and the
-    optional cluster_area_file (z, survey area in deg^2 of the cluster
-    sample; without it the counts use survey_area_deg2 at every z). Runs
+    optional cluster_zmid_convention (1, the default: the z column of the
+    cluster table holds sample points; 0: left cell edges) and
+    cluster_area_file (z, survey area in deg^2 of the cluster sample;
+    without it the counts use survey_area_deg2 at every z). Runs
     after the lens/source n(z) and init_ntomo_powerspectra, before
     init_data_cluster.
 
@@ -538,8 +540,9 @@ class _cosmolike_prototype_base(DataSetLikelihood):
       sets the survey area, cluster model, richness bins, selection kernels
       and (cluster bin, lens bin) pairs of the compiled library, and the
       attributes nz_cluster_file, cluster_ntomo, cluster_zbin_edges,
-      richness_edges, survey_area_deg2, cg_lens_bins, cluster_area_file
-      (None without the key) and cluster_selection_model.
+      richness_edges, survey_area_deg2, cg_lens_bins,
+      cluster_zmid_convention, cluster_area_file (None without the key)
+      and cluster_selection_model.
     """
     self.nz_cluster_file = ini.relativeFileName('nz_cluster_file')
     self.cluster_ntomo = ini.int("cluster_ntomo")
@@ -597,9 +600,19 @@ class _cosmolike_prototype_base(DataSetLikelihood):
       raise LoggedError(self.log, "%s: expected %d columns (z + %d bins)",
                         self.nz_cluster_file, self.cluster_ntomo + 1,
                         self.cluster_ntomo)
+    # what the z column means (optional key cluster_zmid_convention, the
+    # encoding of photoz_zmid_convention): 1 = each value belongs at its z
+    # (the des_cluster synthetic tables; the default), 0 = the z are left
+    # cell edges and each value belongs half a cell higher (the DES and
+    # lighthouse tables)
+    self.cluster_zmid_convention = ini.int("cluster_zmid_convention", 1)
+    if self.cluster_zmid_convention not in (0, 1):
+      raise LoggedError(self.log, "cluster_zmid_convention = %d: must be 0 or 1",
+                        self.cluster_zmid_convention)
     ci.set_cluster_zdist(nofz=nz_cluster,
                          zbin_min=self.cluster_zbin_edges[:-1].copy(),
-                         zbin_max=self.cluster_zbin_edges[1:].copy())
+                         zbin_max=self.cluster_zbin_edges[1:].copy(),
+                         zmid_convention=self.cluster_zmid_convention)
 
     # survey area as a function of redshift (optional key cluster_area_file,
     # columns z and deg^2). A volume-limited cluster sample loses the parts
