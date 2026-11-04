@@ -779,7 +779,7 @@ def sigma_cluster(**kwargs):
             np.array(ci.w_sigma_cluster_tomo()))
 
 
-def w_cc(selection_bias=False, **kwargs):
+def w_cc(selection_bias=False, limber=None, **kwargs):
     """Cluster-cluster angular correlation w_cc on the theta grid.
 
     Arguments:
@@ -787,6 +787,10 @@ def w_cc(selection_bias=False, **kwargs):
                bias of eq (23) as the data vector carries it (one
                factor per cluster leg); False returns the model before
                it.
+      limber = None uses the configured cluster_adopt_limber_cc (the
+               likelihood's choice); 1 forces Limber at every
+               multipole, 0 non-Limber with redshift-space distortions
+               below l = 150.
       kwargs = binning, cosmology, accuracy and nuisance arguments of
                _state.
 
@@ -796,8 +800,9 @@ def w_cc(selection_bias=False, **kwargs):
       richness bins.
     """
     _state(**kwargs)
-    wcc = np.array(ci.w_cc_tomo(
-        limber=int(_CONFIG["cluster_adopt_limber_cc"])))
+    if limber is None:
+        limber = _CONFIG["cluster_adopt_limber_cc"]
+    wcc = np.array(ci.w_cc_tomo(limber=int(limber)))
     if selection_bias:
         # B is (cluster z bin, theta): move theta to the front and
         # let it broadcast over the two richness axes
@@ -806,13 +811,17 @@ def w_cc(selection_bias=False, **kwargs):
     return (np.array(ci.get_binning_real_space()), wcc)
 
 
-def w_cg(selection_bias=False, **kwargs):
+def w_cg(selection_bias=False, limber=None, **kwargs):
     """Cluster x galaxy angular correlation w_cg on the theta grid.
 
     Arguments:
       selection_bias = True multiplies by B(theta), the selection bias
                of eq (23) as the data vector carries it; False returns
                the model before it.
+      limber = None uses the configured cluster_adopt_limber_cg (the
+               likelihood's choice); 1 forces Limber at every
+               multipole, 0 non-Limber with redshift-space distortions
+               below l = 150.
       kwargs = binning, cosmology, accuracy and nuisance arguments of
                _state.
 
@@ -823,8 +832,9 @@ def w_cg(selection_bias=False, **kwargs):
       lists them), the others are zero.
     """
     _state(**kwargs)
-    wcg = np.array(ci.w_cg_tomo(
-        limber=int(_CONFIG["cluster_adopt_limber_cg"])))
+    if limber is None:
+        limber = _CONFIG["cluster_adopt_limber_cg"]
+    wcg = np.array(ci.w_cg_tomo(limber=int(limber)))
     if selection_bias:
         B = np.array(ci.get_cluster_selection_factor())
         # B.T is (theta, cluster z bin); the None axes let it broadcast over
