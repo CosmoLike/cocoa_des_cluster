@@ -85,9 +85,10 @@ def build_state():
     """Initialize cosmolike for 4x2pt + N at the fiducial point.
 
     The init chain of test_cluster_area.py: the likelihood's
-    (compare_reference.init_c, which leaves both blocks in Limber), an
-    all-ones mask, the fiducial nuisance parameters and one CAMB run of
-    the Python reference.
+    (compare_reference.init_c, which reads the switch from the likelihood
+    yaml; vector() then sets it explicitly), an all-ones mask, the
+    fiducial nuisance parameters and one CAMB run of the Python
+    reference.
 
     Returns:
       the compiled interface.

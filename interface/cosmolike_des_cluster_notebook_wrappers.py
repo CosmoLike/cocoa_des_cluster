@@ -218,8 +218,8 @@ _CONFIG = {
     "cluster_include_ia": 1,
     "cluster_magnification": -2.0,  # C_c (eq 28); 0 switches it off
     "cluster_hmf_alpha_mode": 0,    # 0 = Tinker alpha fixed at 0.368
-    "cluster_adopt_limber_cc": 1,   # w_cc: 1 = Limber (the only option)
-    "cluster_adopt_limber_cg": 1,   # w_cg: 1 = Limber (the only option)
+    "cluster_adopt_limber_cc": 0,   # w_cc: 0 = non-Limber + RSD, 1 = Limber
+    "cluster_adopt_limber_cg": 0,   # w_cg: 0 = non-Limber + RSD, 1 = Limber
 }
 
 # filled by init_cosmolike from the .dataset file: the angular binning

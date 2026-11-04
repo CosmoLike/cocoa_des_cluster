@@ -88,14 +88,13 @@ examples use two data sets (2812 and 900 entries). The two
 covariances of the frozen data (`frozen/data/des_cluster_y6_cov.npy`,
 32 MB, and `frozen/data/des_y3_cov_unblinded_final.txt`, 19 MB) are
 stored with Git LFS: a clone without `git lfs pull` holds a pointer
-file in place of each, and every test except `test_neutrino_cb.py`
-(which reads the live data set) then stops at the manifest check,
-naming the file.
+file in place of each, and every test except the four that read the
+live data set (`test_neutrino_cb.py`, `test_cluster_area.py`,
+`test_cluster_zdist_convention.py`, `test_nonlimber_cluster.py`) then
+stops at the manifest check, naming the file.
 
-This sector has 29 tests. The 28 other than `test_neutrino_cb.py` take
-about 10 minutes on an Apple M2 laptop (611 s of pytest time at the
-forced 4 OpenMP threads); the run time of `test_neutrino_cb.py` is not
-recorded.
+This sector has 42 tests. They take about 10 minutes on an Apple M2
+laptop (602 s of pytest time at the forced 4 OpenMP threads).
 
 ## The tests <a name="the_tests"></a>
 
@@ -146,6 +145,9 @@ cover:
 | - | `test_nonlimber_ggl.py` | 3x2pt; IA modeling: NLA | Limber vs non-Limber galaxy-galaxy lensing (`adopt_limber_gs`): the flag reaches the code and moves $\gamma_t$ alone |
 | - | `test_nonlimber_gg.py` | 3x2pt; IA modeling: NLA | Limber vs non-Limber galaxy clustering (`adopt_limber_gg`): the flag reaches the code and moves $w(\theta)$ alone |
 | - | `test_photoz_conventions.py` | cosmic shear; IA modeling: NLA | the n(z) interpolation and z-column conventions: each flag reaches the code and the n(z) caches rebuild |
+| - | `test_cluster_area.py` | 4x2pt + N on the Python reference's CAMB run (no cobaya) | the optional survey area as a function of redshift (`cluster_area_file`): an empty table is the default, a constant table gives the default counts and leaves every two-point entry exact, a taper matches an independent integral, removing it restores the default, and a table that misses a cluster bin stops the process |
+| - | `test_cluster_zdist_convention.py` | 4x2pt + N on the Python reference's CAMB run (no cobaya) | the z convention of the cluster table (`cluster_zmid_convention`): left cell edges equal the cell centres read as sample points, exactly, and the default returns exactly |
+| - | `test_nonlimber_cluster.py` | 4x2pt + N on the Python reference's CAMB run (no cobaya) | non-Limber $w_{cc}$ and $w_{cg}$ (`cluster_adopt_limber_cc`, `cluster_adopt_limber_cg`): only those blocks move, the measured ratios to Limber hold to 5%, the redshift-space boost is positive at 177 arcmin, the result is the same at 1, 8 and 4 threads, and Limber returns exactly |
 | - | `test_neutrino_cb.py` | 4x2pt + N on the Python reference's CAMB run (no cobaya) | evolving cb variance: the massless limit, both fields against independent quadrature at four scale factors, counts and bias, cache invalidation, thread determinism, and the missing-spectrum guard |
 | A1-A6 | `test_accuracy.py` | 4x2pt + N, 6x2pt + N, cosmic shear, 2x2pt, 3x2pt with NLA; 3x2pt with TATT | advisory: $\Delta\chi^2$ of the default numerical settings against high-accuracy settings (no pass/fail) |
 

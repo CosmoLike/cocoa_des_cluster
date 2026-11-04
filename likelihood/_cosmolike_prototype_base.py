@@ -584,9 +584,11 @@ class _cosmolike_prototype_base(DataSetLikelihood):
     ci.init_cluster_hmf_alpha_mode(
         hmf_alpha_mode=int(getattr(self, "cluster_hmf_alpha_mode", 0)))
 
+    # w_cc and w_cg: 0 = non-Limber with redshift-space distortions below
+    # l = 150 (the lighthouse and DES choice), 1 = Limber at every multipole
     ci.init_cluster_adopt_limber(
-        adopt_limber_cc=int(getattr(self, "cluster_adopt_limber_cc", 1)),
-        adopt_limber_cg=int(getattr(self, "cluster_adopt_limber_cg", 1)))
+        adopt_limber_cc=int(getattr(self, "cluster_adopt_limber_cc", 0)),
+        adopt_limber_cg=int(getattr(self, "cluster_adopt_limber_cg", 0)))
 
     # [:-1] = every edge but the last (lower edges), [1:] = every edge but the
     # first (upper edges); .copy() passes owned, contiguous arrays instead of
