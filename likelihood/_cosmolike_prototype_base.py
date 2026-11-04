@@ -514,8 +514,11 @@ class _cosmolike_prototype_base(DataSetLikelihood):
 
     Dataset keys: nz_cluster_file (z column, then <phi_i|z> of each cluster
     bin), cluster_ntomo, cluster_zbin_edges, richness_edges, survey_area_deg2,
-    cg_lens_bins (one lens bin per cluster bin, -1 = no w_cg). Runs after the
-    lens/source n(z) and init_ntomo_powerspectra, before init_data_cluster.
+    cg_lens_bins (one lens bin per cluster bin, -1 = no w_cg), and the
+    optional cluster_area_file (z, survey area in deg^2 of the cluster
+    sample; without it the counts use survey_area_deg2 at every z). Runs
+    after the lens/source n(z) and init_ntomo_powerspectra, before
+    init_data_cluster.
 
     <phi_i|z> is the probability that a cluster at true redshift z is
     observed in cluster redshift bin i: a selection kernel, not a
@@ -535,8 +538,8 @@ class _cosmolike_prototype_base(DataSetLikelihood):
       sets the survey area, cluster model, richness bins, selection kernels
       and (cluster bin, lens bin) pairs of the compiled library, and the
       attributes nz_cluster_file, cluster_ntomo, cluster_zbin_edges,
-      richness_edges, survey_area_deg2, cg_lens_bins and
-      cluster_selection_model.
+      richness_edges, survey_area_deg2, cg_lens_bins, cluster_area_file
+      (None without the key) and cluster_selection_model.
     """
     self.nz_cluster_file = ini.relativeFileName('nz_cluster_file')
     self.cluster_ntomo = ini.int("cluster_ntomo")
@@ -597,6 +600,29 @@ class _cosmolike_prototype_base(DataSetLikelihood):
     ci.set_cluster_zdist(nofz=nz_cluster,
                          zbin_min=self.cluster_zbin_edges[:-1].copy(),
                          zbin_max=self.cluster_zbin_edges[1:].copy())
+
+    # survey area as a function of redshift (optional key cluster_area_file,
+    # columns z and deg^2). A volume-limited cluster sample loses the parts
+    # of the footprint too shallow to detect clusters at z, so the counts
+    # integrate area(z). Without the key every z gets survey_area_deg2 (the
+    # forecast setting); the empty table also clears one a previous dataset
+    # installed in this process.
+    self.cluster_area_file = ini.relativeFileName("cluster_area_file") \
+      if ini.hasKey("cluster_area_file") else None
+    if self.cluster_area_file is None:
+      ci.set_cluster_area(area=np.zeros((0, 2)))
+    else:
+      area = np.loadtxt(self.cluster_area_file)
+      if area.ndim != 2 or area.shape[1] != 2:
+        raise LoggedError(self.log, "%s: expected 2 columns (z, area in deg^2)",
+                          self.cluster_area_file)
+      # the two-point covariance still uses survey_area_deg2; lighthouse
+      # requires it to equal the table's unmasked (low-z) area
+      if abs(area[:, 1].max()/self.survey_area_deg2 - 1.0) > 1e-3:
+        self.log.warning("survey_area_deg2 = %g, but the largest area of %s "
+                         "is %g deg^2", self.survey_area_deg2,
+                         self.cluster_area_file, area[:, 1].max())
+      ci.set_cluster_area(area=area)
 
     # cg_lens_bins[i] = the lens bin correlated with cluster bin i in w_cg
     ci.init_cluster_pairs(cg_lens_bin=self.cg_lens_bins)

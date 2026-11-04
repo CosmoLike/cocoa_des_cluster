@@ -1107,6 +1107,14 @@ PYBIND11_MODULE(cosmolike_des_cluster_interface, m)
       py::arg("zbin_max").none(false)
     );
 
+  m.def("set_cluster_area",
+      &cosmolike_interface::set_cluster_area,
+      "Set the survey area of the cluster sample as a function of redshift "
+      "(column 0 = z, column 1 = deg^2) for the counts; an array with zero "
+      "rows restores the constant survey area",
+      py::arg("area").none(false)
+    );
+
   m.def("init_cluster_pairs",
       [](std::vector<int> cg_lens_bin) {
         cosmolike_interface::init_cluster_pairs(
